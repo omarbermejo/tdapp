@@ -5,7 +5,8 @@ import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro, SectionHeader, Tag } from '@/components/ui/card';
 import { Radius, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
-import { FOCUS_AREAS, PEAK_ENERGY, REMINDER_HOUR, REMINDER_STYLE } from '@/features/auth/options';
+import { FOCUS_AREAS, REMINDER_HOUR, REMINDER_STYLE } from '@/features/auth/options';
+import { NowCard } from '@/features/tasks/now-card';
 
 type Options = readonly { value: string; label: string }[];
 
@@ -51,13 +52,12 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <Card>
-          <Micro>Tu mejor momento</Micro>
-          <Text style={[Type.metric, { color: t.text }]}>{labelOf(PEAK_ENERGY, user.peakEnergy)}</Text>
-          <Text style={[Type.body, { color: t.textMuted }]}>
-            Aquí es donde tu plan pone lo que más cuesta.
-          </Text>
-        </Card>
+        {/*
+          El héroe de la pantalla. Se fue de aquí la tarjeta de "tu mejor momento": competía por
+          la atención con lo único que importa al abrir, y ese dato va a mover la barra de
+          energía del día cuando exista, que es donde de verdad sirve.
+        */}
+        <NowCard />
 
         <View style={styles.block}>
           <SectionHeader title="Tu perfil" hint="Lo que nos contaste al empezar." />

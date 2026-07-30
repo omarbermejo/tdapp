@@ -46,6 +46,31 @@ export type ProfileInput = {
 
 export type DevicePlatform = 'ios' | 'android' | 'web';
 
+/** Lo que el API considera una tarea. Solo los campos que hoy consume la app. */
+export type Task = {
+  id: number;
+  title: string;
+  status: 'pending' | 'done';
+  size: 'quick' | 'medium' | 'deep';
+  focusArea: string | null;
+  /** ISO con zona, tal como lo mando el cliente. */
+  dueAt: string | null;
+  dueDate: string | null;
+  suggestedMinutes: number;
+  elapsedSeconds: number;
+  running: boolean;
+};
+
+/** El dia completo en una sola llamada: es lo que alimentan el widget y la Live Activity. */
+export type Today = {
+  date: string;
+  user: { name: string; accentColor: AccentName; reminderStyle: string };
+  counts: { total: number; pending: number; done: number };
+  next: Task | null;
+  running: Task | null;
+  tasks: Task[];
+};
+
 export class ApiError extends Error {
   fields: Record<string, string>;
   /** 0 = no hubo respuesta. Separa "tu sesion murio" de "no hay wifi". */
@@ -57,7 +82,11 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+/**
+ * El cliente http de la app. Se exporta porque `features/tasks` habla con el mismo servidor
+ * y no tiene sentido que duplique el manejo de errores.
+ */
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(API_URL + path, {
@@ -76,7 +105,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
-const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
+export const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 type Session = { token: string; user: User };
 
@@ -96,6 +125,10 @@ export const api = {
     request<Session>('/auth/apple', { method: 'POST', body: JSON.stringify({ idToken, name }) }),
 
   me: (token: string) => request<{ user: User }>('/me', { headers: bearer(token) }),
+
+  /** `date` en YYYY-MM-DD local; sin el, el API usa su propio dia. */
+  today: (token: string, date?: string) =>
+    request<Today>(`/me/today${date ? `?date=${date}` : ''}`, { headers: bearer(token) }),
 
   /** Devuelve token nuevo: el de antes decia que el correo no estaba verificado. */
   verify: (token: string, code: string) =>
