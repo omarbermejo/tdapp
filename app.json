@@ -5,12 +5,14 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "tdapp",
+    "scheme": ["tdapp", "com.tdapp.tdapp"],
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.tdapp.tdapp",
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.tdapp.tdapp",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
