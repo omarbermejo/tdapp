@@ -1,14 +1,17 @@
 // expo-router lleva react-navigation dentro y reexporta su tipo de tema.
 import type { Theme as NavigationTheme } from 'expo-router';
+import { useColorScheme } from 'react-native';
 
 /**
- * Sistema visual: papel cálido, tinta verde profunda y acentos tierra.
+ * Sistema visual: papel blanco, tinta verde profunda y acentos tierra.
  *
- * La armonía viene del diseño de referencia (Pace): fondo casi plano, tarjetas que se
- * levantan un tono en vez de llevar borde grueso, radios generosos, jerarquía por
- * tamaño y color de texto (no por cajas), y un solo CTA oscuro por pantalla.
+ * La armonía viene del diseño de referencia (Pace): fondo plano, tarjetas que se separan
+ * por un tono de luz en vez de bordes gruesos, radios generosos, jerarquía por tamaño y
+ * color de texto (no por cajas), y un solo CTA sólido por pantalla.
  *
- * Regla: ningún hex vive fuera de este archivo. Los componentes consumen tokens.
+ * Regla: ningún hex vive fuera de este archivo. Los componentes consumen tokens, y los
+ * de color SOLO a través de `useTheme()` / `useAccent()` — un import estático se
+ * congelaría en el esquema que hubiera al cargar el módulo y no seguiría al sistema.
  */
 
 /** Rampas completas de la marca. Solo se usan para derivar los tokens de abajo. */
@@ -73,55 +76,189 @@ export const Palette = {
     800: '#ecc3a0',
     900: '#f6e1cf',
   },
+  /**
+   * Neutros del modo claro. Las rampas de marca solo van hacia el crema, y sobre blanco
+   * un crema no separa nada: para levantar una tarjeta hay que bajar en gris, no subir
+   * en amarillo.
+   */
+  paper: {
+    0: '#ffffff',
+    50: '#fafaf7',
+    100: '#f1f1ea',
+    200: '#e6e6dc',
+  },
+  /**
+   * Neutros del modo oscuro. Son grises puros a proposito: derivar el fondo de la rampa
+   * verde de la marca tiñe TODA la pantalla de verde, y el color de marca tiene que estar
+   * en los acentos, no en el papel. El negro queda para el canvas y los grises levantan
+   * las tarjetas.
+   */
+  carbon: {
+    0: '#000000',
+    900: '#141414',
+    800: '#1f1f1f',
+    700: '#2b2b2b',
+    200: '#9c9c9c',
+    100: '#f2f2f2',
+  },
 } as const;
 
 /**
- * Tokens semánticos. Las tarjetas son MÁS CLARAS que el canvas (papel sobre papel):
- * separar por luz en vez de por borde es lo que hace que la pantalla se sienta tranquila.
+ * Tokens semánticos por esquema.
+ *
+ * En claro las tarjetas son un tono MÁS OSCURAS que el canvas; en oscuro, más claras.
+ * En los dos casos la separación es de luz, nunca de borde grueso.
+ *
+ * `ink` es el relleno del CTA y `onInk` su texto: se invierten entre esquemas, porque
+ * un botón oscuro sobre fondo oscuro deja de ser el ancla de la pantalla.
  */
-export const Theme = {
-  canvas: Palette.cornsilk[500],
-  surface: Palette.cornsilk[800],
-  /** Relleno apagado: pistas de progreso, chips sin seleccionar, avatares. */
-  sunken: Palette.oliveLeaf[900],
-  /** Hairline de 1pt. Nunca bordes gruesos: el peso lo carga la tipografía. */
-  line: Palette.oliveLeaf[900],
+export type Scheme = 'light' | 'dark';
 
-  text: Palette.blackForest[500],
-  textMuted: Palette.oliveLeaf[500],
-  /** Texto sobre superficies oscuras. */
-  onDark: Palette.cornsilk[500],
+export type Tokens = {
+  canvas: string;
+  surface: string;
+  sunken: string;
+  line: string;
+  text: string;
+  textMuted: string;
+  ink: string;
+  inkPressed: string;
+  onInk: string;
+  danger: string;
+  /** Velo detras de una hoja o un dialogo: sin el no se lee que el resto quedo inactivo. */
+  scrim: string;
+};
 
-  /** Tinta del CTA principal. */
-  ink: Palette.blackForest[500],
-  inkPressed: Palette.blackForest[400],
+const TOKENS: Record<Scheme, Tokens> = {
+  light: {
+    canvas: Palette.paper[0],
+    surface: Palette.paper[50],
+    /** Relleno apagado: pistas de progreso, chips sin seleccionar, avatares. */
+    sunken: Palette.paper[100],
+    /** Hairline de 1pt. Nunca bordes gruesos: el peso lo carga la tipografía. */
+    line: Palette.paper[200],
 
-  /** 5.5:1 sobre el papel: el mensaje de error es justo el que hay que poder leer. */
-  danger: Palette.copperwood[400],
-} as const;
+    text: Palette.blackForest[500],
+    textMuted: Palette.oliveLeaf[500],
+
+    ink: Palette.blackForest[500],
+    inkPressed: Palette.blackForest[400],
+    onInk: Palette.paper[0],
+
+    /** 6.9:1 sobre blanco: el mensaje de error es justo el que hay que poder leer. */
+    danger: Palette.copperwood[400],
+    // Tinta de la marca al 40%, no negro puro: el velo tambien es de la paleta.
+    scrim: 'rgba(40, 54, 24, 0.40)',
+  },
+  dark: {
+    canvas: Palette.carbon[0],
+    surface: Palette.carbon[900],
+    sunken: Palette.carbon[800],
+    line: Palette.carbon[700],
+
+    text: Palette.carbon[100],
+    textMuted: Palette.carbon[200],
+
+    // El CTA se vuelve claro: sobre un canvas negro, lo sólido y luminoso es lo que pesa.
+    ink: Palette.carbon[100],
+    inkPressed: Palette.carbon[200],
+    onInk: Palette.carbon[0],
+
+    /** 8.9:1 sobre negro; el copper medio se hunde en el fondo. */
+    danger: Palette.copperwood[700],
+    // Mas opaco que en claro: sobre un canvas negro un velo suave no separa nada.
+    scrim: 'rgba(0, 0, 0, 0.60)',
+  },
+};
 
 /**
  * Acentos del catálogo `accentColor` del backend.
  * - `solid`: relleno decorativo (muestras de color, formas). NUNCA texto.
  * - `soft`: tinte de chips y badges.
- * - `ink`: texto y bordes de estado sobre papel — es el único paso de cada acento
- *   que pasa AA (4.5:1) en 14-17pt y 3:1 como indicador. Los medios (#dda15e, #80ac4d)
- *   se ven bien pero no se leen.
+ * - `ink`: texto y bordes de estado — el único paso de cada acento que pasa AA (4.5:1)
+ *   en 14-17pt sobre el fondo de SU esquema. Los medios (#dda15e, #80ac4d) se ven bien
+ *   sobre blanco pero no se leen; en oscuro pasa al revés y hay que subir la rampa.
  */
-export const Accents = {
-  forest: { solid: Palette.blackForest[500], soft: Palette.blackForest[900], ink: Palette.blackForest[500] },
-  olive: { solid: Palette.oliveLeaf[500], soft: Palette.oliveLeaf[900], ink: Palette.oliveLeaf[400] },
-  leaf: { solid: Palette.blackForest[700], soft: Palette.oliveLeaf[800], ink: Palette.blackForest[600] },
-  clay: { solid: Palette.sunlitClay[500], soft: Palette.sunlitClay[900], ink: Palette.sunlitClay[300] },
-  copper: { solid: Palette.copperwood[500], soft: Palette.copperwood[900], ink: Palette.copperwood[400] },
-} as const;
+export type Accent = { solid: string; soft: string; ink: string };
+export type AccentName = 'forest' | 'olive' | 'leaf' | 'clay' | 'copper';
 
-export type AccentName = keyof typeof Accents;
-export type Accent = (typeof Accents)[AccentName];
+const ACCENTS: Record<Scheme, Record<AccentName, Accent>> = {
+  light: {
+    forest: { solid: Palette.blackForest[500], soft: Palette.blackForest[900], ink: Palette.blackForest[500] },
+    olive: { solid: Palette.oliveLeaf[500], soft: Palette.oliveLeaf[900], ink: Palette.oliveLeaf[400] },
+    leaf: { solid: Palette.blackForest[700], soft: Palette.oliveLeaf[800], ink: Palette.blackForest[600] },
+    clay: { solid: Palette.sunlitClay[500], soft: Palette.sunlitClay[900], ink: Palette.sunlitClay[300] },
+    copper: { solid: Palette.copperwood[500], soft: Palette.copperwood[900], ink: Palette.copperwood[400] },
+  },
+  dark: {
+    forest: { solid: Palette.blackForest[700], soft: Palette.blackForest[400], ink: Palette.blackForest[800] },
+    olive: { solid: Palette.oliveLeaf[600], soft: Palette.oliveLeaf[200], ink: Palette.oliveLeaf[700] },
+    leaf: { solid: Palette.blackForest[700], soft: Palette.oliveLeaf[300], ink: Palette.blackForest[800] },
+    clay: { solid: Palette.sunlitClay[500], soft: Palette.sunlitClay[200], ink: Palette.sunlitClay[600] },
+    copper: { solid: Palette.copperwood[500], soft: Palette.copperwood[200], ink: Palette.copperwood[700] },
+  },
+};
+
+/** Nombres del catálogo, para pintar el selector de color sin depender del esquema. */
+export const ACCENT_NAMES = Object.keys(ACCENTS.light) as AccentName[];
+
+/**
+ * El esquema del sistema. 'unspecified' (Android sin preferencia) cae en claro.
+ * useColorScheme ya re-renderiza solo cuando el sistema cambia.
+ */
+export function useScheme(): Scheme {
+  return useColorScheme() === 'dark' ? 'dark' : 'light';
+}
+
+/** Los tokens de color del esquema actual. Todo color de la UI sale de aquí. */
+export function useTheme(): Tokens {
+  return TOKENS[useScheme()];
+}
 
 /** Tolera acentos viejos o vacíos guardados en la base: nunca deja la UI sin color. */
-export const accentOf = (name?: string | null): Accent =>
-  Accents[name as AccentName] ?? Accents.olive;
+export function useAccent(name?: string | null): Accent {
+  const accents = ACCENTS[useScheme()];
+  return accents[name as AccentName] ?? accents.olive;
+}
+
+/**
+ * La sombra de tarjeta solo existe en claro: en oscuro una sombra negra sobre fondo
+ * oscuro no se ve, y lo que separa es el escalón de luz de `surface`.
+ */
+export function useShadow() {
+  return useScheme() === 'light' ? SHADOW_CARD : null;
+}
+
+const SHADOW_CARD = {
+  shadowColor: Palette.blackForest[500],
+  shadowOpacity: 0.06,
+  shadowRadius: 16,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 2,
+} as const;
+
+/** Para que el navegador (fondos de transición, gestos) use el mismo papel que la app. */
+export function useNavTheme(): NavigationTheme {
+  const scheme = useScheme();
+  const t = TOKENS[scheme];
+  return {
+    dark: scheme === 'dark',
+    colors: {
+      primary: ACCENTS[scheme].olive.solid,
+      background: t.canvas,
+      card: t.surface,
+      text: t.text,
+      border: t.line,
+      notification: t.danger,
+    },
+    fonts: {
+      regular: { fontFamily: 'System', fontWeight: '400' },
+      medium: { fontFamily: 'System', fontWeight: '500' },
+      bold: { fontFamily: 'System', fontWeight: '700' },
+      heavy: { fontFamily: 'System', fontWeight: '800' },
+    },
+  };
+}
 
 export const Radius = { sm: 4, md: 18, lg: 24, xl: 32, pill: 999 } as const;
 
@@ -130,17 +267,6 @@ export const Space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, huge: 48 }
 
 /** Mínimo 44pt de área táctil (HIG); los controles primarios van más altos. */
 export const Touch = { input: 56, button: 58, chip: 48, icon: 44 } as const;
-
-/** Sombra única y muy suave, tintada con la tinta de la marca. */
-export const Shadow = {
-  card: {
-    shadowColor: Palette.blackForest[500],
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-} as const;
 
 /**
  * Titulares en Outfit ExtraBold: geométrica y de trazo grueso, la contraparte del display
@@ -164,22 +290,3 @@ export const Type = {
   /** Micro-label en mayúsculas: es lo que ordena cada bloque sin agregar cajas. */
   micro: { fontSize: 12, lineHeight: 16, fontWeight: '600', letterSpacing: 0.9, textTransform: 'uppercase' },
 } as const;
-
-/** Para que el navegador (fondos de transición, gestos) use el mismo papel que la app. */
-export const NavTheme: NavigationTheme = {
-  dark: false,
-  colors: {
-    primary: Accents.olive.solid,
-    background: Theme.canvas,
-    card: Theme.surface,
-    text: Theme.text,
-    border: Theme.line,
-    notification: Theme.danger,
-  },
-  fonts: {
-    regular: { fontFamily: 'System', fontWeight: '400' },
-    medium: { fontFamily: 'System', fontWeight: '500' },
-    bold: { fontFamily: 'System', fontWeight: '700' },
-    heavy: { fontFamily: 'System', fontWeight: '800' },
-  },
-};

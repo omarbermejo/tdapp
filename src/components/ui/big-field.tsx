@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 
+import { Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
+
 import { FormError } from './form-error';
-import { Radius, Space, Theme, Touch, Type, accentOf, type AccentName } from '@/constants/theme';
 
 type Props = TextInputProps & {
   label: string;
@@ -13,22 +14,24 @@ type Props = TextInputProps & {
 /** Campo de papel con hairline: al enfocar el borde se tine del acento, y el error se lee debajo. */
 export function BigField({ label, error, accent = 'olive', style, ...rest }: Props) {
   const [focused, setFocused] = useState(false);
-  const tint = accentOf(accent).ink;
+  const t = useTheme();
+  const tint = useAccent(accent).ink;
   const active = focused || !!error;
 
   return (
     <View style={styles.wrap}>
-      <Text style={[Type.micro, styles.label]}>{label}</Text>
+      <Text style={[Type.micro, { color: t.textMuted }]}>{label}</Text>
       <TextInput
-        placeholderTextColor={Theme.textMuted}
+        placeholderTextColor={t.textMuted}
         selectionColor={tint}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         style={[
           styles.input,
+          { backgroundColor: t.surface, color: t.text },
           // El borde solo engorda a 1.5pt cuando hay algo que decir (foco o error).
           active && styles.inputActive,
-          { borderColor: error ? Theme.danger : focused ? tint : Theme.line },
+          { borderColor: error ? t.danger : focused ? tint : t.line },
           style,
         ]}
         {...rest}
@@ -40,13 +43,10 @@ export function BigField({ label, error, accent = 'olive', style, ...rest }: Pro
 
 const styles = StyleSheet.create({
   wrap: { gap: Space.sm },
-  label: { color: Theme.textMuted },
   input: {
     minHeight: Touch.input,
     borderRadius: Radius.md,
     borderWidth: 1,
-    backgroundColor: Theme.surface,
-    color: Theme.text,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md,
     ...Type.body,

@@ -3,20 +3,26 @@ import { useFonts } from 'expo-font';
 import { Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Confetti } from '@/components/ui/confetti';
-import { Accents, NavTheme, Theme } from '@/constants/theme';
+import { useAccent, useNavTheme, useScheme, useTheme } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/features/auth/auth-context';
+import { useWidgetSync } from '@/features/widgets/use-widget-sync';
 
 function RootNavigator() {
-  const { stage, loading, celebrating, stopCelebrating } = useAuth();
+  const t = useTheme();
+  const olive = useAccent('olive').solid;
+  const { stage, token, loading, celebrating, stopCelebrating } = useAuth();
+  // El widget solo tiene sentido con la cuenta lista: antes no hay tareas que enseñar.
+  useWidgetSync(token, stage === 'ready');
   // Los titulares son la fuente cargada: sin ella la primera pantalla parpadea con otra tipografia.
   const [fontsLoaded, fontError] = useFonts({ Outfit_800ExtraBold });
 
   if (loading || (!fontsLoaded && !fontError)) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color={Accents.olive.solid} />
+      <View style={[styles.loading, { backgroundColor: t.canvas }]}>
+        <ActivityIndicator size="large" color={olive} />
       </View>
     );
   }
@@ -29,7 +35,7 @@ function RootNavigator() {
   return (
     <>
       <Stack
-        screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: Theme.canvas } }}>
+        screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: t.canvas } }}>
         <Stack.Protected guard={stage === 'guest'}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
@@ -50,20 +56,27 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  const navTheme = useNavTheme();
+  // La barra de estado se invierte con el esquema: iconos oscuros sobre papel, claros sobre tinta.
+  const scheme = useScheme();
+
   return (
-    <ThemeProvider value={NavTheme}>
-      <StatusBar style="dark" />
-      <AuthProvider>
-        <RootNavigator />
-      </AuthProvider>
-    </ThemeProvider>
+    // En iOS RNGH parcha la root view y los gestos cuelan sin esto; en Android no: sin esta
+    // raiz el swipe de las filas no recibe ni un evento.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={navTheme}>
+        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+        <AuthProvider>
+          <RootNavigator />
+        </AuthProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
   loading: {
     flex: 1,
-    backgroundColor: Theme.canvas,
     alignItems: 'center',
     justifyContent: 'center',
   },

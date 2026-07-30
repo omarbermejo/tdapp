@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Accents, Radius } from '@/constants/theme';
+import { Radius, useAccent } from '@/constants/theme';
 
 /**
  * ponytail: confeti a mano con reanimated en vez de una libreria. Son 40 lineas y ademas
@@ -18,20 +18,25 @@ import { Accents, Radius } from '@/constants/theme';
  */
 const PIECES = 28;
 const FALL_MS = 2200;
-const COLORS = [
-  Accents.olive.solid,
-  Accents.clay.solid,
-  Accents.copper.solid,
-  Accents.leaf.solid,
-  Accents.forest.solid,
-];
+/** Un color por acento del catalogo, resueltos en el esquema actual. */
+function useConfettiColors() {
+  // Los hooks no van en un bucle, y son cinco fijos: se llaman uno por uno a proposito.
+  const [forest, olive, leaf, clay, copper] = [
+    useAccent('forest').solid,
+    useAccent('olive').solid,
+    useAccent('leaf').solid,
+    useAccent('clay').solid,
+    useAccent('copper').solid,
+  ];
+  return [olive, clay, copper, leaf, forest];
+}
 
 /** Sin Math.random en el render: una semilla fija da la misma lluvia siempre y no reordena. */
-const piece = (i: number) => {
+const piece = (i: number, colors: string[]) => {
   const spread = (i * 37) % 100; // 37 es primo con 100: reparte sin repetir columnas
   return {
     left: `${spread}%` as const,
-    color: COLORS[i % COLORS.length],
+    color: colors[i % colors.length],
     size: 6 + ((i * 7) % 6),
     delay: (i % 7) * 90,
     drift: ((i % 5) - 2) * 18,
@@ -40,7 +45,7 @@ const piece = (i: number) => {
 };
 
 function Piece({ index, height, onLast }: { index: number; height: number; onLast?: () => void }) {
-  const { left, color, size, delay, drift, spins } = piece(index);
+  const { left, color, size, delay, drift, spins } = piece(index, useConfettiColors());
   const progress = useSharedValue(0);
 
   useEffect(() => {

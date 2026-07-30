@@ -9,7 +9,7 @@
       "tdapp",
       "com.tdapp.tdapp"
     ],
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.tdapp.tdapp",
       "usesAppleSignIn": true,
@@ -40,7 +40,27 @@
         }
       ],
       "expo-secure-store",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "com.tdapp.tdapp.widgets",
+          "groupIdentifier": "group.com.tdapp.tdapp",
+          "enableAndroid": true,
+          "widgets": [
+            {
+              "name": "TodayWidget",
+              "displayName": "Tu d\u00eda",
+              "description": "Lo que sigue hoy y cu\u00e1nto te queda.",
+              "supportedFamilies": [
+                "systemSmall",
+                "systemMedium"
+              ],
+              "contentMarginsDisabled": false
+            }
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

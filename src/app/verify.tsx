@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/ui/big-button';
 import { StepDots } from '@/components/ui/step-dots';
-import { Accents, Radius, Shadow, Space, Theme, Touch, Type } from '@/constants/theme';
+import { Radius, Space, Touch, Type, useAccent, useShadow, useTheme } from '@/constants/theme';
 import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 
@@ -25,7 +25,9 @@ export default function VerifyScreen() {
   const [state, setState] = useState<'idle' | 'checking' | 'sent'>('idle');
   const [error, setError] = useState('');
 
-  const tint = Accents.olive.ink;
+  const th = useTheme();
+  const shadow = useShadow();
+  const tint = useAccent('olive').ink;
 
   const submit = async (code: string) => {
     setError('');
@@ -65,17 +67,17 @@ export default function VerifyScreen() {
         : 'Escribe los 6 dígitos que te llegaron.';
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: th.canvas }]}>
       <View style={styles.header}>
         <StepDots total={2} current={1} />
       </View>
 
       <View style={styles.content}>
         <View style={styles.hero}>
-          <Text style={[Type.display, styles.title]}>Revisa tu correo.</Text>
-          <Text style={[Type.display, styles.titleAccent]}>Ahí está tu código.</Text>
-          <Text style={[Type.body, styles.subtitle]}>Seis dígitos. Vencen en 10 minutos.</Text>
-          <Text style={[Type.label, styles.email]}>{user?.email}</Text>
+          <Text style={[Type.display, { color: th.text }]}>Revisa tu correo.</Text>
+          <Text style={[Type.display, { color: tint }]}>Ahí está tu código.</Text>
+          <Text style={[Type.body, { color: th.textMuted }]}>Seis dígitos. Vencen en 10 minutos.</Text>
+          <Text style={[Type.label, { color: th.text }]}>{user?.email}</Text>
         </View>
 
         <OtpInput
@@ -93,18 +95,23 @@ export default function VerifyScreen() {
           textInputProps={{ accessibilityLabel: 'Código de 6 dígitos', autoCorrect: false }}
           theme={{
             containerStyle: styles.cells,
-            pinCodeContainerStyle: { ...styles.cell, ...(error && styles.cellError) },
-            filledPinCodeContainerStyle: styles.cellFilled,
-            focusedPinCodeContainerStyle: styles.cellFocused,
-            disabledPinCodeContainerStyle: styles.cellDisabled,
-            pinCodeTextStyle: styles.digit,
+            pinCodeContainerStyle: {
+              ...styles.cell,
+              borderColor: th.textMuted,
+              backgroundColor: th.surface,
+              ...(error && { borderColor: th.danger, borderWidth: 1.5 }),
+            },
+            filledPinCodeContainerStyle: { borderColor: th.text },
+            focusedPinCodeContainerStyle: { borderWidth: 1.5, ...shadow },
+            disabledPinCodeContainerStyle: { backgroundColor: th.sunken, borderColor: th.line },
+            pinCodeTextStyle: { ...styles.digit, color: th.text },
             focusStickStyle: { ...styles.stick, backgroundColor: tint },
           }}
         />
 
         <Text
           accessibilityLiveRegion="polite"
-          style={[Type.hint, styles.status, !!error && styles.statusError]}>
+          style={[Type.hint, styles.status, { color: error ? th.danger : th.textMuted }]}>
           {status}
         </Text>
 
@@ -120,7 +127,7 @@ export default function VerifyScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Theme.canvas },
+  screen: { flex: 1 },
   header: { paddingHorizontal: Space.xl, paddingVertical: Space.md },
   content: {
     flex: 1,
@@ -130,10 +137,6 @@ const styles = StyleSheet.create({
     gap: Space.xl,
   },
   hero: { gap: Space.sm },
-  title: { color: Theme.text },
-  titleAccent: { color: Accents.olive.ink },
-  subtitle: { color: Theme.textMuted },
-  email: { color: Theme.text },
 
   cells: { gap: Space.sm },
   cell: {
@@ -144,20 +147,13 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     // El borde vacio ES la instruccion ("hay seis huecos"), asi que va en muted, no en line.
-    borderColor: Theme.textMuted,
-    backgroundColor: Theme.surface,
   },
-  cellError: { borderColor: Theme.danger, borderWidth: 1.5 },
-  cellFilled: { borderColor: Theme.text },
-  cellFocused: { borderWidth: 1.5, ...Shadow.card },
-  cellDisabled: { backgroundColor: Theme.sunken, borderColor: Theme.line },
   // letterSpacing 0 pisa el tracking negativo de metric: en un glifo solo lo descuadra.
-  digit: { ...Type.metric, color: Theme.text, letterSpacing: 0 },
+  digit: { ...Type.metric, letterSpacing: 0 },
   stick: { width: 2, height: 24, borderRadius: Radius.pill },
 
   // Alto fijo para dos lineas: el mensaje cambia sin mover las celdas ni los botones.
-  status: { color: Theme.textMuted, minHeight: 40 },
-  statusError: { color: Theme.danger },
+  status: { minHeight: 40 },
 
   spacer: { flex: 1 },
   actions: { gap: Space.md },

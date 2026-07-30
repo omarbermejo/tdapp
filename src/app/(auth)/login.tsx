@@ -3,15 +3,17 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FormError } from '@/components/ui/form-error';
 import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
 import { Stem } from '@/components/ui/stem';
-import { Space, Theme, Type } from '@/constants/theme';
+import { Space, Type, useTheme } from '@/constants/theme';
 import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 
 export default function LoginScreen() {
+  const t = useTheme();
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,7 +33,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: t.canvas }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}>
@@ -42,8 +44,8 @@ export default function LoginScreen() {
           <BackButton />
 
           <View style={styles.hero}>
-            <Text style={[Type.display, styles.title]}>Hola de nuevo.</Text>
-            <Text style={[Type.body, styles.subtitle]}>Entra y seguimos donde lo dejaste.</Text>
+            <Text style={[Type.display, { color: t.text }]}>Hola de nuevo.</Text>
+            <Text style={[Type.body, { color: t.textMuted }]}>Entra y seguimos donde lo dejaste.</Text>
           </View>
 
           <Stem filled={[!!email, !!password]}>
@@ -69,7 +71,7 @@ export default function LoginScreen() {
             />
           </Stem>
 
-          {!!error && <Text style={[Type.hint, styles.error]}>{error}</Text>}
+          <FormError message={error} />
 
           <View style={styles.spacer} />
 
@@ -88,7 +90,7 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Theme.canvas },
+  screen: { flex: 1 },
   flex: { flex: 1 },
   content: {
     flexGrow: 1,
@@ -98,9 +100,6 @@ const styles = StyleSheet.create({
     gap: Space.xl,
   },
   hero: { gap: Space.sm },
-  title: { color: Theme.text },
-  subtitle: { color: Theme.textMuted },
   spacer: { flex: 1 },
   actions: { gap: Space.md },
-  error: { color: Theme.danger },
 });

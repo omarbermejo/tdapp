@@ -1,0 +1,292 @@
+import { Image } from 'expo-image';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { BigButton } from '@/components/ui/big-button';
+import { Card, Micro } from '@/components/ui/card';
+import { Radius, Space, Touch, Type, useAccent, useTheme, type Accent } from '@/constants/theme';
+import type { Task } from '@/features/auth/api';
+import { useAuth } from '@/features/auth/auth-context';
+import { localDate } from '@/features/tasks/api';
+import { DayTimeline } from '@/features/tasks/day-timeline';
+import { useTasks } from '@/features/tasks/use-tasks';
+import { usePressScale } from '@/hooks/use-press-scale';
+
+import { TAB_DOCK } from './_layout';
+
+/** Dos semanas hacia adelante. Mas que eso ya no es "que viene", es un archivo. */
+const DAYS = 14;
+
+/**
+ * Fecha local desde 'YYYY-MM-DD'. `new Date('2026-07-30')` la leeria como medianoche UTC y en
+ * America corre el dia hacia atras; con el constructor de tres numeros no hay zona de por medio.
+ */
+const parse = (date: string) => {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
+/** `date` mas `offset` dias. setDate normaliza el desborde de mes y de año solo. */
+const shift = (date: string, offset: number) => {
+  const at = parse(date);
+  at.setDate(at.getDate() + offset);
+  return at;
+};
+
+const long = (at: Date) =>
+  at.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+
+const upper = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Por hora y las sin hora al final: lo que no esta puesto en el dia no manda en el orden. */
+const byTime = (a: Task, b: Task) => {
+  if (a.dueAt && b.dueAt) return Date.parse(a.dueAt) - Date.parse(b.dueAt);
+  if (a.dueAt) return -1;
+  if (b.dueAt) return 1;
+  return 0;
+};
+
+/**
+ * La agenda: que viene y en que dia. No es la pantalla de "que hago ahora" — esa es el home,
+ * con una sola tarea al frente. Aqui si se puede ver la lista, porque venir a verla es la
+ * intencion y no una distraccion que aparece al abrir la app.
+ */
+export default function CalendarScreen() {
+  const { user } = useAuth();
+  const t = useTheme();
+  const tint = useAccent(user?.accentColor);
+
+  /**
+   * El reloj se lee en el efecto y nunca al pintar: la fecha en el render es impura. El
+   * intervalo esta porque una agenda abierta pasada la medianoche seguiria marcando "Hoy" en
+   * el dia de ayer; el updater devuelve el mismo valor cuando no cambio, asi que despues del
+   * primer anclaje no provoca renders.
+   */
+  const [today, setToday] = useState('');
+  // Minutos desde medianoche. Vive aqui y no en el render por lo mismo: leer el reloj al
+  // pintar es impuro, y ademas la marca tiene que moverse sola mientras la pantalla esta abierta.
+  const [minutes, setMinutes] = useState(0);
+  useEffect(() => {
+    const tick = () => {
+      setToday((prev) => (prev === localDate() ? prev : localDate()));
+      const at = new Date();
+      setMinutes(at.getHours() * 60 + at.getMinutes());
+    };
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  /**
+   * El dia elegido vive en la ruta, no en un useState.
+   *
+   * La tira de la semana del home empuja `?date=` para que tocar el viernes alla caiga en el
+   * viernes aca, y esta pantalla es una PESTAÑA: ya esta montada, asi que un `useState(date)`
+   * solo leeria el parametro la primera vez y el segundo toque desde el home no moveria nada.
+   * Con la ruta como estado hay UNA fuente de verdad para las dos tiras.
+   *
+   * Sin parametro el dia es hoy, asi que al cruzar la medianoche la vista se reancla sola.
+   */
+  const { date } = useLocalSearchParams<{ date?: string }>();
+  const selected = date || today;
+
+  const { tasks, error, loading, reload } = useTasks(selected);
+
+  const days = today ? Array.from({ length: DAYS }, (_, i) => shift(today, i)) : [];
+  const sorted = tasks ? [...tasks].sort(byTime) : [];
+  const tomorrow = today ? localDate(shift(today, 1)) : '';
+  // El `!selected` va primero: sin dia todavia, '' === '' diria "Hoy" bajo un titulo vacio.
+  const relative = !selected ? '' : selected === today ? 'Hoy' : selected === tomorrow ? 'Mañana' : '';
+  const isViewingToday = !!today && selected === today;
+
+  // El guard va DESPUES de todos los hooks: al cerrar sesion el user se vuelve null y salir
+  // antes dejaria a React con menos hooks que en el render anterior.
+  if (!user) return null;
+
+  return (
+    <SafeAreaView style={[styles.screen, { backgroundColor: t.canvas }]} edges={['top', 'bottom']}>
+      <View style={styles.head}>
+        <Micro>{relative || 'Que viene'}</Micro>
+        <Text style={[Type.display, { color: t.text }]} numberOfLines={2}>
+          {selected ? upper(long(parse(selected))) : ''}
+        </Text>
+      </View>
+
+      {/* Fuera del padding de la pantalla: la tira se corta en el borde y eso invita a arrastrarla. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.strip}>
+        {days.map((at) => {
+          const day = localDate(at);
+          return (
+            <Day
+              key={day}
+              at={at}
+              on={day === selected}
+              isToday={day === today}
+              tint={tint}
+              onPress={() => router.setParams({ date: day })}
+            />
+          );
+        })}
+      </ScrollView>
+
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {loading && (
+          <Card>
+            <Micro>{relative || 'Agenda'}</Micro>
+            <Text style={[Type.body, { color: t.textMuted }]}>Trayendo ese día…</Text>
+          </Card>
+        )}
+
+        {!loading && !!error && !tasks && (
+          <Card>
+            <Micro>{relative || 'Agenda'}</Micro>
+            <Text style={[Type.body, { color: t.textMuted }]}>{error}</Text>
+            <BigButton
+              label="Reintentar"
+              variant="ghost"
+              accent={user.accentColor}
+              onPress={reload}
+            />
+          </Card>
+        )}
+
+        {!loading && !!tasks && sorted.length === 0 && (
+          <Card>
+            {/* La ilustracion hace que un dia vacio se sienta como espacio, no como falta. */}
+            <Image
+              source={require('@/assets/stickers/bubble.svg')}
+              style={styles.empty}
+              contentFit="contain"
+              accessible={false}
+            />
+            <Text style={[Type.section, { color: t.text }]}>Nada agendado.</Text>
+            <Text style={[Type.body, { color: t.textMuted }]}>
+              Un día en blanco no es un día perdido. Si algo va aquí, ponlo.
+            </Text>
+            <BigButton
+              label="Agendar algo"
+              accent={user.accentColor}
+              onPress={() => router.push('/new-task')}
+            />
+          </Card>
+        )}
+
+        {sorted.length > 0 && (
+          <>
+            {/*
+              El tiempo se ve: las horas a la izquierda y un riel que las une. Una lista pelada
+              dice el orden; el riel dice que todo eso pasa en el MISMO dia. Corre de arriba a
+              abajo a proposito — el riel es el dia, no la union entre dos tarjetas.
+            */}
+            <DayTimeline
+              tasks={sorted}
+              fallback={user.accentColor}
+              isToday={isViewingToday}
+              minutes={minutes}
+              reload={reload}
+            />
+
+            <BigButton
+              label="Agendar otra"
+              variant="ghost"
+              accent={user.accentColor}
+              onPress={() => router.push('/new-task')}
+            />
+          </>
+        )}
+
+        {/* Un fallo con la lista ya en pantalla no borra la pantalla: se avisa y se sigue leyendo. */}
+        {!!error && !!tasks && (
+          <Text style={[Type.hint, styles.notice, { color: t.danger }]}>{error}</Text>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+/** Componente aparte porque cada dia necesita su propio shared value para el toque. */
+function Day({
+  at,
+  on,
+  isToday,
+  tint,
+  onPress,
+}: {
+  at: Date;
+  on: boolean;
+  isToday: boolean;
+  tint: Accent;
+  onPress: () => void;
+}) {
+  const t = useTheme();
+  const press = usePressScale({ to: 0.94 });
+  // es-MX devuelve 'lun.' con punto; en una tira de tres letras el punto es ruido.
+  const name = at.toLocaleDateString('es-MX', { weekday: 'short' }).replace('.', '');
+
+  return (
+    <Animated.View style={press.style}>
+      <Pressable
+        accessibilityRole="radio"
+        accessibilityState={{ checked: on }}
+        accessibilityLabel={long(at)}
+        onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        style={[
+          styles.cell,
+          { backgroundColor: on ? tint.soft : t.surface, borderColor: on ? tint.ink : t.line },
+        ]}>
+        <Text style={[Type.micro, { color: on ? t.text : t.textMuted }]}>{name}</Text>
+        <Text style={[Type.section, { color: t.text }]}>{String(at.getDate())}</Text>
+        {/*
+          Hoy se marca con el punto y el dia elegido con el relleno: pueden no ser el mismo. El
+          hueco se reserva siempre y solo se pinta el punto cuando toca, para que la celda de hoy
+          no mida distinto que las demas.
+        */}
+        <View style={styles.slot}>
+          {isToday && <View style={[styles.mark, { backgroundColor: tint.ink }]} />}
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+/** Grosor del riel y del punto de hoy: la linea del dia, no un borde de caja. */
+const RAIL = 2;
+const MARK = 5;
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  head: { paddingHorizontal: Space.xl, paddingTop: Space.lg, gap: Space.xs },
+  strip: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    paddingHorizontal: Space.xl,
+    paddingVertical: Space.lg,
+  },
+  // La celda del dia es un objetivo tactil: mide lo que mide un boton.
+  cell: {
+    width: Touch.button,
+    borderRadius: Radius.md,
+    borderWidth: RAIL,
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingVertical: Space.md,
+  },
+  slot: { height: MARK },
+  mark: { width: MARK, height: MARK, borderRadius: Radius.pill },
+  content: {
+    paddingHorizontal: Space.xl,
+    // El aire sale de la geometria de la pastilla flotante, que vive en `_layout`.
+    paddingBottom: TAB_DOCK,
+    gap: Space.lg,
+  },
+  notice: { paddingHorizontal: Space.xs },
+  empty: { width: '48%', aspectRatio: 1, alignSelf: 'center' },
+});

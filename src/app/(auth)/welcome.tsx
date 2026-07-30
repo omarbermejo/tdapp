@@ -4,7 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/ui/big-button';
-import { Accents, Space, Theme, Type } from '@/constants/theme';
+import { Space, Type, useAccent, useTheme } from '@/constants/theme';
+import { FormError } from '@/components/ui/form-error';
 import { AppleButton } from '@/features/auth/apple-button';
 import { useGoogleSignIn } from '@/features/auth/use-google-sign-in';
 
@@ -17,14 +18,16 @@ const STICKER_RATIO = 139 / 129;
  * y las acciones ancladas abajo con un solo boton oscuro.
  */
 export default function WelcomeScreen() {
+  const t = useTheme();
+  const olive = useAccent('olive');
   const google = useGoogleSignIn();
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: t.canvas }]}>
       <View style={styles.hero}>
-        <Text style={[Type.display, styles.title]}>Tu cabeza va rápido.</Text>
-        <Text style={[Type.display, styles.titleAccent]}>Aquí no se pierde.</Text>
-        <Text style={[Type.body, styles.subtitle]}>
+        <Text style={[Type.display, { color: t.text }]}>Tu cabeza va rápido.</Text>
+        <Text style={[Type.display, { color: olive.ink }]}>Aquí no se pierde.</Text>
+        <Text style={[Type.body, { color: t.textMuted, marginTop: Space.md }]}>
           Tareas cortas, recordatorios que sí funcionan y cero formularios eternos.
         </Text>
       </View>
@@ -58,9 +61,11 @@ export default function WelcomeScreen() {
             }
           />
         )}
-        {!!google.error && <Text style={[Type.hint, styles.error]}>{google.error}</Text>}
-
         <AppleButton />
+
+        {/* Los errores de proveedor van juntos y debajo de ambos botones: entre uno y otro
+            parecian pertenecer al de abajo y empujaban la pila al aparecer. */}
+        <FormError message={google.error} />
 
         <BigButton label="Ya tengo cuenta" variant="ghost" onPress={() => router.push('/login')} />
       </View>
@@ -71,18 +76,13 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Theme.canvas,
     paddingHorizontal: Space.xl,
     paddingTop: Space.md,
     paddingBottom: Space.lg,
   },
   hero: { marginTop: Space.huge },
-  title: { color: Theme.text },
-  titleAccent: { color: Accents.olive.ink },
-  subtitle: { color: Theme.textMuted, marginTop: Space.md },
   stage: { flex: 1, alignItems: 'center', justifyContent: 'center', marginVertical: Space.lg },
   sticker: { width: '64%', aspectRatio: STICKER_RATIO },
   providerIcon: { width: 20, height: 20 },
   actions: { gap: Space.md },
-  error: { color: Theme.danger },
 });

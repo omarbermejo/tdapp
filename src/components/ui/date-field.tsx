@@ -14,7 +14,12 @@ import { BigField } from './big-field';
  * El precio de la mascara es que se puede teclear cualquier cosa, y "22/08/8787" se veia
  * perfectamente valido hasta que el API lo rechazaba. Asi que valida aqui tambien: mientras
  * la fecha no sea real y posible, no sale del campo (onChange recibe null) y el motivo se lee
- * debajo. Las reglas espejan las de createProfile en el API — hay que mantenerlas en sinc.
+ * debajo. Las reglas de 'birth' espejan las de createProfile en el API — hay que mantenerlas
+ * en sinc.
+ *
+ * El rango depende de para que se pide la fecha, y son los dos unicos casos que hay: un
+ * nacimiento ('birth', el default) mira al pasado; un vencimiento ('future') mira al dia de
+ * hoy en adelante. Que el dia exista se exige en los dos.
  */
 const MIN_DATE = '1920-01-01';
 const MIN_AGE = 5;
@@ -38,12 +43,22 @@ const youngest = () => {
     .slice(0, 10);
 };
 
-const reject = (iso: string) => {
+/** Hoy en la zona del telefono, no en UTC: el dia del usuario es el que decide si ya pasó. */
+const today = () => {
+  const at = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
+};
+
+const reject = (iso: string, mode: DateMode) => {
   if (!isReal(iso)) return 'Ese día no existe';
+  if (mode === 'future') return iso < today() ? 'Ese día ya pasó' : null;
   if (iso < MIN_DATE) return 'Revisa el año';
   if (iso > youngest()) return 'Revisa el año: sale una fecha en el futuro o muy reciente';
   return null;
 };
+
+export type DateMode = 'birth' | 'future';
 
 export function DateField({
   label,
@@ -51,6 +66,7 @@ export function DateField({
   onChange,
   error,
   accent,
+  mode = 'birth',
 }: {
   label: string;
   /** ISO 'YYYY-MM-DD' o null. Solo llega cuando la fecha esta completa Y es valida. */
@@ -58,6 +74,8 @@ export function DateField({
   onChange: (value: string | null) => void;
   error?: string;
   accent?: AccentName;
+  /** Rango permitido. Default 'birth' para no cambiarle el trato a quien ya lo usa. */
+  mode?: DateMode;
 }) {
   const [text, setText] = useState(() => mask(toDigits(value)));
   const [own, setOwn] = useState<string | null>(null);
@@ -73,7 +91,7 @@ export function DateField({
     }
 
     const iso = toIso(digits);
-    const problem = reject(iso);
+    const problem = reject(iso, mode);
     setOwn(problem);
     onChange(problem ? null : iso);
   };

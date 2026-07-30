@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
-import { Space, Theme, accentOf, type AccentName } from '@/constants/theme';
+import { Space, useAccent, useTheme, type AccentName } from '@/constants/theme';
 
 import { BUD, Bud } from './stem';
 
@@ -17,14 +17,16 @@ export function StepDots({
   current: number;
   accent?: AccentName;
 }) {
+  const theme = useTheme();
+  const ink = useAccent(accent).ink;
   const done = total > 1 ? Math.min(Math.max(current, 0), total - 1) / (total - 1) : 1;
 
   return (
     <View style={styles.row} accessibilityLabel={`Paso ${current + 1} de ${total}`}>
       {/* El riel vive entre los centros de los brotes, no de borde a borde. */}
       <View pointerEvents="none" style={styles.rail}>
-        <View style={styles.pending} />
-        <View style={[styles.done, { width: `${done * 100}%`, backgroundColor: accentOf(accent).ink }]} />
+        <View style={[styles.pending, { backgroundColor: theme.line }]} />
+        <View style={[styles.done, { width: `${done * 100}%`, backgroundColor: ink }]} />
       </View>
       {Array.from({ length: total }, (_, i) => (
         <Bud key={i} on={i <= current} accent={accent} />
@@ -48,6 +50,6 @@ const styles = StyleSheet.create({
     top: BUD / 2 - 1,
     height: 2,
   },
-  pending: { flex: 1, backgroundColor: Theme.line },
+  pending: { flex: 1 },
   done: { position: 'absolute', left: 0, top: 0, bottom: 0 },
 });

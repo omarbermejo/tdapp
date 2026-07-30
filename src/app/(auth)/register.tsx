@@ -3,12 +3,13 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FormError } from '@/components/ui/form-error';
 import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
 import { StepDots } from '@/components/ui/step-dots';
 import { Stem } from '@/components/ui/stem';
-import { Accents, Radius, Space, Theme, Type } from '@/constants/theme';
+import { Radius, Space, Type, useAccent, useTheme } from '@/constants/theme';
 import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 
@@ -34,6 +35,8 @@ function strengthOf(password: string) {
 
 /** Tres tramos del mismo riel que usa la rama de progreso: un solo idioma en toda la app. */
 function PasswordMeter({ password }: { password: string }) {
+  const t = useTheme();
+  const olive = useAccent('olive');
   const { level, valid, hint } = strengthOf(password);
 
   return (
@@ -44,13 +47,14 @@ function PasswordMeter({ password }: { password: string }) {
             key={i}
             style={[
               styles.segment,
-              !!password && i < level && (valid ? styles.segmentValid : styles.segmentShort),
+              { backgroundColor: t.line },
+              !!password && i < level && { backgroundColor: valid ? olive.ink : t.textMuted },
             ]}
           />
         ))}
       </View>
       {/* Alto fijo: al escribir el primer caracter no salta el campo de abajo. */}
-      <Text style={[Type.hint, styles.meterHint]}>{password ? hint : ''}</Text>
+      <Text style={[Type.hint, styles.meterHint, { color: t.textMuted }]}>{password ? hint : ''}</Text>
     </View>
   );
 }
@@ -60,6 +64,7 @@ function PasswordMeter({ password }: { password: string }) {
  * pedirlo todo aqui era el camino corto a que nadie termine de registrarse.
  */
 export default function RegisterScreen() {
+  const t = useTheme();
   const { signUp } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -101,7 +106,7 @@ export default function RegisterScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: t.canvas }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}>
@@ -117,8 +122,8 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View style={styles.hero}>
-            <Text style={[Type.display, styles.title]}>Solo tres datos.</Text>
-            <Text style={[Type.body, styles.subtitle]}>Lo demás lo ajustas después.</Text>
+            <Text style={[Type.display, { color: t.text }]}>Solo tres datos.</Text>
+            <Text style={[Type.body, { color: t.textMuted }]}>Lo demás lo ajustas después.</Text>
           </View>
 
           <Stem filled={[!!name, !!email, strength.valid, matches]}>
@@ -167,7 +172,7 @@ export default function RegisterScreen() {
             />
           </Stem>
 
-          {!!error && <Text style={[Type.hint, styles.error]}>{error}</Text>}
+          <FormError message={error} />
 
           <View style={styles.spacer} />
 
@@ -186,7 +191,7 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Theme.canvas },
+  screen: { flex: 1 },
   flex: { flex: 1 },
   header: {
     flexDirection: 'row',
@@ -203,18 +208,13 @@ const styles = StyleSheet.create({
     gap: Space.xl,
   },
   hero: { gap: Space.sm },
-  title: { color: Theme.text },
-  subtitle: { color: Theme.textMuted },
 
   withMeter: { gap: Space.sm },
   meter: { gap: Space.xs },
   meterRow: { flexDirection: 'row', gap: Space.xs },
-  segment: { flex: 1, height: 4, borderRadius: Radius.pill, backgroundColor: Theme.line },
-  segmentShort: { backgroundColor: Theme.textMuted },
-  segmentValid: { backgroundColor: Accents.olive.ink },
-  meterHint: { color: Theme.textMuted, minHeight: 20 },
+  segment: { flex: 1, height: 4, borderRadius: Radius.pill },
+  meterHint: { minHeight: 20 },
 
   spacer: { flex: 1 },
   actions: { gap: Space.md },
-  error: { color: Theme.danger },
 });

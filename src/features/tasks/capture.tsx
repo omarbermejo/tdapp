@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -10,16 +10,16 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/ui/big-button';
 import { FormError } from '@/components/ui/form-error';
-import { Radius, Space, Touch, Type, useAccent, useShadow, useTheme, type AccentName } from '@/constants/theme';
+import { Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
-import { usePressScale } from '@/hooks/use-press-scale';
 
-import { tasksApi } from './api';
+import { localIso, tasksApi } from './api';
+import { tasksChanged } from './revalidate';
 
 /**
  * Anotar en tres segundos.
@@ -27,23 +27,36 @@ import { tasksApi } from './api';
  * Es lo mas importante que hace una app para TDAH: sacarte la cosa de la cabeza ANTES de que
  * se pierda. Por eso no hay formulario — un campo, teclado abierto solo, y la tecla de enviar
  * guarda. Ni tamano, ni foco, ni hora: eso se afina despues, cuando ya no se te puede olvidar.
+ *
+ * Controlada y sin boton propio: quien la abre es el + de la barra de `(app)/_layout`, y desde
+ * ahi no hay forma de alcanzar el `reload` de la pantalla de abajo. Por eso al guardar avisa
+ * con `tasksChanged()` en vez de recibir un callback.
  */
-export function Capture({ accent = 'olive', onCreated }: { accent?: AccentName; onCreated: () => void }) {
+export function CaptureSheet({
+  open,
+  onClose,
+  accent = 'olive',
+}: {
+  open: boolean;
+  onClose: () => void;
+  accent?: AccentName;
+}) {
   const t = useTheme();
   const tint = useAccent(accent);
-  const shadow = useShadow();
+  // Un Modal de RN no hereda el SafeAreaView de la pantalla: el area segura se aplica aqui.
+  const insets = useSafeAreaInsets();
   const { token } = useAuth();
-  const press = usePressScale({ to: 0.94, haptic: Haptics.ImpactFeedbackStyle.Medium });
 
-  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Limpia y avisa: la hoja sigue montada entre aperturas, asi que si no se borra el campo
+  // la siguiente captura empieza con la anterior escrita.
   const close = () => {
-    setOpen(false);
     setTitle('');
     setError('');
+    onClose();
   };
 
   const save = async () => {
@@ -53,8 +66,8 @@ export function Capture({ accent = 'olive', onCreated }: { accent?: AccentName; 
     setSaving(true);
     setError('');
     try {
-      await tasksApi.create(token, clean);
-      onCreated();
+      await tasksApi.create(token, { title: clean, dueAt: localIso() });
+      tasksChanged();
       close();
     } catch (e) {
       setError(e instanceof ApiError ? (e.fields.title ?? e.message) : 'No pudimos anotarla');
@@ -64,73 +77,67 @@ export function Capture({ accent = 'olive', onCreated }: { accent?: AccentName; 
   };
 
   return (
-    <>
-      <Animated.View style={[styles.fabSlot, press.style]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Anotar algo"
-          onPress={() => setOpen(true)}
-          onPressIn={press.onPressIn}
-          onPressOut={press.onPressOut}
-          style={[styles.fab, { backgroundColor: t.ink }, shadow]}>
-          <Text style={[Type.display, styles.plus, { color: t.onInk }]}>+</Text>
-        </Pressable>
-      </Animated.View>
+    <Modal visible={open} transparent animationType="slide" onRequestClose={close}>
+      {/* Tocar fuera cierra: salir tiene que ser tan barato como entrar. */}
+      <Pressable style={[styles.backdrop, { backgroundColor: t.scrim }]} onPress={close} />
 
-      <Modal visible={open} transparent animationType="slide" onRequestClose={close}>
-        {/* Tocar fuera cierra: salir tiene que ser tan barato como entrar. */}
-        <Pressable style={styles.backdrop} onPress={close} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.sheetWrap}>
+        <View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: t.surface,
+              borderTopColor: t.line,
+              // Max y no suma: con el teclado abierto el KeyboardAvoidingView ya levanta la
+              // hoja, y sumar el inset le colgaria un hueco de 34pt debajo del ultimo boton.
+              paddingBottom: Math.max(Space.xl, insets.bottom),
+            },
+          ]}>
+          <Text style={[Type.micro, { color: t.textMuted }]}>Anota y suéltalo</Text>
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.sheetWrap}>
-          <View style={[styles.sheet, { backgroundColor: t.surface, borderTopColor: t.line }]}>
-            <Text style={[Type.micro, { color: t.textMuted }]}>Anota y suéltalo</Text>
+          <TextInput
+            autoFocus
+            value={title}
+            onChangeText={setTitle}
+            onSubmitEditing={save}
+            returnKeyType="done"
+            placeholder="¿Qué traes en la cabeza?"
+            placeholderTextColor={t.textMuted}
+            selectionColor={tint.ink}
+            maxLength={120}
+            style={[styles.input, { backgroundColor: t.canvas, borderColor: tint.ink, color: t.text }]}
+          />
 
-            <TextInput
-              autoFocus
-              value={title}
-              onChangeText={setTitle}
-              onSubmitEditing={save}
-              returnKeyType="done"
-              placeholder="¿Qué traes en la cabeza?"
-              placeholderTextColor={t.textMuted}
-              selectionColor={tint.ink}
-              maxLength={120}
-              style={[styles.input, { backgroundColor: t.canvas, borderColor: tint.ink, color: t.text }]}
-            />
+          <FormError message={error} />
 
-            <FormError message={error} />
+          <BigButton label="Anotar" loading={saving} onPress={save} />
 
-            <BigButton label="Anotar" loading={saving} onPress={save} />
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </>
+          {/* La salida para cuando SI quieres decidir. Va como fantasma y al final: aqui el
+              boton solido sigue siendo anotar, y la hoja no se llena de campos. */}
+          <BigButton
+            label="Con más detalle"
+            variant="ghost"
+            accent={accent}
+            onPress={() => {
+              close();
+              router.push('/new-task');
+            }}
+          />
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
-const FAB = 60;
-
 const styles = StyleSheet.create({
-  fabSlot: { position: 'absolute', right: Space.xl, bottom: Space.xl },
-  fab: {
-    width: FAB,
-    height: FAB,
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // El + del sistema trae mucho hueco arriba: se sube para que quede al centro real.
-  plus: { marginTop: -4 },
-
   backdrop: { flex: 1 },
   sheetWrap: { justifyContent: 'flex-end' },
   sheet: {
     gap: Space.md,
     paddingHorizontal: Space.xl,
     paddingTop: Space.lg,
-    paddingBottom: Space.xl,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     borderTopWidth: 1,

@@ -1,8 +1,11 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
 
-import { Radius, Theme, Touch, Type } from '@/constants/theme';
+import { FormError } from '@/components/ui/form-error';
+import { BigButton } from '@/components/ui/big-button';
+import { useTheme } from '@/constants/theme';
 
 import { ApiError } from './api';
 import { useAuth } from './auth-context';
@@ -11,12 +14,16 @@ import { useAuth } from './auth-context';
  * Sign in with Apple. Solo se pinta donde el sistema lo soporta (iPhone con iOS 13+):
  * en Android isAvailableAsync devuelve false y en web hay un stub que no renderiza nada.
  *
- * Usamos el boton nativo de Apple porque sus lineamientos exigen ese diseño; lo unico
- * que ajustamos es el radio y la altura para que case con el resto de la pila.
+ * Usamos BigButton y no AppleAuthenticationButton: el nativo dibuja su etiqueta a 20.7pt
+ * contra los 17pt del resto y no deja cambiarla, asi que la pila se veia despareja aunque
+ * las cajas midieran igual. Los lineamientos de Apple permiten un boton propio mientras
+ * lleve su logo, un texto aprobado y contraste suficiente; esto cumple las tres.
  */
 export function AppleButton() {
+  const t = useTheme();
   const { signInWithApple } = useAuth();
   const [available, setAvailable] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -29,6 +36,7 @@ export function AppleButton() {
 
   const signIn = async () => {
     setError('');
+    setLoading(true);
     try {
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
@@ -48,24 +56,26 @@ export function AppleButton() {
       // El usuario cerro la hoja de Apple: no es un error que valga la pena mostrar.
       if ((e as { code?: string }).code === 'ERR_REQUEST_CANCELED') return;
       setError(e instanceof ApiError ? e.message : 'No se pudo entrar con Apple');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <>
-      <AppleAuthentication.AppleAuthenticationButton
-        buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE_OUTLINE}
-        cornerRadius={Radius.md}
-        style={styles.button}
+      <BigButton
+        label="Continuar con Apple"
+        variant="outline"
+        loading={loading}
         onPress={signIn}
+        icon={<SymbolView name="apple.logo" tintColor={t.text} style={styles.logo} />}
       />
-      {!!error && <Text style={[Type.hint, styles.error]}>{error}</Text>}
+      <FormError message={error} />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  button: { width: '100%', height: Touch.button },
-  error: { color: Theme.danger },
+  // Mismo alto que el logo de Google; el de Apple es mas angosto por su propia forma.
+  logo: { width: 18, height: 20 },
 });
