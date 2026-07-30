@@ -37,6 +37,8 @@ export type NewTask = {
   title?: string;
   notes?: string | null;
   size?: Task['size'];
+  /** Minutos exactos. null vuelve a dejar que manden los del tamaño. */
+  minutes?: number | null;
   status?: Task['status'];
   focusArea?: string | null;
   /** ISO con zona; usa localIso() o isoAt(). null lo desagenda. */

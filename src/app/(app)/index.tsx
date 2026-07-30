@@ -1,11 +1,14 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Space, Type, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
+import { DayCard } from '@/features/tasks/day-card';
+import { useLocalToday } from '@/features/tasks/day';
 import { TodayList } from '@/features/tasks/today-list';
-import { useToday } from '@/features/tasks/use-today';
+import { useTasks } from '@/features/tasks/use-tasks';
 import { WeekStrip } from '@/features/tasks/week-strip';
 
 import { TAB_DOCK } from './_layout';
@@ -18,15 +21,26 @@ const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
  *
  * Aqui vivia una tarjeta "En curso" con el cronometro al frente. Se fue: contaba hacia ARRIBA
  * y pasarse de los 25 min se leia como una app rota, y encima le robaba la pantalla a lo unico
- * que el usuario viene a ver, que son sus tareas. En su lugar la semana, que responde "en que
- * dia estoy" sin pedir nada. El cronometro sigue vivo en el API (POST /tasks/:id/timer) para
- * cuando vuelva, y cuando vuelva cuenta hacia abajo.
+ * que el usuario viene a ver, que son sus tareas. El cronometro sigue vivo en el API
+ * (POST /tasks/:id/timer) para cuando vuelva, y cuando vuelva cuenta hacia abajo.
+ *
+ * El orden de arriba a abajo es donde estoy (la semana), como voy (la card) y que falta (la
+ * lista). Anotar vive en la card y no flotando: la barra de abajo es solo para navegar.
+ *
+ * Tocar un dia de la tira NO navega: cambia el dia de ESTA pantalla. El home dejo de ser "hoy"
+ * para ser "el dia que estas viendo", asi que los datos ya no salen de /me/today (que solo sabe
+ * de hoy) sino de /tasks?date=, y los conteos se cuentan aqui. La agenda sigue siendo otra
+ * cosa: ahi se ve el riel de horas de dos semanas, aqui se ve UN dia y se trabaja en el.
  */
 export default function HomeScreen() {
   const { user } = useAuth();
   const t = useTheme();
-  // El dia vive aqui porque lo comparten el encabezado y la lista.
-  const day = useToday();
+  const today = useLocalToday();
+  // '' significa "sin elegir", que es hoy: asi al cruzar la medianoche la pantalla se reancla sola.
+  const [picked, setPicked] = useState('');
+  const selected = picked || today;
+  // El dia vive aqui porque lo comparten la tira, la card y la lista.
+  const day = useTasks(selected);
 
   // El guard va DESPUES de los hooks: al cerrar sesion el user se vuelve null, y salir antes
   // dejaba a React con menos hooks que en el render anterior.
@@ -41,11 +55,20 @@ export default function HomeScreen() {
 
         {/* La tira ES la fecha de la pantalla: el home ya no imprime el dia en ninguna otra parte. */}
         <WeekStrip
+          today={today}
+          selected={selected}
+          onPickDay={setPicked}
           accent={user.accentColor}
-          onPickDay={(date) => router.push(`/calendar?date=${date}`)}
         />
 
-        <TodayList day={day} />
+        <DayCard
+          day={day}
+          today={today}
+          selected={selected}
+          onCapture={() => router.push('/new-task')}
+        />
+
+        <TodayList day={day} today={today} selected={selected} />
       </ScrollView>
     </SafeAreaView>
   );

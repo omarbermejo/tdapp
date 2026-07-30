@@ -5,7 +5,6 @@ import { ApiError, type Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 
 import { tasksApi } from './api';
-import { useOnTasksChanged } from './revalidate';
 
 /**
  * `for` es el dia al que pertenece lo que hay guardado, y por eso vive DENTRO del estado.
@@ -39,9 +38,9 @@ export function useTasks(date: string) {
     }
   }, [token, date]);
 
-  // Igual que en use-today: useFocusEffect corre al montar Y al volver, asi lo que se crea en
-  // otra pantalla aparece al regresar. La carga va dentro y no llama a reload en seco, asi el
-  // primer setState no es sincrono con el cuerpo del efecto.
+  // useFocusEffect y no useEffect: corre al montar Y al VOLVER, asi lo que se crea en /new-task
+  // aparece al regresar. La carga va dentro y no llama a reload en seco, asi el primer setState
+  // no es sincrono con el cuerpo del efecto.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -54,9 +53,6 @@ export function useTasks(date: string) {
       };
     }, [reload])
   );
-
-  // Y cuando se anota desde la barra, que esta fuera de esta pantalla y no cambia el foco.
-  useOnTasksChanged(reload);
 
   /**
    * Al cambiar de dia el estado todavia trae el anterior. Se descarta al pintar en vez de

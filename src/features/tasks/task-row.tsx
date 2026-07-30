@@ -1,12 +1,22 @@
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import ReanimatedSwipeable, {
   SwipeDirection,
   type SwipeableMethods,
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { runOnJS, useAnimatedReaction, type SharedValue } from 'react-native-reanimated';
+import Animated, {
+  interpolateColor,
+  runOnJS,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 
 import { Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
@@ -47,6 +57,12 @@ const DRAG_OFFSET = 12;
  */
 const SPRING = { mass: 1, damping: 24, stiffness: 320 } as const;
 
+/** El rebote de la casilla al marcar: sube seco y el resorte lo devuelve. */
+const POP = { mass: 0.6, damping: 12, stiffness: 380 } as const;
+
+/** El cruce del relleno. Corto a proposito: acompaña al haptico, no lo hace esperar. */
+const CROSS = { duration: 180 } as const;
+
 const tick = () => {
   Haptics.selectionAsync().catch(() => {});
 };
@@ -66,29 +82,70 @@ const timeLabel = (iso: string | null) =>
  * El panel de detras. Vive en su propio componente porque necesita hooks de reanimated y
  * `renderLeftActions` es una funcion que se llama en cada frame: unos hooks ahi dentro serian
  * hooks condicionales.
+ *
+ * El contenido se mantiene centrado en la parte REVELADA, no en el panel completo. Antes
+ * estaba fijo en el centro de los 104pt, asi que durante casi todo el arrastre lo que se veia
+ * era una etiqueta cortada por la mitad — eso era lo que se veia mal, no el gesto.
  */
 function SwipeFace({
   progress,
+  direction,
   label,
+  glyph,
   background,
   color,
 }: {
   progress: SharedValue<number>;
+  /** -1 panel izquierdo, +1 derecho: de que lado se revela. */
+  direction: -1 | 1;
   label: string;
+  /** El tipo sale del propio SymbolView: los nombres de SF Symbols son literales, no strings. */
+  glyph: ComponentProps<typeof SymbolView>['name'];
   background: string;
   color: string;
 }) {
+  // Se anima desde el hilo de UI y no desde `progress` directo para que el cruce del umbral
+  // tenga su propio resorte: el salto es la confirmacion visual de lo que el haptico dice.
+  const armed = useSharedValue(0);
+
   useAnimatedReaction(
     () => progress.value >= COMMIT,
     (crossed, previous) => {
+      if (crossed === previous) return;
+      armed.value = withSpring(crossed ? 1 : 0, POP);
       // Solo el cruce hacia afuera: al regresar no hay nada que confirmar.
-      if (crossed && previous === false) runOnJS(tick)();
+      if (crossed) runOnJS(tick)();
     }
   );
 
+  const content = useAnimatedStyle(() => {
+    // Sin overshoot el progreso no pasa de 1, pero se acota igual: un clamp de mas nunca
+    // rompio nada y un NaN en un transform deja el panel invisible.
+    const p = Math.min(Math.max(progress.value, 0), 1);
+    return {
+      // Aparece en el primer tercio: antes de eso la rendija es mas angosta que el glifo.
+      opacity: Math.min(1, p / 0.35),
+      transform: [
+        { translateX: direction * (1 - p) * (ACTION / 2) },
+        { scale: 0.82 + p * 0.18 + armed.value * 0.1 },
+      ],
+    };
+  });
+
   return (
     <View style={[styles.action, { backgroundColor: background }]}>
-      <Text style={[Type.label, { color }]}>{label}</Text>
+      <Animated.View style={[styles.actionContent, content]}>
+        <SymbolView
+          name={glyph}
+          size={22}
+          tintColor={color}
+          fallback={<Text style={[Type.label, { color }]}>{label}</Text>}
+        />
+        {/* El glifo dice la accion de un vistazo; la palabra la confirma para quien no lo lea. */}
+        <Text style={[Type.micro, { color }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </Animated.View>
     </View>
   );
 }
@@ -128,6 +185,49 @@ export function TaskRow({
 
   const done = task.status === 'done';
 
+  // Un solo progreso manda el relleno, el borde, el glifo y el color del titulo: asi las cuatro
+  // cosas cruzan juntas y no se ven como cuatro cambios. Arranca en su valor final para que las
+  // tareas ya hechas no se animen al montar la lista.
+  const mark = useSharedValue(done ? 1 : 0);
+  const pop = useSharedValue(1);
+  const dim = useSharedValue(1);
+  // El estado anterior en un ref: el efecto tambien corre al montar y ahi no hay nada que animar.
+  const wasDone = useRef(done);
+
+  useEffect(() => {
+    if (wasDone.current === done) return;
+    wasDone.current = done;
+    mark.value = withTiming(done ? 1 : 0, CROSS);
+    pop.value = withSequence(withTiming(1.16, { duration: 90 }), withSpring(1, POP));
+  }, [done, mark, pop]);
+
+  useEffect(() => {
+    // La espera del servidor ya no es un corte a opacidad 0.5: se apaga y se prende.
+    dim.value = withTiming(busy ? 0.55 : 1, { duration: 150 });
+  }, [busy, dim]);
+
+  const rowStyle = useAnimatedStyle(() => ({ opacity: dim.value }));
+
+  // De `sunken` (el propio fondo de la fila, o sea "vacio") a `ink`, y el borde con el. En hecha
+  // el borde queda del mismo color que el relleno: se lee como el circulo lleno de siempre.
+  const circleStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(mark.value, [0, 1], [t.sunken, tint.ink]),
+    borderColor: interpolateColor(mark.value, [0, 1], [t.textMuted, tint.ink]),
+    transform: [{ scale: pop.value }],
+  }));
+
+  const glyphStyle = useAnimatedStyle(() => ({
+    opacity: mark.value,
+    // Entra creciendo desde el centro; sin esto el check aparece seco a tamaño final.
+    transform: [{ scale: 0.6 + mark.value * 0.4 }],
+  }));
+
+  // `textDecorationLine` no se puede animar, asi que el tachado sigue siendo instantaneo; lo que
+  // cruza es el color, que es el cambio que ocupa toda la linea.
+  const titleStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(mark.value, [0, 1], [t.text, t.textMuted]),
+  }));
+
   const toggle = useCallback(async () => {
     if (!token) return;
     setBusy(true);
@@ -163,6 +263,13 @@ export function TaskRow({
     ]);
   }, [task.title, remove]);
 
+  const onCheck = useCallback(() => {
+    // El mismo golpe que el gesto: la casilla y el swipe hacen lo mismo y tienen que sentirse
+    // igual. Y es la respuesta inmediata al toque, porque el relleno espera al servidor.
+    thud();
+    void toggle();
+  }, [toggle]);
+
   const onOpen = useCallback(
     (direction: SwipeDirection) => {
       thud();
@@ -188,10 +295,28 @@ export function TaskRow({
       containerStyle={[styles.container, { borderColor: t.line }]}
       // Arrastrar hacia la derecha revela el panel de la IZQUIERDA. De ahi el cruce.
       renderLeftActions={(progress) => (
-        <SwipeFace progress={progress} label="Hecha" background={tint.soft} color={t.text} />
+        <SwipeFace
+          progress={progress}
+          direction={-1}
+          label={done ? 'Pendiente' : 'Hecha'}
+          glyph={
+            done
+              ? { ios: 'arrow.uturn.backward', android: 'undo', web: 'undo' }
+              : { ios: 'checkmark', android: 'check', web: 'check' }
+          }
+          background={tint.soft}
+          color={t.text}
+        />
       )}
       renderRightActions={(progress) => (
-        <SwipeFace progress={progress} label="Borrar" background={t.danger} color={t.onInk} />
+        <SwipeFace
+          progress={progress}
+          direction={1}
+          label="Borrar"
+          glyph={{ ios: 'trash', android: 'delete', web: 'delete' }}
+          background={t.danger}
+          color={t.onInk}
+        />
       )}
       leftThreshold={ACTION * COMMIT}
       rightThreshold={ACTION * COMMIT}
@@ -201,48 +326,38 @@ export function TaskRow({
       dragOffsetFromRightEdge={DRAG_OFFSET}
       animationOptions={SPRING}
       onSwipeableOpen={onOpen}>
-      <View style={[styles.row, { backgroundColor: t.sunken }, busy && styles.busy]}>
+      <Animated.View style={[styles.row, { backgroundColor: t.sunken }, rowStyle]}>
         <Pressable
           accessibilityRole="checkbox"
           accessibilityState={{ checked: done, disabled: busy }}
           accessibilityLabel={done ? 'Marcar como pendiente' : 'Marcar como hecha'}
           disabled={busy}
-          onPress={toggle}
+          onPress={onCheck}
           hitSlop={Space.sm}
           style={styles.check}>
-          <View
-            style={[
-              styles.circle,
-              // `line` sobre `sunken` da 1.11:1 y el borde desaparece; `textMuted` da 5.0:1 en
-              // claro y 6.0:1 en oscuro, que es lo que hace que se lea como casilla y no como
-              // adorno. Relleno en `tint.ink` con el glifo en `onInk`: ink es el unico paso que
-              // pasa AA y como invierte su luz entre esquemas el check contrasta en los dos.
-              done
-                ? { backgroundColor: tint.ink }
-                : { borderColor: t.textMuted, borderWidth: 2 },
-            ]}>
-            {done && (
+          {/* `line` sobre `sunken` da 1.11:1 y el borde desaparece; `textMuted` da 5.0:1 en claro
+              y 6.0:1 en oscuro, que es lo que hace que se lea como casilla y no como adorno.
+              Relleno en `tint.ink` con el glifo en `onInk`: ink es el unico paso que pasa AA y
+              como invierte su luz entre esquemas el check contrasta en los dos. */}
+          <Animated.View style={[styles.circle, circleStyle]}>
+            {/* Montado siempre, no `done && ...`: un glifo que aparece no puede crecer. */}
+            <Animated.View style={glyphStyle}>
               <SymbolView
                 name={{ ios: 'checkmark', android: 'check', web: 'check' }}
                 size={14}
                 tintColor={t.onInk}
                 fallback={<Text style={[Type.hint, { color: t.onInk }]}>✓</Text>}
               />
-            )}
-          </View>
+            </Animated.View>
+          </Animated.View>
         </Pressable>
 
         <View style={styles.text}>
-          <Text
-            style={[
-              Type.body,
-              styles.title,
-              { color: done ? t.textMuted : t.text },
-              done && styles.struck,
-            ]}
+          <Animated.Text
+            style={[Type.body, styles.title, titleStyle, done && styles.struck]}
             numberOfLines={2}>
             {task.title}
-          </Text>
+          </Animated.Text>
           <Text style={[Type.hint, { color: t.textMuted }]} numberOfLines={1}>
             {[
               `${task.suggestedMinutes} min`,
@@ -253,7 +368,7 @@ export function TaskRow({
               .join(' · ')}
           </Text>
         </View>
-      </View>
+      </Animated.View>
     </ReanimatedSwipeable>
   );
 }
@@ -276,7 +391,6 @@ const styles = StyleSheet.create({
     paddingRight: Space.lg,
     borderRadius: Radius.md,
   },
-  busy: { opacity: 0.5 },
   check: {
     width: Touch.icon,
     height: Touch.icon,
@@ -289,6 +403,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    // El borde vive SIEMPRE (antes solo en pendiente): es lo que se puede cruzar de color en vez
+    // de aparecer y desaparecer. En hecha queda del color del relleno y no se distingue.
+    borderWidth: 2,
   },
   text: { flex: 1, gap: Space.xs },
   // El titulo es lo primero que se lee y ahora es lo unico que el usuario ve de su dia: medio
@@ -298,4 +415,5 @@ const styles = StyleSheet.create({
   // Ancho fijo: de ahi sale cuanto se revela. La altura la estira el contenedor del panel
   // (es un absoluteFill), y un flexGrow aqui creceria a lo ANCHO y se comeria la medida.
   action: { width: ACTION, alignItems: 'center', justifyContent: 'center' },
+  actionContent: { alignItems: 'center', gap: Space.xs },
 });

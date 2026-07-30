@@ -6,7 +6,7 @@ import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/ui/big-button';
-import { Card, Micro } from '@/components/ui/card';
+import { Micro } from '@/components/ui/card';
 import { Radius, Space, Touch, Type, useAccent, useTheme, type Accent } from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
@@ -137,14 +137,14 @@ export default function CalendarScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {loading && (
-          <Card>
+          <View style={styles.message}>
             <Micro>{relative || 'Agenda'}</Micro>
             <Text style={[Type.body, { color: t.textMuted }]}>Trayendo ese día…</Text>
-          </Card>
+          </View>
         )}
 
         {!loading && !!error && !tasks && (
-          <Card>
+          <View style={styles.message}>
             <Micro>{relative || 'Agenda'}</Micro>
             <Text style={[Type.body, { color: t.textMuted }]}>{error}</Text>
             <BigButton
@@ -153,11 +153,15 @@ export default function CalendarScreen() {
               accent={user.accentColor}
               onPress={reload}
             />
-          </Card>
+          </View>
         )}
 
         {!loading && !!tasks && sorted.length === 0 && (
-          <Card>
+          /*
+            Sin tarjeta a proposito: una caja de `surface` sobre el canvas leia como dos fondos
+            encimados. Un mensaje no es contenido, es la pantalla hablando — va sobre el papel.
+          */
+          <View style={styles.message}>
             {/* La ilustracion hace que un dia vacio se sienta como espacio, no como falta. */}
             <Image
               source={require('@/assets/stickers/bubble.svg')}
@@ -174,7 +178,7 @@ export default function CalendarScreen() {
               accent={user.accentColor}
               onPress={() => router.push('/new-task')}
             />
-          </Card>
+          </View>
         )}
 
         {sorted.length > 0 && (
@@ -187,16 +191,10 @@ export default function CalendarScreen() {
             <DayTimeline
               tasks={sorted}
               fallback={user.accentColor}
+              peakEnergy={user.peakEnergy}
               isToday={isViewingToday}
               minutes={minutes}
               reload={reload}
-            />
-
-            <BigButton
-              label="Agendar otra"
-              variant="ghost"
-              accent={user.accentColor}
-              onPress={() => router.push('/new-task')}
             />
           </>
         )}
@@ -287,6 +285,8 @@ const styles = StyleSheet.create({
     paddingBottom: TAB_DOCK,
     gap: Space.lg,
   },
+  // El mismo aire interior que traia Card, para que el contenido no cambie de sitio.
+  message: { gap: Space.md, paddingVertical: Space.md },
   notice: { paddingHorizontal: Space.xs },
   empty: { width: '48%', aspectRatio: 1, alignSelf: 'center' },
 });

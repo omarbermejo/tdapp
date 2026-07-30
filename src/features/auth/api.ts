@@ -52,6 +52,8 @@ export type Task = {
   title: string;
   status: 'pending' | 'done';
   size: 'quick' | 'medium' | 'deep';
+  /** Minutos exactos que puso la persona; null = "que decida el tamaño". */
+  minutes: number | null;
   focusArea: string | null;
   /** ISO con zona, tal como lo mando el cliente. */
   dueAt: string | null;

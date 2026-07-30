@@ -1,6 +1,15 @@
+import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import Animated, {
+  interpolateColor,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 import {
   Radius,
@@ -45,6 +54,13 @@ const long = (at: Date) =>
 const initial = (at: Date) =>
   upper(at.toLocaleDateString('es-MX', { weekday: 'short' }).replace('.', '')).charAt(0);
 
+/** La tira se arma de lunes a domingo: 30ms por columna, 180ms de fundido cada una. */
+const STAGGER = 30;
+const FADE = 180;
+
+/** Corto y con un pelin de rebote: el circulo de hoy aterriza, no crece. */
+const LAND = { damping: 15, stiffness: 320 };
+
 /**
  * El encabezado de semana del home: en que dia vive el usuario y donde cae dentro de su semana.
  *
@@ -60,6 +76,11 @@ export function WeekStrip({
 }) {
   const t = useTheme();
   const tint = useAccent(accent);
+  /*
+    reanimated ya envuelve AccessibilityInfo.isReduceMotionEnabled() y escucha sus cambios:
+    leerlo con un hook evita el frame en blanco de resolver una promesa en un efecto.
+  */
+  const reduced = useReducedMotion();
 
   /**
    * El reloj se lee en el efecto y nunca al pintar: la fecha en el render es impura. El
@@ -80,9 +101,18 @@ export function WeekStrip({
   const at = today ? parse(today) : null;
   const days = today ? weekOf(today) : [];
 
+  // El encabezado no se puede animar al montar (nace vacio, dentro del hueco reservado), asi
+  // que su fundido lo dispara la llegada del dia, un frame antes que la primera columna.
+  const headIn = useSharedValue(0);
+  useEffect(() => {
+    if (!today) return;
+    headIn.value = reduced ? 1 : withTiming(1, { duration: FADE });
+  }, [today, reduced, headIn]);
+  const head = useAnimatedStyle(() => ({ opacity: headIn.value }));
+
   return (
     <View style={styles.strip}>
-      <View style={styles.head}>
+      <Animated.View style={[styles.head, head]}>
         <Text style={[Type.section, { color: t.text }]}>
           {at ? upper(at.toLocaleDateString('es-MX', { weekday: 'long' })) : ''}
         </Text>
@@ -90,14 +120,16 @@ export function WeekStrip({
         <Text style={[Type.micro, { color: t.textMuted }]}>
           {at ? at.toLocaleDateString('es-MX', { month: 'long' }) : ''}
         </Text>
-      </View>
+      </Animated.View>
 
       <View style={styles.week}>
-        {days.map((day) => (
+        {days.map((day, i) => (
           <Day
             key={localDate(day)}
             at={day}
+            index={i}
             isToday={localDate(day) === today}
+            reduced={reduced}
             tint={tint}
             onPickDay={onPickDay}
           />
@@ -107,29 +139,78 @@ export function WeekStrip({
   );
 }
 
-/** Componente aparte porque cada dia necesita su propio shared value para el toque. */
+/** Componente aparte porque cada dia necesita sus propios shared values. */
 function Day({
   at,
+  index,
   isToday,
+  reduced,
   tint,
   onPickDay,
 }: {
   at: Date;
+  index: number;
   isToday: boolean;
+  reduced: boolean;
   tint: Accent;
   onPickDay?: (date: string) => void;
 }) {
   const t = useTheme();
-  const press = usePressScale({ to: 0.9 });
+  // Soft y no el Light por omision: el golpe de bajada solo acompaña, el que confirma la
+  // eleccion es el selectionAsync de onPress.
+  const press = usePressScale({ to: 0.9, haptic: Haptics.ImpactFeedbackStyle.Soft });
+
+  const enter = useSharedValue(reduced ? 1 : 0);
+  const land = useSharedValue(isToday && !reduced ? 0.8 : 1);
+
+  // El dedo abajo se guarda en estado y no se escribe al shared value desde el handler: el
+  // compilador de React solo acepta mutarlos dentro de un efecto.
+  const [held, setHeld] = useState(false);
+  const heldAt = useSharedValue(0);
+  useEffect(() => {
+    heldAt.value = withTiming(held ? 1 : 0, { duration: held ? 120 : 180 });
+  }, [held, heldAt]);
+
+  useEffect(() => {
+    if (reduced) {
+      enter.value = 1;
+      land.value = 1;
+      return;
+    }
+    enter.value = withDelay(index * STAGGER, withTiming(1, { duration: FADE }));
+    // El circulo de hoy llega con su columna, no antes: la tira sigue leyendose de izquierda a derecha.
+    if (isToday) land.value = withDelay(index * STAGGER, withSpring(1, LAND));
+  }, [reduced, index, isToday, enter, land]);
+
+  /*
+    La opacidad viaja en su propio estilo porque `press.style` escribe `transform`: en un array
+    de estilos la ultima clave gana, y mezclar las dos en un solo objeto borraria la escala.
+  */
+  const column = useAnimatedStyle(() => ({ opacity: enter.value }));
+  const circle = useAnimatedStyle(() => ({ transform: [{ scale: land.value }] }));
+
+  // El numero se tiñe mientras el dedo esta abajo: en un objetivo de 34pt la escala sola se
+  // pierde debajo del pulgar.
+  const base = isToday ? t.text : t.textMuted;
+  // base y tint entran en las dependencias: al cambiar el esquema el worklet tiene que releerlos.
+  const number = useAnimatedStyle(
+    () => ({ color: interpolateColor(heldAt.value, [0, 1], [base, tint.ink]) }),
+    [base, tint.ink],
+  );
 
   const face = (
     <>
       <Text style={[Type.micro, { color: t.textMuted }]}>{initial(at)}</Text>
-      <View style={[styles.dot, isToday && { backgroundColor: tint.soft }]}>
-        <Text style={[Type.label, { color: isToday ? t.text : t.textMuted }]}>
-          {String(at.getDate())}
-        </Text>
-      </View>
+      <Animated.View
+        style={[
+          styles.dot,
+          circle,
+          // Unica señal extra de hoy: el aro de tinta del acento. El relleno `soft` solo no
+          // separa nada sobre papel blanco, y con dos señales mas la tira dejaria de estar tranquila.
+          isToday && { backgroundColor: tint.soft, borderWidth: 1, borderColor: tint.ink },
+        ]}>
+        <Animated.Text style={[Type.label, number]}>{String(at.getDate())}</Animated.Text>
+      </Animated.View>
     </>
   );
 
@@ -139,24 +220,34 @@ function Day({
   */
   if (!onPickDay) {
     return (
-      <View
+      <Animated.View
         pointerEvents="none"
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        style={[styles.col, styles.cell]}>
+        style={[styles.col, styles.cell, column]}>
         {face}
-      </View>
+      </Animated.View>
     );
   }
 
   return (
-    <Animated.View style={[styles.col, press.style]}>
+    <Animated.View style={[styles.col, column, press.style]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={long(at)}
-        onPress={() => onPickDay(localDate(at))}
-        onPressIn={press.onPressIn}
-        onPressOut={press.onPressOut}
+        onPress={() => {
+          // En web no hay motor haptico; el catch evita ensuciar la consola.
+          Haptics.selectionAsync().catch(() => {});
+          onPickDay(localDate(at));
+        }}
+        onPressIn={() => {
+          press.onPressIn();
+          setHeld(true);
+        }}
+        onPressOut={() => {
+          press.onPressOut();
+          setHeld(false);
+        }}
         style={styles.cell}>
         {face}
       </Pressable>

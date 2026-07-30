@@ -23,17 +23,24 @@ const GUTTER = Space.md;
 /**
  * Puntos por minuto del hueco entre dos tareas.
  *
- * Es lo que arregla lo que se sentia rigido: en una lista, 90 minutos y 10 minutos miden
- * igual, asi que la pantalla decia el ORDEN pero no el tiempo. Con esto una manana libre se
- * ve libre y tres cosas encimadas se ven encimadas.
- *
- * 0.4 sale de la pantalla, no de la teoria: una hora da 24pt (se nota) y las 9 horas entre
- * una tarea de la manana y una de la noche darian 216pt, que ya es scroll de mas. De ahi el
- * techo — a partir de dos horas el hueco deja de crecer y solo dice "aqui hay mucho".
+ * Bajo a proposito. La primera version usaba 0.4 con techo de 116pt y produjo el problema
+ * opuesto al que arreglaba: una tarde sin nada dejaba medio pantallazo de vacio muerto, sin
+ * ritmo. Ahora la estructura del dia la cargan las franjas y el hueco solo insinua la
+ * distancia, no la representa a escala.
  */
-const PPM = 0.4;
+const PPM = 0.22;
 const GAP_MIN = Space.sm;
-const GAP_MAX = 116;
+const GAP_MAX = 56;
+
+/** Desde este hueco vale la pena decir cuanto es: menos de 45 min no es "tiempo libre". */
+const LABEL_FROM = 45;
+
+/** Las tres franjas del dia. Los limites son los del catalogo peakEnergy del backend. */
+const BANDS = [
+  { key: 'morning', label: 'Mañana', until: 12 * 60 },
+  { key: 'afternoon', label: 'Tarde', until: 18 * 60 },
+  { key: 'night', label: 'Noche', until: 24 * 60 },
+] as const;
 
 /** Minutos desde medianoche. */
 const minutesOf = (iso: string) => {
@@ -41,8 +48,17 @@ const minutesOf = (iso: string) => {
   return at.getHours() * 60 + at.getMinutes();
 };
 
-const gapHeight = (from: number, to: number) =>
-  Math.min(GAP_MAX, Math.max(GAP_MIN, (to - from) * PPM));
+const bandOf = (minutes: number) => BANDS.find((band) => minutes < band.until) ?? BANDS[2];
+
+const gapHeight = (span: number) => Math.min(GAP_MAX, Math.max(GAP_MIN, span * PPM));
+
+/** '1 h 30' · '2 h' · '50 min'. Sin ceros de relleno: es una etiqueta, no un reloj. */
+const spanLabel = (minutes: number) => {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (!hours) return `${rest} min`;
+  return rest ? `${hours} h ${rest}` : `${hours} h`;
+};
 
 const hourLabel = (iso: string | null) =>
   iso
@@ -56,6 +72,8 @@ type Props = {
   tasks: Task[];
   /** Acento del usuario: el default de las tareas sin foco. */
   fallback: AccentName;
+  /** Su mejor franja, del onboarding. Se marca en el encabezado. */
+  peakEnergy?: string;
   /** Solo en hoy se pinta la marca de ahora. */
   isToday: boolean;
   /** Minutos desde medianoche; el padre lo mueve cada minuto. */
@@ -64,52 +82,119 @@ type Props = {
 };
 
 /**
- * El dia como franja de tiempo.
+ * El dia por franjas.
  *
- * El riel no es un adorno que une tarjetas: es el dia. Cada tarea lo tine con el color de su
- * familia, asi que la columna izquierda contesta de un vistazo la pregunta que importa —
- * "¿mi dia es todo trabajo?" — sin leer un solo titulo.
+ * Tercera version, y las dos anteriores explican esta. Una lista dice el ORDEN pero no el
+ * tiempo. Huecos a escala dicen el tiempo pero dejan vacios sin ritmo. Manana, tarde y noche
+ * como secciones dan la estructura, y dentro de cada una el hueco insinua la distancia.
+ *
+ * Las franjas son las mismas del catalogo `peakEnergy`, asi que la que la persona eligio en
+ * el onboarding se marca aqui: el dato que dio se le devuelve convertido en orientacion, en
+ * vez de quedar guardado en un perfil que no vuelve a ver.
+ *
+ * El riel lo tine cada tarea con el color de su familia: la columna izquierda contesta
+ * "¿mi dia es todo trabajo?" sin leer un solo titulo.
  */
-export function DayTimeline({ tasks, fallback, isToday, minutes, reload }: Props) {
+export function DayTimeline({ tasks, fallback, peakEnergy, isToday, minutes, reload }: Props) {
+  const timed = tasks.filter((task) => task.dueAt);
+  const untimed = tasks.filter((task) => !task.dueAt);
+
+  // El escalonado de la entrada tiene que ser continuo de una franja a la siguiente, asi que
+  // el orden se resuelve una vez sobre la lista completa. Un contador que se fuera sumando
+  // dentro del map seria mutacion durante el render, y con React Compiler eso es un error.
+  const order = new Map(tasks.map((task, i) => [task.id, i]));
+
   return (
-    <View>
-      {tasks.map((task, i) => {
-        const previous = tasks[i - 1];
-        const at = task.dueAt ? minutesOf(task.dueAt) : null;
-        const before = previous?.dueAt ? minutesOf(previous.dueAt) : null;
+    <View style={styles.day}>
+      {BANDS.map((band) => {
+        const inBand = timed.filter((task) => bandOf(minutesOf(task.dueAt!)).key === band.key);
+        if (!inBand.length) return null;
 
         return (
-          <View key={task.id}>
-            {/* El hueco solo existe entre dos tareas con hora: sin hora no hay distancia que medir. */}
-            {before !== null && at !== null && (
-              <Gap
-                height={gapHeight(before, at)}
-                // La marca cae DENTRO del hueco, en la fraccion exacta que ya transcurrio.
-                now={isToday && minutes > before && minutes <= at ? (minutes - before) / (at - before) : null}
-                minutes={minutes}
-                fallback={fallback}
-              />
-            )}
-            {i === 0 && isToday && at !== null && minutes <= at && (
-              <Gap height={GAP_MIN} now={1} minutes={minutes} fallback={fallback} />
-            )}
-
-            <Slot task={task} fallback={fallback} reload={reload} index={i} />
-          </View>
+          <Band
+            key={band.key}
+            label={band.label}
+            isPeak={peakEnergy === band.key}
+            tasks={inBand}
+            fallback={fallback}
+            isToday={isToday}
+            minutes={minutes}
+            reload={reload}
+            order={order}
+          />
         );
       })}
 
-      {/* Todas las horas del dia ya pasaron: la marca cierra la franja. */}
-      {isToday && tasks.length > 0 && lastPassed(tasks, minutes) && (
-        <Gap height={GAP_MIN} now={0} minutes={minutes} fallback={fallback} />
+      {/* Sin hora: no viven en ninguna franja, asi que van al final con su propio titulo. */}
+      {untimed.length > 0 && (
+        <Band
+          label="Sin hora"
+          tasks={untimed}
+          fallback={fallback}
+          isToday={false}
+          minutes={minutes}
+          reload={reload}
+          order={order}
+        />
       )}
     </View>
   );
 }
 
-/** True cuando ninguna tarea con hora queda por venir. */
-const lastPassed = (tasks: Task[], minutes: number) =>
-  !tasks.some((task) => task.dueAt && minutesOf(task.dueAt) > minutes);
+/** Una franja: titulo, sus tareas y los huecos entre ellas. */
+function Band({
+  label,
+  isPeak,
+  tasks,
+  fallback,
+  isToday,
+  minutes,
+  reload,
+  order,
+}: {
+  label: string;
+  isPeak?: boolean;
+  tasks: Task[];
+  fallback: AccentName;
+  isToday: boolean;
+  minutes: number;
+  reload: () => Promise<void> | void;
+  order: Map<number, number>;
+}) {
+  const t = useTheme();
+  const tint = useAccent(fallback);
+
+  return (
+    <View>
+      <View style={styles.bandHead}>
+        <Text style={[Type.micro, { color: t.textMuted }]}>{label}</Text>
+        {/* Su mejor momento, en su color: es lo unico que se resalta del encabezado. */}
+        {isPeak && <Text style={[Type.micro, { color: tint.ink }]}>· Tu mejor momento</Text>}
+      </View>
+
+      {tasks.map((task, i) => {
+        const previous = tasks[i - 1];
+        const at = task.dueAt ? minutesOf(task.dueAt) : null;
+        const before = previous?.dueAt ? minutesOf(previous.dueAt) : null;
+        const inGap = before !== null && at !== null && isToday && minutes > before && minutes <= at;
+
+        return (
+          <View key={task.id}>
+            {before !== null && at !== null && (
+              <Gap
+                span={at - before}
+                now={inGap ? (minutes - before) / (at - before) : null}
+                minutes={minutes}
+                fallback={fallback}
+              />
+            )}
+            <Slot task={task} fallback={fallback} reload={reload} index={order.get(task.id) ?? i} />
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 /** Una tarea: hora, tramo de riel con su color, y la fila de siempre. */
 function Slot({
@@ -131,7 +216,7 @@ function Slot({
   return (
     <Animated.View
       // Escalonada y lenta: Tiimo lo dice explicito — el movimiento guia la atencion, no la
-      // exige. 70ms entre filas alcanza para leer el orden en que aparecen sin que se sienta lento.
+      // exige. 70ms entre filas alcanza para leer el orden sin que se sienta lento.
       entering={FadeInDown.delay(index * 70).duration(420)}
       style={styles.row}>
       <Text style={[Type.label, styles.hour, { color: task.dueAt ? t.text : t.textMuted }]}>
@@ -155,16 +240,18 @@ function Slot({
 }
 
 /**
- * El aire entre dos tareas, alto en proporcion al tiempo. Si ahora cae aqui, la marca se
- * pinta en su fraccion: ver cuanto del hueco ya se fue es lo que hace sentir el dia pasar.
+ * El aire entre dos tareas.
+ *
+ * Desde 45 minutos dice cuanto es. Un hueco rotulado deja de ser ausencia y pasa a ser un
+ * dato: "2 h libre" es algo que se puede usar; medio pantallazo en blanco no dice nada.
  */
 function Gap({
-  height,
+  span,
   now,
   minutes,
   fallback,
 }: {
-  height: number;
+  span: number;
   now: number | null;
   minutes: number;
   fallback: AccentName;
@@ -172,10 +259,11 @@ function Gap({
   const t = useTheme();
   const tint = useAccent(fallback);
   const pulse = useSharedValue(1);
+  const height = gapHeight(span);
 
   useEffect(() => {
     if (now === null) return;
-    // Late y lento: es un signo de vida, no una alarma. 1.4s por lado no llama la atencion.
+    // Lento: es un signo de vida, no una alarma. 1.4s por lado no llama la atencion.
     pulse.value = withRepeat(withTiming(1.6, { duration: 1400 }), -1, true);
   }, [now, pulse]);
 
@@ -184,6 +272,13 @@ function Gap({
   return (
     <View style={[styles.gap, { height }]}>
       <View style={[styles.gapRail, { backgroundColor: t.line }]} />
+
+      {span >= LABEL_FROM && now === null && (
+        <Text style={[Type.hint, styles.gapLabel, { color: t.textMuted }]}>
+          {spanLabel(span)} libre
+        </Text>
+      )}
+
       {now !== null && (
         <View
           style={[styles.nowRow, { top: Math.max(0, Math.min(height - 1, height * now - 0.5)) }]}
@@ -198,32 +293,31 @@ function Gap({
 }
 
 const DOT = 6;
-/** Centro de la columna del riel, para alinear el punto y la linea. */
+/** Centro de la columna del riel, para alinear el punto, la linea y el rotulo. */
 const RAIL_X = HOUR_W + GUTTER;
 
 const styles = StyleSheet.create({
+  day: { gap: Space.xl },
+  // El titulo se alinea con las tarjetas, no con la columna de horas.
+  bandHead: {
+    flexDirection: 'row',
+    gap: Space.xs,
+    paddingLeft: RAIL_X + GUTTER,
+    paddingBottom: Space.sm,
+  },
+
   row: { flexDirection: 'row', alignItems: 'center' },
   hour: { width: HOUR_W, textAlign: 'right' },
   railSlot: { width: GUTTER * 2, alignItems: 'center', alignSelf: 'stretch' },
-  // Alto completo de la fila: el tramo mide lo que dura visualmente la tarjeta.
   segment: { width: RAIL, flex: 1, borderRadius: Radius.pill, marginVertical: Space.xs },
   body: { flex: 1 },
 
-  gap: { position: 'relative' },
-  gapRail: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: RAIL_X - 1,
-    width: 2,
-  },
+  gap: { position: 'relative', justifyContent: 'center' },
+  gapRail: { position: 'absolute', top: 0, bottom: 0, left: RAIL_X - 1, width: 2 },
+  gapLabel: { paddingLeft: RAIL_X + GUTTER },
+
   nowRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center' },
   nowHour: { width: HOUR_W, textAlign: 'right' },
-  nowDot: {
-    width: DOT,
-    height: DOT,
-    borderRadius: Radius.pill,
-    marginLeft: GUTTER - DOT / 2,
-  },
+  nowDot: { width: DOT, height: DOT, borderRadius: Radius.pill, marginLeft: GUTTER - DOT / 2 },
   nowLine: { flex: 1, height: 1, marginLeft: GUTTER - DOT / 2 },
 });
