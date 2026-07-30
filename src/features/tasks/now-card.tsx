@@ -7,7 +7,7 @@ import { Space, Type, useTheme } from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
 import { FOCUS_AREAS } from '@/features/auth/options';
 
-import { useToday } from './use-today';
+import type { useToday } from './use-today';
 
 /** Re-render cada segundo, solo mientras algo corre. */
 function useTick(active: boolean) {
@@ -40,9 +40,9 @@ const meta = (task: Task) => [`${task.suggestedMinutes} min`, focusLabel(task.fo
  * distraccion. Aqui hay una sola tarea y una sola accion; el resto del dia se resume en una
  * linea debajo.
  */
-export function NowCard() {
+export function NowCard({ day }: { day: ReturnType<typeof useToday> }) {
   const t = useTheme();
-  const { today, error, loading, fetchedAt, reload, toggleTimer } = useToday();
+  const { today, error, loading, fetchedAt, reload, toggleTimer } = day;
 
   const task = today?.running ?? today?.next ?? null;
   const running = !!today?.running;

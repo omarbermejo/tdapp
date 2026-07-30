@@ -6,7 +6,9 @@ import { Card, Micro, SectionHeader, Tag } from '@/components/ui/card';
 import { Radius, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
 import { FOCUS_AREAS, REMINDER_HOUR, REMINDER_STYLE } from '@/features/auth/options';
+import { Capture } from '@/features/tasks/capture';
 import { NowCard } from '@/features/tasks/now-card';
+import { useToday } from '@/features/tasks/use-today';
 
 type Options = readonly { value: string; label: string }[];
 
@@ -29,6 +31,9 @@ export default function HomeScreen() {
 
   const t = useTheme();
   const accent = useAccent(user.accentColor);
+  // El dia vive aqui porque lo comparten dos cosas: la tarjeta que lo pinta y el boton que
+  // lo cambia. Antes vivia dentro de la tarjeta y el boton no tenia como avisarle.
+  const day = useToday();
   const today = new Date().toLocaleDateString('es-MX', {
     weekday: 'long',
     day: 'numeric',
@@ -57,7 +62,7 @@ export default function HomeScreen() {
           la atención con lo único que importa al abrir, y ese dato va a mover la barra de
           energía del día cuando exista, que es donde de verdad sirve.
         */}
-        <NowCard />
+        <NowCard day={day} />
 
         <View style={styles.block}>
           <SectionHeader title="Tu perfil" hint="Lo que nos contaste al empezar." />
@@ -108,6 +113,9 @@ export default function HomeScreen() {
 
         <BigButton label="Cerrar sesión" variant="ghost" accent="copper" onPress={signOut} />
       </ScrollView>
+
+      {/* Fuera del ScrollView: anotar tiene que estar a mano sin importar donde vas leyendo. */}
+      <Capture accent={user.accentColor} onCreated={day.reload} />
     </SafeAreaView>
   );
 }
