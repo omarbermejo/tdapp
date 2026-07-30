@@ -8,7 +8,7 @@ import { Accents, NavTheme, Theme } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/features/auth/auth-context';
 
 function RootNavigator() {
-  const { user, loading } = useAuth();
+  const { stage, loading } = useAuth();
   // Los titulares son la fuente cargada: sin ella la primera pantalla parpadea con otra tipografia.
   const [fontsLoaded, fontError] = useFonts({ Outfit_800ExtraBold });
 
@@ -20,12 +20,24 @@ function RootNavigator() {
     );
   }
 
+  /**
+   * Los cuatro estados del alta son excluyentes, asi que solo hay una pantalla disponible a la
+   * vez y no hace falta anchor. El fade evita que pasar de un estado a otro se lea como un
+   * push desde el lado equivocado.
+   */
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Theme.canvas } }}>
-      <Stack.Protected guard={!user}>
+    <Stack
+      screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: Theme.canvas } }}>
+      <Stack.Protected guard={stage === 'guest'}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
-      <Stack.Protected guard={!!user}>
+      <Stack.Protected guard={stage === 'verify'}>
+        <Stack.Screen name="verify" />
+      </Stack.Protected>
+      <Stack.Protected guard={stage === 'onboarding'}>
+        <Stack.Screen name="onboarding" />
+      </Stack.Protected>
+      <Stack.Protected guard={stage === 'ready'}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
     </Stack>

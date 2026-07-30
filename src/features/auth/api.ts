@@ -19,26 +19,37 @@ export type User = {
   reminderStyle: string;
   accentColor: AccentName;
   createdAt: string;
+  /**
+   * ponytail: opcionales mientras haya APIs desplegadas sin estos campos. `stageOf` compara
+   * contra false/null explicitos, asi que ausentes = cuenta lista y nadie queda atrapado.
+   */
+  emailVerified?: boolean;
+  onboardedAt?: string | null;
 };
 
-export type RegisterInput = {
-  name: string;
-  email: string;
-  password: string;
-  birthYear?: number | null;
-  diagnosis?: string;
-  treatment?: string;
-  focusAreas?: string[];
-  peakEnergy?: string;
-  reminderStyle?: string;
-  accentColor?: string;
+export type RegisterInput = { name: string; email: string; password: string };
+
+/** Los 7 campos que afina el onboarding. Espeja el perfil que ya devuelve el registro. */
+export type ProfileInput = {
+  birthYear: number | null;
+  diagnosis: string;
+  treatment: string;
+  focusAreas: string[];
+  peakEnergy: string;
+  reminderStyle: string;
+  accentColor: AccentName;
 };
+
+export type DevicePlatform = 'ios' | 'android' | 'web';
 
 export class ApiError extends Error {
   fields: Record<string, string>;
-  constructor(message: string, fields: Record<string, string> = {}) {
+  /** 0 = no hubo respuesta. Separa "tu sesion murio" de "no hay wifi". */
+  status: number;
+  constructor(message: string, fields: Record<string, string> = {}, status = 0) {
     super(message);
     this.fields = fields;
+    this.status = status;
   }
 }
 
@@ -54,9 +65,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(data.error ?? 'Algo salió mal', data.fields);
+  if (!res.ok) throw new ApiError(data.error ?? 'Algo salió mal', data.fields, res.status);
   return data as T;
 }
+
+const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 type Session = { token: string; user: User };
 
@@ -75,6 +88,31 @@ export const api = {
   apple: (idToken: string, name?: string) =>
     request<Session>('/auth/apple', { method: 'POST', body: JSON.stringify({ idToken, name }) }),
 
-  me: (token: string) =>
-    request<{ user: User }>('/auth/me', { headers: { Authorization: `Bearer ${token}` } }),
+  me: (token: string) => request<{ user: User }>('/me', { headers: bearer(token) }),
+
+  /** Devuelve token nuevo: el de antes decia que el correo no estaba verificado. */
+  verify: (token: string, code: string) =>
+    request<Session>('/auth/verify', {
+      method: 'POST',
+      headers: bearer(token),
+      body: JSON.stringify({ code }),
+    }),
+
+  resend: (token: string) =>
+    request<void>('/auth/resend', { method: 'POST', headers: bearer(token) }),
+
+  /** Guarda el perfil del onboarding; el API sella onboardedAt la primera vez. */
+  onboard: (token: string, input: ProfileInput) =>
+    request<{ user: User }>('/me/profile', {
+      method: 'PATCH',
+      headers: bearer(token),
+      body: JSON.stringify(input),
+    }),
+
+  registerDevice: (token: string, pushToken: string, platform: DevicePlatform) =>
+    request<void>('/me/devices', {
+      method: 'POST',
+      headers: bearer(token),
+      body: JSON.stringify({ token: pushToken, platform }),
+    }),
 };

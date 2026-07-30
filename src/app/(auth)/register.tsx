@@ -6,69 +6,36 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
-import { Choice } from '@/components/ui/choice';
 import { StepDots } from '@/components/ui/step-dots';
-import { Space, Theme, Type, type AccentName } from '@/constants/theme';
-import { ApiError, type RegisterInput } from '@/features/auth/api';
+import { Stem } from '@/components/ui/stem';
+import { Space, Theme, Type } from '@/constants/theme';
+import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
-import {
-  ACCENT_COLOR,
-  DIAGNOSIS,
-  FOCUS_AREAS,
-  PEAK_ENERGY,
-  REMINDER_STYLE,
-  TREATMENT,
-} from '@/features/auth/options';
-
-const STEPS = 3;
-
-/** Qué campo vive en qué paso, para devolver al usuario donde su error es visible. */
-const STEP_FIELDS = [
-  ['name', 'email', 'password'],
-  ['birthYear', 'diagnosis', 'treatment'],
-  ['focusAreas', 'peakEnergy', 'reminderStyle', 'accentColor'],
-];
 
 /**
- * Registro en 3 pasos. Solo el primero es obligatorio: el resto se puede saltar
- * y el backend rellena con defaults. Un formulario largo de golpe es abandono seguro.
+ * Solo credenciales. El perfil TDAH se pide en el onboarding, despues de verificar el correo:
+ * pedirlo todo aqui era el camino corto a que nadie termine de registrarse.
  */
 export default function RegisterScreen() {
   const { signUp } = useAuth();
-  const [step, setStep] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [fields, setFields] = useState<Record<string, string>>({});
-
-  const [form, setForm] = useState<RegisterInput>({
-    name: '',
-    email: '',
-    password: '',
-    birthYear: null,
-    diagnosis: 'undisclosed',
-    treatment: 'undisclosed',
-    focusAreas: [],
-    peakEnergy: 'varies',
-    reminderStyle: 'firm',
-    accentColor: 'olive',
-  });
-
-  const accent = form.accentColor as AccentName;
-  const set = <K extends keyof RegisterInput>(key: K, value: RegisterInput[K]) =>
-    setForm((f) => ({ ...f, [key]: value }));
+  const [loading, setLoading] = useState(false);
 
   const submit = async () => {
     setError('');
     setFields({});
     setLoading(true);
     try {
-      await signUp(form);
+      // No navega: al quedar la sesion sin verificar, el guard del root salta al codigo.
+      await signUp({ name, email, password });
     } catch (e) {
       if (e instanceof ApiError) {
         setError(e.message);
         setFields(e.fields);
-        const failed = STEP_FIELDS.findIndex((keys) => keys.some((k) => k in e.fields));
-        if (failed >= 0) setStep(failed);
       } else {
         setError('Algo salió mal');
       }
@@ -77,144 +44,73 @@ export default function RegisterScreen() {
     }
   };
 
-  const next = () => (step === STEPS - 1 ? submit() : setStep(step + 1));
-  const back = () => (step === 0 ? router.back() : setStep(step - 1));
-
   return (
     <SafeAreaView style={styles.screen}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}>
         <View style={styles.header}>
-          <BackButton onPress={back} />
+          <BackButton />
           <View style={styles.flex}>
-            <StepDots total={STEPS} current={step} accent={accent} />
+            <StepDots total={2} current={0} />
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          {step === 0 && (
-            <>
-              <Text style={[Type.display, styles.title]}>Empecemos{'\n'}por lo básico</Text>
-              <View style={styles.form}>
-                <BigField
-                  label="¿Cómo te llamamos?"
-                  value={form.name}
-                  onChangeText={(v) => set('name', v)}
-                  placeholder="Tu nombre"
-                  accent={accent}
-                  error={fields.name}
-                  autoComplete="given-name"
-                />
-                <BigField
-                  label="Correo"
-                  value={form.email}
-                  onChangeText={(v) => set('email', v)}
-                  placeholder="tu@correo.com"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  inputMode="email"
-                  autoComplete="email"
-                  accent={accent}
-                  error={fields.email}
-                />
-                <BigField
-                  label="Contraseña"
-                  value={form.password}
-                  onChangeText={(v) => set('password', v)}
-                  placeholder="Mínimo 8 caracteres"
-                  secureTextEntry
-                  autoComplete="new-password"
-                  accent={accent}
-                  error={fields.password}
-                />
-              </View>
-            </>
-          )}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          <View style={styles.hero}>
+            <Text style={[Type.display, styles.title]}>Solo tres datos.</Text>
+            <Text style={[Type.body, styles.subtitle]}>Lo demás lo ajustas después.</Text>
+          </View>
 
-          {step === 1 && (
-            <>
-              <View style={styles.intro}>
-                <Text style={[Type.display, styles.title]}>Cuéntanos{'\n'}de ti</Text>
-                <Text style={[Type.body, styles.hint]}>Todo esto es opcional. Puedes saltarlo.</Text>
-              </View>
-              <Choice
-                label="Tu TDAH es de tipo…"
-                options={DIAGNOSIS}
-                value={form.diagnosis!}
-                onChange={(v) => set('diagnosis', v)}
-                accent={accent}
-              />
-              <Choice
-                label="¿Llevas algún tratamiento?"
-                options={TREATMENT}
-                value={form.treatment!}
-                onChange={(v) => set('treatment', v)}
-                accent={accent}
-              />
-              <BigField
-                label="Año de nacimiento"
-                value={form.birthYear ? String(form.birthYear) : ''}
-                onChangeText={(v) => set('birthYear', v ? Number(v.replace(/\D/g, '')) : null)}
-                placeholder="1995"
-                keyboardType="number-pad"
-                maxLength={4}
-                accent={accent}
-                error={fields.birthYear}
-              />
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <View style={styles.intro}>
-                <Text style={[Type.display, styles.title]}>¿En qué{'\n'}te ayudamos?</Text>
-                <Text style={[Type.body, styles.hint]}>Todo esto es opcional. Puedes saltarlo.</Text>
-              </View>
-              <Choice
-                label="Tus focos"
-                hint="Máximo 3. Menos focos, más resultados."
-                options={FOCUS_AREAS}
-                value={form.focusAreas!}
-                onChange={(v) => set('focusAreas', v)}
-                max={3}
-                accent={accent}
-              />
-              <Choice
-                label="Rindes mejor en…"
-                options={PEAK_ENERGY}
-                value={form.peakEnergy!}
-                onChange={(v) => set('peakEnergy', v)}
-                accent={accent}
-              />
-              <Choice
-                label="¿Cómo te recordamos las cosas?"
-                options={REMINDER_STYLE}
-                value={form.reminderStyle!}
-                onChange={(v) => set('reminderStyle', v)}
-                accent={accent}
-              />
-              <Choice
-                label="Tu color"
-                options={ACCENT_COLOR}
-                value={form.accentColor!}
-                onChange={(v) => set('accentColor', v)}
-                accent={accent}
-              />
-            </>
-          )}
+          <Stem filled={[!!name, !!email, !!password]}>
+            <BigField
+              label="¿Cómo te llamamos?"
+              value={name}
+              onChangeText={setName}
+              placeholder="Tu nombre"
+              error={fields.name}
+              autoComplete="given-name"
+            />
+            <BigField
+              label="Correo"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="tu@correo.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              inputMode="email"
+              autoComplete="email"
+              error={fields.email}
+            />
+            <BigField
+              label="Contraseña"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Mínimo 8 caracteres"
+              secureTextEntry
+              autoComplete="new-password"
+              onSubmitEditing={submit}
+              returnKeyType="go"
+              error={fields.password}
+            />
+          </Stem>
 
           {!!error && <Text style={[Type.hint, styles.error]}>{error}</Text>}
-        </ScrollView>
 
-        <View style={styles.actions}>
-          <BigButton
-            label={step === STEPS - 1 ? 'Crear mi cuenta' : 'Siguiente'}
-            loading={loading}
-            onPress={next}
-          />
-          {step > 0 && step < STEPS - 1 && (
-            <BigButton label="Saltar y crear cuenta" variant="ghost" accent={accent} onPress={submit} />
-          )}
-        </View>
+          <View style={styles.spacer} />
+
+          <View style={styles.actions}>
+            <BigButton label="Crear mi cuenta" loading={loading} onPress={submit} />
+            <BigButton
+              label="Ya tengo cuenta"
+              variant="ghost"
+              onPress={() => router.replace('/login')}
+            />
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -230,13 +126,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xl,
     paddingVertical: Space.md,
   },
-  content: { paddingHorizontal: Space.xl, paddingTop: Space.md, paddingBottom: Space.xl, gap: Space.xl },
-  // Titular y bajada van juntos: son un bloque, no dos secciones.
-  intro: { gap: Space.sm },
-  // Los campos de un mismo formulario van mas juntos que los bloques de la pantalla.
-  form: { gap: Space.lg },
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: Space.xl,
+    paddingTop: Space.md,
+    paddingBottom: Space.lg,
+    gap: Space.xl,
+  },
+  hero: { gap: Space.sm },
   title: { color: Theme.text },
-  hint: { color: Theme.textMuted },
+  subtitle: { color: Theme.textMuted },
+  spacer: { flex: 1 },
+  actions: { gap: Space.md },
   error: { color: Theme.danger },
-  actions: { paddingHorizontal: Space.xl, paddingTop: Space.md, paddingBottom: Space.sm, gap: Space.md },
 });
