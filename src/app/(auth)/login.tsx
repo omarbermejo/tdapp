@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
-import { Brand, Type } from '@/constants/brand';
+import { Space, Theme, Type } from '@/constants/theme';
 import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 
@@ -30,9 +30,14 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Text style={[Type.hero, styles.title]}>Hola de{'\n'}nuevo 👋</Text>
+          <View style={styles.intro}>
+            <Text style={[Type.display, styles.title]}>Hola de nuevo.</Text>
+            <Text style={[Type.body, styles.subtitle]}>Entra y seguimos donde lo dejaste.</Text>
+          </View>
 
           <View style={styles.form}>
             <BigField
@@ -59,11 +64,10 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.actions}>
-            <BigButton label="Entrar" accent="lime" loading={loading} onPress={submit} />
+            <BigButton label="Entrar" loading={loading} onPress={submit} />
             <BigButton
               label="No tengo cuenta"
               variant="ghost"
-              accent="electric"
               onPress={() => router.replace('/register')}
             />
           </View>
@@ -74,11 +78,19 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Brand.ink },
+  screen: { flex: 1, backgroundColor: Theme.canvas },
   flex: { flex: 1 },
-  content: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 24, gap: 32, justifyContent: 'center' },
-  title: { color: Brand.text },
-  form: { gap: 20 },
-  actions: { gap: 10 },
-  error: { color: Brand.danger },
+  content: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: Space.xl,
+    paddingBottom: Space.xl,
+    gap: Space.xl,
+  },
+  intro: { gap: Space.sm },
+  title: { color: Theme.text },
+  subtitle: { color: Theme.textMuted },
+  form: { gap: Space.lg },
+  actions: { gap: Space.md },
+  error: { color: Theme.danger },
 });

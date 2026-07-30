@@ -1,33 +1,35 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
 
-import { AccentName, Accents, Brand, Radius, Touch, Type, onAccent } from '@/constants/brand';
+import { Accents, Radius, Shadow, Theme, Touch, Type, type AccentName } from '@/constants/theme';
 
 type Props = {
   label: string;
   onPress: () => void;
+  /** Tiñe el texto de `outline` y `ghost`. `primary` siempre va con la tinta de la marca. */
   accent?: AccentName;
-  variant?: 'solid' | 'outline' | 'ghost';
+  variant?: 'primary' | 'outline' | 'ghost';
   loading?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
 };
 
 /**
- * Boton grande con borde inferior grueso: se hunde al presionar.
- * La respuesta tactil inmediata importa mas que la elegancia aqui.
+ * Un solo boton oscuro por pantalla (`primary`); el resto son papel con hairline
+ * o texto pelado. La jerarquia la carga el peso visual, no un color saturado.
  */
 export function BigButton({
   label,
   onPress,
-  accent = 'electric',
-  variant = 'solid',
+  accent = 'olive',
+  variant = 'primary',
   loading,
   disabled,
   style,
 }: Props) {
-  const color = Accents[accent];
-  const solid = variant === 'solid';
+  const tint = Accents[accent].solid;
+  const primary = variant === 'primary';
   const blocked = disabled || loading;
+  const color = primary ? Theme.onDark : tint;
 
   return (
     <Pressable
@@ -37,19 +39,18 @@ export function BigButton({
       disabled={blocked}
       style={({ pressed }) => [
         styles.base,
-        solid && { backgroundColor: color, borderBottomColor: Brand.shadow },
-        variant === 'outline' && { borderColor: color, borderWidth: 3, borderBottomWidth: 6 },
+        primary && styles.primary,
+        variant === 'outline' && styles.outline,
         variant === 'ghost' && styles.ghost,
         blocked && styles.blocked,
         pressed && !blocked && styles.pressed,
         style,
       ]}>
       {loading ? (
-        <ActivityIndicator color={solid ? onAccent(accent) : color} />
+        <ActivityIndicator color={color} />
       ) : (
-        <Text style={[Type.button, { color: solid ? onAccent(accent) : color }]}>{label}</Text>
+        <Text style={[Type.button, { color }]}>{label}</Text>
       )}
-      {variant === 'ghost' && <View style={[styles.underline, { backgroundColor: color }]} />}
     </Pressable>
   );
 }
@@ -61,11 +62,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-    borderBottomWidth: 6,
-    borderBottomColor: 'transparent',
   },
-  ghost: { minHeight: 48, borderBottomWidth: 0 },
-  underline: { height: 3, width: '42%', borderRadius: 3, marginTop: 2 },
-  pressed: { transform: [{ translateY: 4 }], borderBottomWidth: 2, opacity: 0.92 },
-  blocked: { opacity: 0.45 },
+  primary: { backgroundColor: Theme.ink, ...Shadow.card },
+  outline: {
+    backgroundColor: Theme.surface,
+    borderWidth: 1,
+    borderColor: Theme.line,
+    ...Shadow.card,
+  },
+  ghost: { minHeight: Touch.icon, backgroundColor: 'transparent' },
+  pressed: { opacity: 0.9, transform: [{ scale: 0.985 }] },
+  blocked: { opacity: 0.4 },
 });

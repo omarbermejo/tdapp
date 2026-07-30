@@ -5,8 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": ["tdapp", "com.tdapp.tdapp"],
-    "userInterfaceStyle": "automatic",
+    "scheme": [
+      "tdapp",
+      "com.tdapp.tdapp"
+    ],
+    "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.tdapp.tdapp",
       "icon": "./assets/expo.icon"
@@ -14,7 +17,7 @@
     "android": {
       "package": "com.tdapp.tdapp",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#fefae0",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -30,7 +33,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#fefae0",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }

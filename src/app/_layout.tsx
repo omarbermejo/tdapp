@@ -1,8 +1,8 @@
-import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
+import { Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { Accents, Brand } from '@/constants/brand';
+import { Accents, NavTheme, Theme } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/features/auth/auth-context';
 
 function RootNavigator() {
@@ -11,13 +11,13 @@ function RootNavigator() {
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color={Accents.electric} />
+        <ActivityIndicator size="large" color={Accents.olive.solid} />
       </View>
     );
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Brand.ink } }}>
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Theme.canvas } }}>
       <Stack.Protected guard={!user}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
@@ -30,8 +30,8 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider value={DarkTheme}>
-      <StatusBar style="light" />
+    <ThemeProvider value={NavTheme}>
+      <StatusBar style="dark" />
       <AuthProvider>
         <RootNavigator />
       </AuthProvider>
@@ -42,7 +42,7 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   loading: {
     flex: 1,
-    backgroundColor: Brand.ink,
+    backgroundColor: Theme.canvas,
     alignItems: 'center',
     justifyContent: 'center',
   },

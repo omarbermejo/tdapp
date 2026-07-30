@@ -1,12 +1,12 @@
 import { StyleSheet, View } from 'react-native';
 
-import { AccentName, Accents, Brand } from '@/constants/brand';
+import { Accents, Radius, Space, Theme, type AccentName } from '@/constants/theme';
 
-/** Barra de progreso gruesa: saber cuanto falta evita el abandono a media forma. */
+/** Barra segmentada: ver cuanto falta en trozos concretos evita abandonar a media forma. */
 export function StepDots({
   total,
   current,
-  accent = 'electric',
+  accent = 'olive',
 }: {
   total: number;
   current: number;
@@ -17,7 +17,10 @@ export function StepDots({
       {Array.from({ length: total }, (_, i) => (
         <View
           key={i}
-          style={[styles.bar, { backgroundColor: i <= current ? Accents[accent] : Brand.inkLine }]}
+          style={[
+            styles.segment,
+            { backgroundColor: i <= current ? Accents[accent].solid : Theme.sunken },
+          ]}
         />
       ))}
     </View>
@@ -25,6 +28,6 @@ export function StepDots({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 8 },
-  bar: { flex: 1, height: 10, borderRadius: 5 },
+  row: { flexDirection: 'row', gap: Space.xs },
+  segment: { flex: 1, height: 8, borderRadius: Radius.pill },
 });

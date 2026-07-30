@@ -42,9 +42,9 @@ export const REMINDER_STYLE: readonly Option[] = [
 ];
 
 export const ACCENT_COLOR: readonly Option[] = [
-  { value: 'electric', label: 'Eléctrico', emoji: '🟣' },
-  { value: 'lime', label: 'Lima', emoji: '🟢' },
-  { value: 'mango', label: 'Mango', emoji: '🟠' },
-  { value: 'magenta', label: 'Magenta', emoji: '🩷' },
-  { value: 'turquoise', label: 'Turquesa', emoji: '🩵' },
+  { value: 'forest', label: 'Bosque', emoji: '🟩' },
+  { value: 'olive', label: 'Oliva', emoji: '🫒' },
+  { value: 'leaf', label: 'Hoja', emoji: '🟢' },
+  { value: 'clay', label: 'Barro', emoji: '🟤' },
+  { value: 'copper', label: 'Cobre', emoji: '🟠' },
 ];

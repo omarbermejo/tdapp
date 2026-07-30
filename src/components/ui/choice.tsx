@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AccentName, Accents, Brand, Radius, Touch, Type, onAccent } from '@/constants/brand';
+import { Accents, Radius, Space, Theme, Touch, Type, type AccentName } from '@/constants/theme';
 
 export type Option = { value: string; label: string; emoji?: string };
 
@@ -16,10 +16,12 @@ type Props = {
 };
 
 /**
- * Opciones como pastillas grandes con emoji. Elegir de una lista visual cuesta
- * mucho menos que escribir, y el emoji da un ancla para reconocerla de un vistazo.
+ * Opciones como pastillas de papel con hairline. La seleccionada se tine con el
+ * acento suave, nunca con un bloque saturado; el emoji queda dentro del chip
+ * porque es el ancla visual que hace reconocible la opcion de un vistazo.
  */
-export function Choice({ label, options, value, onChange, accent = 'electric', max, hint }: Props) {
+export function Choice({ label, options, value, onChange, accent = 'olive', max, hint }: Props) {
+  const tint = Accents[accent];
   const multi = Array.isArray(value);
   const isOn = (v: string) => (multi ? (value as string[]).includes(v) : value === v);
 
@@ -33,7 +35,7 @@ export function Choice({ label, options, value, onChange, accent = 'electric', m
 
   return (
     <View style={styles.wrap}>
-      <Text style={[Type.label, styles.label]}>{label}</Text>
+      <Text style={[Type.micro, styles.label]}>{label}</Text>
       {!!hint && <Text style={[Type.hint, styles.hint]}>{hint}</Text>}
       <View style={styles.row}>
         {options.map((option) => {
@@ -46,13 +48,11 @@ export function Choice({ label, options, value, onChange, accent = 'electric', m
               onPress={() => toggle(option.value)}
               style={({ pressed }) => [
                 styles.chip,
-                on && { backgroundColor: Accents[accent], borderColor: Accents[accent] },
+                on && { backgroundColor: tint.soft, borderColor: tint.solid, borderWidth: 1.5 },
                 pressed && styles.pressed,
               ]}>
               {!!option.emoji && <Text style={styles.emoji}>{option.emoji}</Text>}
-              <Text style={[Type.label, { color: on ? onAccent(accent) : Brand.text }]}>
-                {option.label}
-              </Text>
+              <Text style={[Type.label, styles.chipLabel]}>{option.label}</Text>
             </Pressable>
           );
         })}
@@ -62,21 +62,22 @@ export function Choice({ label, options, value, onChange, accent = 'electric', m
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 10 },
-  label: { color: Brand.text },
-  hint: { color: Brand.textMute, marginTop: -6 },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  wrap: { gap: Space.sm },
+  label: { color: Theme.textMuted },
+  hint: { color: Theme.textMuted },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   chip: {
     minHeight: Touch.chip,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 18,
+    gap: Space.sm,
+    paddingHorizontal: Space.lg,
     borderRadius: Radius.pill,
-    borderWidth: 3,
-    borderColor: Brand.inkLine,
-    backgroundColor: Brand.inkSoft,
+    borderWidth: 1,
+    borderColor: Theme.line,
+    backgroundColor: Theme.surface,
   },
-  emoji: { fontSize: 22 },
-  pressed: { transform: [{ scale: 0.96 }] },
+  chipLabel: { color: Theme.text },
+  emoji: { fontSize: 20 },
+  pressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
 });

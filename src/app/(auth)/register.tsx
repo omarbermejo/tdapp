@@ -7,7 +7,7 @@ import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
 import { Choice } from '@/components/ui/choice';
 import { StepDots } from '@/components/ui/step-dots';
-import { AccentName, Brand, Type } from '@/constants/brand';
+import { Radius, Shadow, Space, Theme, Touch, Type, type AccentName } from '@/constants/theme';
 import { ApiError, type RegisterInput } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import {
@@ -42,7 +42,7 @@ export default function RegisterScreen() {
     focusAreas: [],
     peakEnergy: 'varies',
     reminderStyle: 'firm',
-    accentColor: 'electric',
+    accentColor: 'olive',
   });
 
   const accent = form.accentColor as AccentName;
@@ -75,16 +75,23 @@ export default function RegisterScreen() {
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <View style={styles.header}>
-          <Pressable onPress={back} hitSlop={16} accessibilityRole="button" accessibilityLabel="Atrás">
-            <Text style={styles.back}>←</Text>
+          <Pressable
+            onPress={back}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Atrás"
+            style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
+            <Text style={styles.backGlyph}>←</Text>
           </Pressable>
-          <StepDots total={STEPS} current={step} accent={accent} />
+          <View style={styles.flex}>
+            <StepDots total={STEPS} current={step} accent={accent} />
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {step === 0 && (
             <>
-              <Text style={[Type.title, styles.title]}>Empecemos{'\n'}por lo básico</Text>
+              <Text style={[Type.display, styles.title]}>Empecemos{'\n'}por lo básico</Text>
               <BigField
                 label="¿Cómo te llamamos?"
                 value={form.name}
@@ -121,8 +128,10 @@ export default function RegisterScreen() {
 
           {step === 1 && (
             <>
-              <Text style={[Type.title, styles.title]}>Cuéntanos{'\n'}de ti</Text>
-              <Text style={[Type.hint, styles.skipHint]}>Todo esto es opcional. Puedes saltarlo.</Text>
+              <View style={styles.intro}>
+                <Text style={[Type.display, styles.title]}>Cuéntanos{'\n'}de ti</Text>
+                <Text style={[Type.body, styles.hint]}>Todo esto es opcional. Puedes saltarlo.</Text>
+              </View>
               <Choice
                 label="Tu TDAH es de tipo…"
                 options={DIAGNOSIS}
@@ -152,7 +161,10 @@ export default function RegisterScreen() {
 
           {step === 2 && (
             <>
-              <Text style={[Type.title, styles.title]}>¿En qué{'\n'}te ayudamos?</Text>
+              <View style={styles.intro}>
+                <Text style={[Type.display, styles.title]}>¿En qué{'\n'}te ayudamos?</Text>
+                <Text style={[Type.body, styles.hint]}>Todo esto es opcional. Puedes saltarlo.</Text>
+              </View>
               <Choice
                 label="Tus focos"
                 hint="Máximo 3. Menos focos, más resultados."
@@ -186,7 +198,7 @@ export default function RegisterScreen() {
             </>
           )}
 
-          {!!error && <Text style={[Type.hint, styles.error]}>⚠︎ {error}</Text>}
+          {!!error && <Text style={[Type.hint, styles.error]}>{error}</Text>}
         </ScrollView>
 
         <View style={styles.actions}>
@@ -206,13 +218,31 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Brand.ink },
+  screen: { flex: 1, backgroundColor: Theme.canvas },
   flex: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 20, paddingHorizontal: 24, paddingVertical: 12 },
-  back: { color: Brand.text, fontSize: 32, fontWeight: '800', lineHeight: 36 },
-  content: { paddingHorizontal: 24, paddingBottom: 24, gap: 24 },
-  title: { color: Brand.text },
-  skipHint: { color: Brand.textMute, marginTop: -16 },
-  actions: { paddingHorizontal: 24, paddingBottom: 12, gap: 8 },
-  error: { color: Brand.danger },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.lg,
+    paddingHorizontal: Space.xl,
+    paddingVertical: Space.md,
+  },
+  back: {
+    width: Touch.icon,
+    height: Touch.icon,
+    borderRadius: Radius.pill,
+    backgroundColor: Theme.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.card,
+  },
+  backGlyph: { color: Theme.text, fontSize: 22, lineHeight: 26, fontWeight: '700' },
+  pressed: { opacity: 0.9 },
+  content: { paddingHorizontal: Space.xl, paddingTop: Space.md, paddingBottom: Space.xl, gap: Space.xl },
+  // Titular y bajada van juntos: son un bloque, no dos secciones.
+  intro: { gap: Space.sm },
+  title: { color: Theme.text },
+  hint: { color: Theme.textMuted },
+  error: { color: Theme.danger },
+  actions: { paddingHorizontal: Space.xl, paddingTop: Space.md, paddingBottom: Space.sm, gap: Space.sm },
 });
