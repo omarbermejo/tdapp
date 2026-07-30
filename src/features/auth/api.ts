@@ -16,6 +16,8 @@ export type User = {
   focusAreas: string[];
   peakEnergy: string;
   reminderStyle: string;
+  /** Hora del recordatorio diario, 0..23. Sin ella no hay nada que agendar. */
+  reminderHour: number;
   accentColor: AccentName;
   createdAt: string;
   /**
@@ -38,6 +40,7 @@ export type ProfileInput = {
   focusAreas: string[];
   peakEnergy: string;
   reminderStyle: string;
+  reminderHour: number;
   accentColor: AccentName;
 };
 

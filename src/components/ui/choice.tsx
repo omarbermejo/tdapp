@@ -8,7 +8,16 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 
-import { Radius, Space, Theme, Touch, Type, accentOf, type Accent, type AccentName } from '@/constants/theme';
+import {
+  Radius,
+  Space,
+  Touch,
+  Type,
+  useAccent,
+  useTheme,
+  type Accent,
+  type AccentName,
+} from '@/constants/theme';
 import { usePressScale } from '@/hooks/use-press-scale';
 
 export type Option = {
@@ -16,12 +25,14 @@ export type Option = {
   label: string;
   /** Sticker recoloreado a la paleta (assets/stickers/chips). */
   icon?: ImageSourcePropType;
-  /** Para elegir un color: la muestra ES la opcion, no hace falta icono. */
-  swatch?: string;
+  /** Para elegir un color: la muestra ES la opcion, no hace falta icono. Es el NOMBRE
+   *  del acento, porque el hex depende del esquema y las opciones son datos estaticos. */
+  swatch?: AccentName;
 };
 
 type Props = {
-  label: string;
+  /** Opcional: en el onboarding conversacional la pregunta ya es la burbuja de arriba. */
+  label?: string;
   options: readonly Option[];
   /** string = seleccion unica, string[] = multiple */
   value: string | string[];
@@ -41,7 +52,8 @@ type Props = {
  * se distingue del papel.
  */
 export function Choice({ label, options, value, onChange, accent = 'olive', max, hint }: Props) {
-  const tint = accentOf(accent);
+  const theme = useTheme();
+  const tint = useAccent(accent);
   const multi = Array.isArray(value);
   const isOn = (v: string) => (multi ? (value as string[]).includes(v) : value === v);
 
@@ -55,8 +67,8 @@ export function Choice({ label, options, value, onChange, accent = 'olive', max,
 
   return (
     <View style={styles.wrap}>
-      <Text style={[Type.micro, styles.label]}>{label}</Text>
-      {!!hint && <Text style={[Type.hint, styles.hint]}>{hint}</Text>}
+      {!!label && <Text style={[Type.micro, { color: theme.textMuted }]}>{label}</Text>}
+      {!!hint && <Text style={[Type.hint, { color: theme.textMuted }]}>{hint}</Text>}
       <View style={styles.grid}>
         {options.map((option) => (
           <Card
@@ -90,6 +102,8 @@ function Card({
   tint: Accent;
   onPress: () => void;
 }) {
+  const t = useTheme();
+  const swatch = useAccent(option.swatch);
   const press = usePressScale({ to: 0.96 });
   const chosen = useSharedValue(on ? 1 : 0);
 
@@ -100,10 +114,11 @@ function Card({
   // El borde se queda en 2pt siempre y solo cambia de color: animar el grosor movia el
   // contenido un pixel en cada toque.
   const skin = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(chosen.value, [0, 1], [Theme.surface, tint.soft]),
-    borderColor: interpolateColor(chosen.value, [0, 1], [Theme.line, tint.ink]),
+    backgroundColor: interpolateColor(chosen.value, [0, 1], [t.surface, tint.soft]),
+    borderColor: interpolateColor(chosen.value, [0, 1], [t.line, tint.ink]),
     transform: [{ scale: 1 + chosen.value * 0.03 }],
-  }));
+    // t entra en las dependencias: al cambiar el esquema el worklet tiene que releerlo.
+  }), [t.surface, t.line, tint.soft, tint.ink]);
 
   return (
     <Animated.View style={[styles.slot, press.style]}>
@@ -118,32 +133,38 @@ function Card({
           {!!option.icon && (
             <Image source={option.icon} style={styles.icon} contentFit="contain" accessible={false} />
           )}
-          {!!option.swatch && <View style={[styles.swatch, { backgroundColor: option.swatch }]} />}
-          <Text style={[Type.label, styles.cardLabel]}>{option.label}</Text>
+          {!!option.swatch && <View style={[styles.swatch, { backgroundColor: swatch.solid }]} />}
+          <Text style={[Type.label, { color: t.text }]}>{option.label}</Text>
         </Pressable>
       </Animated.View>
     </Animated.View>
   );
 }
 
-const MARK = 26;
+const MARK = 22;
 
 const styles = StyleSheet.create({
   wrap: { gap: Space.sm },
-  label: { color: Theme.textMuted },
-  hint: { color: Theme.textMuted },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  // 48% + el gap cabe hasta en 320pt de ancho, y sin flexGrow la fila impar no se estira.
-  slot: { flexBasis: '48%' },
+  /**
+   * Mosaico: cada chip mide lo que mide su texto (basis auto) y el sobrante de la fila se
+   * reparte entre los que hay (flexGrow). Salen tamanos distintos SIN borde derecho
+   * irregular, que es lo que hacia que una lista de pastillas se leyera como un desorden.
+   */
+  slot: { flexGrow: 1, flexBasis: 'auto' },
   card: {
-    flex: 1,
-    minHeight: Touch.chip + Space.xl,
-    // Radius.md y no pill: dejaron de ser pastillas, ahora son tarjetas.
+    minHeight: Touch.chip,
     borderRadius: Radius.md,
     borderWidth: 2,
   },
-  touch: { flex: 1, gap: Space.sm, padding: Space.md, justifyContent: 'center' },
+  touch: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.md,
+  },
   icon: { width: MARK, height: MARK },
   swatch: { width: MARK, height: MARK, borderRadius: Radius.pill },
-  cardLabel: { color: Theme.text },
 });

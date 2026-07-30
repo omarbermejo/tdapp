@@ -1,5 +1,4 @@
 import type { Option } from '@/components/ui/choice';
-import { Accents } from '@/constants/theme';
 
 /**
  * Etiquetas en español para los catalogos del backend (GET /auth/catalogs).
@@ -41,11 +40,33 @@ export const REMINDER_STYLE: readonly Option[] = [
   { value: 'persistent', label: 'Insistente', icon: require('@/assets/icons/chips/persistent.svg') },
 ];
 
-/** El color no lleva icono: la muestra ES la opcion que se esta eligiendo. */
+/**
+ * Horas para el recordatorio diario. Presets y no un picker: son dos toques contra tres
+ * ruedas, y una hora en punto cubre el caso real de "avisame en la manana".
+ *
+ * El valor va como texto porque Choice trabaja con strings; quien guarda lo pasa a numero,
+ * que es lo que valida el API (0..23).
+ */
+export const REMINDER_HOUR: readonly Option[] = [
+  { value: '6', label: '6 am' },
+  { value: '7', label: '7 am' },
+  { value: '8', label: '8 am' },
+  { value: '9', label: '9 am' },
+  { value: '13', label: '1 pm' },
+  { value: '18', label: '6 pm' },
+  { value: '20', label: '8 pm' },
+  { value: '21', label: '9 pm' },
+];
+
+/**
+ * El color no lleva icono: la muestra ES la opcion que se esta eligiendo.
+ * `swatch` guarda el NOMBRE del acento y no el hex, porque el hex depende del esquema
+ * y este modulo se evalua una sola vez al cargar.
+ */
 export const ACCENT_COLOR: readonly Option[] = [
-  { value: 'forest', label: 'Bosque', swatch: Accents.forest.solid },
-  { value: 'olive', label: 'Oliva', swatch: Accents.olive.solid },
-  { value: 'leaf', label: 'Hoja', swatch: Accents.leaf.solid },
-  { value: 'clay', label: 'Barro', swatch: Accents.clay.solid },
-  { value: 'copper', label: 'Cobre', swatch: Accents.copper.solid },
+  { value: 'forest', label: 'Bosque', swatch: 'forest' },
+  { value: 'olive', label: 'Oliva', swatch: 'olive' },
+  { value: 'leaf', label: 'Hoja', swatch: 'leaf' },
+  { value: 'clay', label: 'Barro', swatch: 'clay' },
+  { value: 'copper', label: 'Cobre', swatch: 'copper' },
 ];

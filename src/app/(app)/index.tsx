@@ -3,9 +3,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro, SectionHeader, Tag } from '@/components/ui/card';
-import { Radius, Space, Theme, Touch, Type, accentOf } from '@/constants/theme';
+import { Radius, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
-import { FOCUS_AREAS, PEAK_ENERGY, REMINDER_STYLE } from '@/features/auth/options';
+import { FOCUS_AREAS, PEAK_ENERGY, REMINDER_HOUR, REMINDER_STYLE } from '@/features/auth/options';
 
 type Options = readonly { value: string; label: string }[];
 
@@ -26,7 +26,8 @@ export default function HomeScreen() {
   const { user, signOut } = useAuth();
   if (!user) return null;
 
-  const accent = accentOf(user.accentColor);
+  const t = useTheme();
+  const accent = useAccent(user.accentColor);
   const today = new Date().toLocaleDateString('es-MX', {
     weekday: 'long',
     day: 'numeric',
@@ -34,17 +35,17 @@ export default function HomeScreen() {
   });
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: t.canvas }]} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.head}>
           <View style={styles.headText}>
             <Micro>{today.charAt(0).toUpperCase() + today.slice(1)}</Micro>
-            <Text style={[Type.display, styles.greeting]} numberOfLines={2}>
+            <Text style={[Type.display, { color: t.text }]} numberOfLines={2}>
               Hola, {user.name}
             </Text>
           </View>
           <View style={[styles.avatar, { backgroundColor: accent.soft }]}>
-            <Text style={[Type.section, styles.initial]}>
+            <Text style={[Type.section, { color: t.text }]}>
               {user.name.trim().charAt(0).toUpperCase()}
             </Text>
           </View>
@@ -52,8 +53,8 @@ export default function HomeScreen() {
 
         <Card>
           <Micro>Tu mejor momento</Micro>
-          <Text style={[Type.metric, styles.metric]}>{labelOf(PEAK_ENERGY, user.peakEnergy)}</Text>
-          <Text style={[Type.body, styles.muted]}>
+          <Text style={[Type.metric, { color: t.text }]}>{labelOf(PEAK_ENERGY, user.peakEnergy)}</Text>
+          <Text style={[Type.body, { color: t.textMuted }]}>
             Aquí es donde tu plan pone lo que más cuesta.
           </Text>
         </Card>
@@ -64,14 +65,17 @@ export default function HomeScreen() {
           <Card>
             <View style={styles.row}>
               <Micro>Recordatorios</Micro>
-              <Text style={[Type.body, styles.value]}>
-                {labelOf(REMINDER_STYLE, user.reminderStyle)}
+              <Text style={[Type.body, styles.value, { color: t.text }]}>
+                {`${labelOf(REMINDER_STYLE, user.reminderStyle)}, a las ${labelOf(
+                  REMINDER_HOUR,
+                  String(user.reminderHour)
+                )}`}
               </Text>
             </View>
             {!!user.birthDate && (
               <View style={styles.row}>
                 <Micro>Naciste</Micro>
-                <Text style={[Type.body, styles.value]}>
+                <Text style={[Type.body, styles.value, { color: t.text }]}>
                   {new Date(`${user.birthDate}T00:00:00`).toLocaleDateString('es-MX', {
                     day: 'numeric',
                     month: 'long',
@@ -91,15 +95,15 @@ export default function HomeScreen() {
                 ))}
               </View>
             ) : (
-              <Text style={[Type.body, styles.muted]}>Sin definir</Text>
+              <Text style={[Type.body, { color: t.textMuted }]}>Sin definir</Text>
             )}
           </Card>
         </View>
 
-        <View style={styles.email}>
+        <View style={[styles.email, { borderTopColor: t.line }]}>
           <Micro>Cómo entras</Micro>
-          <Text style={[Type.body, styles.value]}>{user.email}</Text>
-          <Text style={[Type.hint, styles.muted]}>{ENTRY[user.authProvider ?? 'password']}</Text>
+          <Text style={[Type.body, styles.value, { color: t.text }]}>{user.email}</Text>
+          <Text style={[Type.hint, { color: t.textMuted }]}>{ENTRY[user.authProvider ?? 'password']}</Text>
         </View>
 
         <BigButton label="Cerrar sesión" variant="ghost" accent="copper" onPress={signOut} />
@@ -109,7 +113,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Theme.canvas },
+  screen: { flex: 1 },
   content: {
     paddingHorizontal: Space.xl,
     paddingTop: Space.lg,
@@ -118,7 +122,6 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
   headText: { flex: 1, gap: Space.xs },
-  greeting: { color: Theme.text },
   avatar: {
     width: Touch.chip,
     height: Touch.chip,
@@ -126,17 +129,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  initial: { color: Theme.text },
-  metric: { color: Theme.text },
-  muted: { color: Theme.textMuted },
   block: { gap: Space.md },
   row: { gap: Space.xs },
-  value: { color: Theme.text, fontWeight: '600' },
+  value: { fontWeight: '600' },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   email: {
     gap: Space.xs,
     borderTopWidth: 1,
-    borderTopColor: Theme.line,
     paddingTop: Space.lg,
   },
 });
