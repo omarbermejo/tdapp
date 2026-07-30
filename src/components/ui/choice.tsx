@@ -1,8 +1,14 @@
 import { Image } from 'expo-image';
-import { Pressable, StyleSheet, Text, View, type ImageSourcePropType, type ViewStyle } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { useEffect } from 'react';
+import { Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import Animated, {
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 
-import { Radius, Space, Theme, Touch, Type, accentOf, type AccentName } from '@/constants/theme';
+import { Radius, Space, Theme, Touch, Type, accentOf, type Accent, type AccentName } from '@/constants/theme';
 import { usePressScale } from '@/hooks/use-press-scale';
 
 export type Option = {
@@ -58,7 +64,7 @@ export function Choice({ label, options, value, onChange, accent = 'olive', max,
             option={option}
             on={isOn(option.value)}
             multi={multi}
-            selectedStyle={{ backgroundColor: tint.soft, borderColor: tint.ink, borderWidth: 2 }}
+            tint={tint}
             onPress={() => toggle(option.value)}
           />
         ))}
@@ -67,37 +73,55 @@ export function Choice({ label, options, value, onChange, accent = 'olive', max,
   );
 }
 
-/** Componente aparte porque cada tarjeta necesita su propio shared value para la animacion. */
+/** Un muelle con algo de rebote: al quedar elegida la tarjeta da un empujoncito, no un salto. */
+const BOUNCY = { damping: 12, stiffness: 220 };
+
+/** Componente aparte porque cada tarjeta necesita sus propios shared values. */
 function Card({
   option,
   on,
   multi,
-  selectedStyle,
+  tint,
   onPress,
 }: {
   option: Option;
   on: boolean;
   multi: boolean;
-  selectedStyle: ViewStyle;
+  tint: Accent;
   onPress: () => void;
 }) {
   const press = usePressScale({ to: 0.96 });
+  const chosen = useSharedValue(on ? 1 : 0);
+
+  useEffect(() => {
+    chosen.value = withSpring(on ? 1 : 0, BOUNCY);
+  }, [chosen, on]);
+
+  // El borde se queda en 2pt siempre y solo cambia de color: animar el grosor movia el
+  // contenido un pixel en cada toque.
+  const skin = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(chosen.value, [0, 1], [Theme.surface, tint.soft]),
+    borderColor: interpolateColor(chosen.value, [0, 1], [Theme.line, tint.ink]),
+    transform: [{ scale: 1 + chosen.value * 0.03 }],
+  }));
 
   return (
     <Animated.View style={[styles.slot, press.style]}>
-      <Pressable
-        accessibilityRole={multi ? 'checkbox' : 'radio'}
-        accessibilityState={{ checked: on }}
-        onPress={onPress}
-        onPressIn={press.onPressIn}
-        onPressOut={press.onPressOut}
-        style={[styles.card, on && selectedStyle]}>
-        {!!option.icon && (
-          <Image source={option.icon} style={styles.icon} contentFit="contain" accessible={false} />
-        )}
-        {!!option.swatch && <View style={[styles.swatch, { backgroundColor: option.swatch }]} />}
-        <Text style={[Type.label, styles.cardLabel]}>{option.label}</Text>
-      </Pressable>
+      <Animated.View style={[styles.card, skin]}>
+        <Pressable
+          accessibilityRole={multi ? 'checkbox' : 'radio'}
+          accessibilityState={{ checked: on }}
+          onPress={onPress}
+          onPressIn={press.onPressIn}
+          onPressOut={press.onPressOut}
+          style={styles.touch}>
+          {!!option.icon && (
+            <Image source={option.icon} style={styles.icon} contentFit="contain" accessible={false} />
+          )}
+          {!!option.swatch && <View style={[styles.swatch, { backgroundColor: option.swatch }]} />}
+          <Text style={[Type.label, styles.cardLabel]}>{option.label}</Text>
+        </Pressable>
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -114,15 +138,11 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     minHeight: Touch.chip + Space.xl,
-    gap: Space.sm,
-    padding: Space.md,
-    justifyContent: 'center',
     // Radius.md y no pill: dejaron de ser pastillas, ahora son tarjetas.
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Theme.line,
-    backgroundColor: Theme.surface,
+    borderWidth: 2,
   },
+  touch: { flex: 1, gap: Space.sm, padding: Space.md, justifyContent: 'center' },
   icon: { width: MARK, height: MARK },
   swatch: { width: MARK, height: MARK, borderRadius: Radius.pill },
   cardLabel: { color: Theme.text },

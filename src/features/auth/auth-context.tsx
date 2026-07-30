@@ -39,11 +39,16 @@ const storage = {
 export type Stage = 'guest' | 'verify' | 'onboarding' | 'ready';
 
 /**
- * Compara contra false/null explicitos a proposito: mientras el API no mande los campos
- * nuevos, todos son 'ready' y nadie queda atrapado en una pantalla sin endpoint detras.
+ * El paso lo decide el API (`user.stage`); aqui solo se traduce "sin sesion" a 'guest'.
+ * El fallback deriva de las marcas de tiempo por si contesta un API viejo sin el campo,
+ * y compara contra false/null explicitos para que un user sin esos campos sea 'ready'
+ * en vez de quedar atrapado en una pantalla sin endpoint detras.
  */
 export const stageOf = (user: User | null): Stage =>
-  !user ? 'guest' : user.emailVerified === false ? 'verify' : user.onboardedAt === null ? 'onboarding' : 'ready';
+  !user
+    ? 'guest'
+    : (user.stage ??
+      (user.emailVerified === false ? 'verify' : user.onboardedAt === null ? 'onboarding' : 'ready'));
 
 type AuthValue = {
   user: User | null;
@@ -58,6 +63,13 @@ type AuthValue = {
   resend: () => Promise<void>;
   finishOnboarding: (input: ProfileInput) => Promise<void>;
   signOut: () => Promise<void>;
+  /**
+   * Se acaba de terminar el onboarding. Vive aqui y no en la pantalla porque al guardar el
+   * perfil el guard cambia de grupo y desmonta el onboarding: el confeti tiene que caer
+   * encima de la app que se acaba de abrir, no de un formulario que ya no existe.
+   */
+  celebrating: boolean;
+  stopCelebrating: () => void;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -65,6 +77,7 @@ const AuthContext = createContext<AuthValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [celebrating, setCelebrating] = useState(false);
 
   const start = useCallback(async (next: Session) => {
     await storage.set(next);
@@ -107,13 +120,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp: async (input) => start(await api.register(input)),
       verify: async (code) => start(await api.verify(token!, code)),
       resend: () => api.resend(token!),
-      finishOnboarding: async (input) => withUser((await api.onboard(token!, input)).user),
+      finishOnboarding: async (input) => {
+        const { user } = await api.onboard(token!, input);
+        // Primero la fiesta y luego el commit: el commit es lo que voltea el guard.
+        setCelebrating(true);
+        await withUser(user);
+      },
       signOut: async () => {
+        setCelebrating(false);
         await storage.clear();
         setSession(null);
       },
+      celebrating,
+      stopCelebrating: () => setCelebrating(false),
     };
-  }, [session, loading, start]);
+  }, [session, loading, start, celebrating]);
 
   return <AuthContext value={value}>{children}</AuthContext>;
 }

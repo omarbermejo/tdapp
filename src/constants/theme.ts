@@ -123,7 +123,7 @@ export type Accent = (typeof Accents)[AccentName];
 export const accentOf = (name?: string | null): Accent =>
   Accents[name as AccentName] ?? Accents.olive;
 
-export const Radius = { md: 18, lg: 24, xl: 32, pill: 999 } as const;
+export const Radius = { sm: 4, md: 18, lg: 24, xl: 32, pill: 999 } as const;
 
 /** Ritmo vertical del diseño de referencia: pocos valores, muy espaciados. */
 export const Space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, huge: 48 } as const;

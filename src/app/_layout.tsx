@@ -4,11 +4,12 @@ import { Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { Confetti } from '@/components/ui/confetti';
 import { Accents, NavTheme, Theme } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/features/auth/auth-context';
 
 function RootNavigator() {
-  const { stage, loading } = useAuth();
+  const { stage, loading, celebrating, stopCelebrating } = useAuth();
   // Los titulares son la fuente cargada: sin ella la primera pantalla parpadea con otra tipografia.
   const [fontsLoaded, fontError] = useFonts({ Outfit_800ExtraBold });
 
@@ -26,21 +27,25 @@ function RootNavigator() {
    * push desde el lado equivocado.
    */
   return (
-    <Stack
-      screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: Theme.canvas } }}>
-      <Stack.Protected guard={stage === 'guest'}>
-        <Stack.Screen name="(auth)" />
-      </Stack.Protected>
-      <Stack.Protected guard={stage === 'verify'}>
-        <Stack.Screen name="verify" />
-      </Stack.Protected>
-      <Stack.Protected guard={stage === 'onboarding'}>
-        <Stack.Screen name="onboarding" />
-      </Stack.Protected>
-      <Stack.Protected guard={stage === 'ready'}>
-        <Stack.Screen name="(app)" />
-      </Stack.Protected>
-    </Stack>
+    <>
+      <Stack
+        screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: Theme.canvas } }}>
+        <Stack.Protected guard={stage === 'guest'}>
+          <Stack.Screen name="(auth)" />
+        </Stack.Protected>
+        <Stack.Protected guard={stage === 'verify'}>
+          <Stack.Screen name="verify" />
+        </Stack.Protected>
+        <Stack.Protected guard={stage === 'onboarding'}>
+          <Stack.Screen name="onboarding" />
+        </Stack.Protected>
+        <Stack.Protected guard={stage === 'ready'}>
+          <Stack.Screen name="(app)" />
+        </Stack.Protected>
+      </Stack>
+      {/* Encima del navegador: el confeti sobrevive al cambio de grupo de rutas. */}
+      {celebrating && <Confetti onDone={stopCelebrating} />}
+    </>
   );
 }
 
