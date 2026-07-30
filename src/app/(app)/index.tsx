@@ -34,10 +34,8 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.head}>
           <View style={styles.headText}>
-            <Text style={[Type.hint, styles.date]}>
-              {today.charAt(0).toUpperCase() + today.slice(1)}
-            </Text>
-            <Text style={[Type.title, styles.greeting]} numberOfLines={2}>
+            <Micro>{today.charAt(0).toUpperCase() + today.slice(1)}</Micro>
+            <Text style={[Type.display, styles.greeting]} numberOfLines={2}>
               Hola, {user.name}
             </Text>
           </View>
@@ -107,7 +105,6 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
   headText: { flex: 1, gap: Space.xs },
-  date: { color: Theme.textMuted },
   greeting: { color: Theme.text },
   avatar: {
     width: Touch.chip,

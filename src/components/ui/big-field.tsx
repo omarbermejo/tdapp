@@ -12,7 +12,7 @@ type Props = TextInputProps & {
 /** Campo de papel con hairline: al enfocar el borde se tine del acento, y el error se lee debajo. */
 export function BigField({ label, error, accent = 'olive', style, ...rest }: Props) {
   const [focused, setFocused] = useState(false);
-  const tint = Accents[accent].solid;
+  const tint = Accents[accent].ink;
   const active = focused || !!error;
 
   return (
@@ -32,7 +32,7 @@ export function BigField({ label, error, accent = 'olive', style, ...rest }: Pro
         ]}
         {...rest}
       />
-      {!!error && <Text style={[Type.hint, styles.error]}>⚠︎ {error}</Text>}
+      {!!error && <Text style={[Type.hint, styles.error]}>{error}</Text>}
     </View>
   );
 }

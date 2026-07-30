@@ -1,6 +1,5 @@
 // expo-router lleva react-navigation dentro y reexporta su tipo de tema.
 import type { Theme as NavigationTheme } from 'expo-router';
-import { Platform } from 'react-native';
 
 /**
  * Sistema visual: papel cálido, tinta verde profunda y acentos tierra.
@@ -83,38 +82,38 @@ export const Palette = {
 export const Theme = {
   canvas: Palette.cornsilk[500],
   surface: Palette.cornsilk[800],
-  surfaceHigh: Palette.cornsilk[900],
   /** Relleno apagado: pistas de progreso, chips sin seleccionar, avatares. */
   sunken: Palette.oliveLeaf[900],
   /** Hairline de 1pt. Nunca bordes gruesos: el peso lo carga la tipografía. */
   line: Palette.oliveLeaf[900],
-  lineStrong: Palette.oliveLeaf[800],
 
   text: Palette.blackForest[500],
   textMuted: Palette.oliveLeaf[500],
-  /** Solo decorativo o deshabilitado: no alcanza contraste AA para texto normal. */
-  textFaint: Palette.oliveLeaf[600],
   /** Texto sobre superficies oscuras. */
   onDark: Palette.cornsilk[500],
 
-  /** Tinta del CTA principal y de la tab activa. */
+  /** Tinta del CTA principal. */
   ink: Palette.blackForest[500],
   inkPressed: Palette.blackForest[400],
 
+  /** 5.5:1 sobre el papel: el mensaje de error es justo el que hay que poder leer. */
   danger: Palette.copperwood[400],
-  dangerSoft: Palette.copperwood[900],
 } as const;
 
 /**
  * Acentos del catálogo `accentColor` del backend.
- * `solid` para rellenos, `soft` para chips y tintes, `on` para el texto encima de `solid`.
+ * - `solid`: relleno decorativo (muestras de color, formas). NUNCA texto.
+ * - `soft`: tinte de chips y badges.
+ * - `ink`: texto y bordes de estado sobre papel — es el único paso de cada acento
+ *   que pasa AA (4.5:1) en 14-17pt y 3:1 como indicador. Los medios (#dda15e, #80ac4d)
+ *   se ven bien pero no se leen.
  */
 export const Accents = {
-  forest: { solid: Palette.blackForest[500], soft: Palette.blackForest[900], on: Palette.cornsilk[500] },
-  olive: { solid: Palette.oliveLeaf[500], soft: Palette.oliveLeaf[900], on: Palette.cornsilk[500] },
-  leaf: { solid: Palette.blackForest[700], soft: Palette.oliveLeaf[800], on: Palette.blackForest[500] },
-  clay: { solid: Palette.sunlitClay[500], soft: Palette.sunlitClay[900], on: Palette.blackForest[500] },
-  copper: { solid: Palette.copperwood[500], soft: Palette.copperwood[900], on: Palette.cornsilk[500] },
+  forest: { solid: Palette.blackForest[500], soft: Palette.blackForest[900], ink: Palette.blackForest[500] },
+  olive: { solid: Palette.oliveLeaf[500], soft: Palette.oliveLeaf[900], ink: Palette.oliveLeaf[400] },
+  leaf: { solid: Palette.blackForest[700], soft: Palette.oliveLeaf[800], ink: Palette.blackForest[600] },
+  clay: { solid: Palette.sunlitClay[500], soft: Palette.sunlitClay[900], ink: Palette.sunlitClay[300] },
+  copper: { solid: Palette.copperwood[500], soft: Palette.copperwood[900], ink: Palette.copperwood[400] },
 } as const;
 
 export type AccentName = keyof typeof Accents;
@@ -124,7 +123,7 @@ export type Accent = (typeof Accents)[AccentName];
 export const accentOf = (name?: string | null): Accent =>
   Accents[name as AccentName] ?? Accents.olive;
 
-export const Radius = { sm: 12, md: 18, lg: 24, xl: 32, pill: 999 } as const;
+export const Radius = { md: 18, lg: 24, xl: 32, pill: 999 } as const;
 
 /** Ritmo vertical del diseño de referencia: pocos valores, muy espaciados. */
 export const Space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, huge: 48 } as const;
@@ -141,24 +140,24 @@ export const Shadow = {
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
-  lifted: {
-    shadowColor: Palette.blackForest[500],
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
-  },
 } as const;
 
-/** SF Rounded en iOS: lo más cercano al display geométrico del diseño, sin bajar fuentes. */
-export const Display = Platform.select({ ios: 'ui-rounded', default: undefined });
+/**
+ * Titulares en Outfit ExtraBold: geométrica y de trazo grueso, la contraparte del display
+ * del diseño de referencia. El texto de interfaz se queda en la fuente del sistema —
+ * dos fuentes, una para gritar y otra para leer.
+ *
+ * Solo cargamos el peso 800, así que estos estilos NO llevan fontWeight: en Android
+ * pedir un peso que la familia no tiene la tira a sans-serif.
+ */
+export const Display = 'Outfit_800ExtraBold';
 
 export const Type = {
-  display: { fontFamily: Display, fontSize: 34, lineHeight: 40, fontWeight: '700', letterSpacing: -0.6 },
-  title: { fontFamily: Display, fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.4 },
-  section: { fontFamily: Display, fontSize: 20, lineHeight: 26, fontWeight: '700', letterSpacing: -0.2 },
-  metric: { fontFamily: Display, fontSize: 30, lineHeight: 34, fontWeight: '700', letterSpacing: -0.4 },
-  button: { fontFamily: Display, fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  display: { fontFamily: Display, fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
+  title: { fontFamily: Display, fontSize: 26, lineHeight: 32, letterSpacing: -0.4 },
+  section: { fontFamily: Display, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
+  metric: { fontFamily: Display, fontSize: 30, lineHeight: 34, letterSpacing: -0.4 },
+  button: { fontSize: 17, lineHeight: 22, fontWeight: '700' },
   body: { fontSize: 16, lineHeight: 24, fontWeight: '500' },
   label: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
   hint: { fontSize: 14, lineHeight: 20, fontWeight: '500' },
@@ -178,9 +177,9 @@ export const NavTheme: NavigationTheme = {
     notification: Theme.danger,
   },
   fonts: {
-    regular: { fontFamily: Display ?? 'System', fontWeight: '400' },
-    medium: { fontFamily: Display ?? 'System', fontWeight: '500' },
-    bold: { fontFamily: Display ?? 'System', fontWeight: '700' },
-    heavy: { fontFamily: Display ?? 'System', fontWeight: '800' },
+    regular: { fontFamily: 'System', fontWeight: '400' },
+    medium: { fontFamily: 'System', fontWeight: '500' },
+    bold: { fontFamily: 'System', fontWeight: '700' },
+    heavy: { fontFamily: 'System', fontWeight: '800' },
   },
 };

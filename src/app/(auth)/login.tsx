@@ -60,7 +60,7 @@ export default function LoginScreen() {
               onSubmitEditing={submit}
               returnKeyType="go"
             />
-            {!!error && <Text style={[Type.hint, styles.error]}>⚠︎ {error}</Text>}
+            {!!error && <Text style={[Type.hint, styles.error]}>{error}</Text>}
           </View>
 
           <View style={styles.actions}>

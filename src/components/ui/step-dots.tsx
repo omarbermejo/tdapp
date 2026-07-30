@@ -19,7 +19,8 @@ export function StepDots({
           key={i}
           style={[
             styles.segment,
-            { backgroundColor: i <= current ? Accents[accent].solid : Theme.sunken },
+            // ink y no solid: clay o leaf contra la pista dan menos de 3:1 y el progreso desaparece.
+            { backgroundColor: i <= current ? Accents[accent].ink : Theme.sunken },
           ]}
         />
       ))}

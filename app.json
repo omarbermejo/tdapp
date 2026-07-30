@@ -12,6 +12,7 @@
     "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.tdapp.tdapp",
+      "usesAppleSignIn": true,
       "icon": "./assets/expo.icon"
     },
     "android": {

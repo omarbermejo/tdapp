@@ -48,7 +48,9 @@ export function Choice({ label, options, value, onChange, accent = 'olive', max,
               onPress={() => toggle(option.value)}
               style={({ pressed }) => [
                 styles.chip,
-                on && { backgroundColor: tint.soft, borderColor: tint.solid, borderWidth: 1.5 },
+                // El indicador de estado es el borde en ink (>=3:1 contra el papel);
+                // el tinte solo acompaña, porque soft contra surface no se distingue.
+                on && { backgroundColor: tint.soft, borderColor: tint.ink, borderWidth: 2 },
                 pressed && styles.pressed,
               ]}>
               {!!option.emoji && <Text style={styles.emoji}>{option.emoji}</Text>}

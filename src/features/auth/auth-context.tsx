@@ -27,6 +27,7 @@ type AuthValue = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: (idToken: string) => Promise<void>;
+  signInWithApple: (idToken: string, name?: string) => Promise<void>;
   signUp: (input: RegisterInput) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -60,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       signIn: async (email, password) => start(await api.login(email, password)),
       signInWithGoogle: async (idToken) => start(await api.google(idToken)),
+      signInWithApple: async (idToken, name) => start(await api.apple(idToken, name)),
       signUp: async (input) => start(await api.register(input)),
       signOut: async () => {
         await storage.clear();

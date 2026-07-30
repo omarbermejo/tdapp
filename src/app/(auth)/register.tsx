@@ -21,6 +21,13 @@ import {
 
 const STEPS = 3;
 
+/** Qué campo vive en qué paso, para devolver al usuario donde su error es visible. */
+const STEP_FIELDS = [
+  ['name', 'email', 'password'],
+  ['birthYear', 'diagnosis', 'treatment'],
+  ['focusAreas', 'peakEnergy', 'reminderStyle', 'accentColor'],
+];
+
 /**
  * Registro en 3 pasos. Solo el primero es obligatorio: el resto se puede saltar
  * y el backend rellena con defaults. Un formulario largo de golpe es abandono seguro.
@@ -59,7 +66,8 @@ export default function RegisterScreen() {
       if (e instanceof ApiError) {
         setError(e.message);
         setFields(e.fields);
-        if (Object.keys(e.fields).length) setStep(0);
+        const failed = STEP_FIELDS.findIndex((keys) => keys.some((k) => k in e.fields));
+        if (failed >= 0) setStep(failed);
       } else {
         setError('Algo salió mal');
       }
@@ -81,7 +89,7 @@ export default function RegisterScreen() {
             accessibilityRole="button"
             accessibilityLabel="Atrás"
             style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
-            <Text style={styles.backGlyph}>←</Text>
+            <Text style={[Type.section, styles.backGlyph]}>←</Text>
           </Pressable>
           <View style={styles.flex}>
             <StepDots total={STEPS} current={step} accent={accent} />
@@ -92,37 +100,39 @@ export default function RegisterScreen() {
           {step === 0 && (
             <>
               <Text style={[Type.display, styles.title]}>Empecemos{'\n'}por lo básico</Text>
-              <BigField
-                label="¿Cómo te llamamos?"
-                value={form.name}
-                onChangeText={(v) => set('name', v)}
-                placeholder="Tu nombre"
-                accent={accent}
-                error={fields.name}
-                autoComplete="given-name"
-              />
-              <BigField
-                label="Correo"
-                value={form.email}
-                onChangeText={(v) => set('email', v)}
-                placeholder="tu@correo.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                inputMode="email"
-                autoComplete="email"
-                accent={accent}
-                error={fields.email}
-              />
-              <BigField
-                label="Contraseña"
-                value={form.password}
-                onChangeText={(v) => set('password', v)}
-                placeholder="Mínimo 8 caracteres"
-                secureTextEntry
-                autoComplete="new-password"
-                accent={accent}
-                error={fields.password}
-              />
+              <View style={styles.form}>
+                <BigField
+                  label="¿Cómo te llamamos?"
+                  value={form.name}
+                  onChangeText={(v) => set('name', v)}
+                  placeholder="Tu nombre"
+                  accent={accent}
+                  error={fields.name}
+                  autoComplete="given-name"
+                />
+                <BigField
+                  label="Correo"
+                  value={form.email}
+                  onChangeText={(v) => set('email', v)}
+                  placeholder="tu@correo.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  inputMode="email"
+                  autoComplete="email"
+                  accent={accent}
+                  error={fields.email}
+                />
+                <BigField
+                  label="Contraseña"
+                  value={form.password}
+                  onChangeText={(v) => set('password', v)}
+                  placeholder="Mínimo 8 caracteres"
+                  secureTextEntry
+                  autoComplete="new-password"
+                  accent={accent}
+                  error={fields.password}
+                />
+              </View>
             </>
           )}
 
@@ -204,7 +214,6 @@ export default function RegisterScreen() {
         <View style={styles.actions}>
           <BigButton
             label={step === STEPS - 1 ? 'Crear mi cuenta' : 'Siguiente'}
-            accent={accent}
             loading={loading}
             onPress={next}
           />
@@ -236,13 +245,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Shadow.card,
   },
-  backGlyph: { color: Theme.text, fontSize: 22, lineHeight: 26, fontWeight: '700' },
+  backGlyph: { color: Theme.text },
   pressed: { opacity: 0.9 },
   content: { paddingHorizontal: Space.xl, paddingTop: Space.md, paddingBottom: Space.xl, gap: Space.xl },
   // Titular y bajada van juntos: son un bloque, no dos secciones.
   intro: { gap: Space.sm },
+  // Los campos de un mismo formulario van mas juntos que los bloques de la pantalla.
+  form: { gap: Space.lg },
   title: { color: Theme.text },
   hint: { color: Theme.textMuted },
   error: { color: Theme.danger },
-  actions: { paddingHorizontal: Space.xl, paddingTop: Space.md, paddingBottom: Space.sm, gap: Space.sm },
+  actions: { paddingHorizontal: Space.xl, paddingTop: Space.md, paddingBottom: Space.sm, gap: Space.md },
 });

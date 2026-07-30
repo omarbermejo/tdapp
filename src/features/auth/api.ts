@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 
-import type { AccentName } from '@/constants/brand';
+import type { AccentName } from '@/constants/theme';
 
 /** El simulador alcanza localhost; un celular real no. Reusamos el host del dev server de Expo. */
 const devHost = Constants.expoConfig?.hostUri?.split(':')[0];
@@ -70,6 +70,10 @@ export const api = {
   /** Canjea el id_token de Google por nuestro JWT. Crea la cuenta si el correo es nuevo. */
   google: (idToken: string) =>
     request<Session>('/auth/google', { method: 'POST', body: JSON.stringify({ idToken }) }),
+
+  /** Igual que google, pero Apple solo manda el nombre en la primera autorizacion. */
+  apple: (idToken: string, name?: string) =>
+    request<Session>('/auth/apple', { method: 'POST', body: JSON.stringify({ idToken, name }) }),
 
   me: (token: string) =>
     request<{ user: User }>('/auth/me', { headers: { Authorization: `Bearer ${token}` } }),

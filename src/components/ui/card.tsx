@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
-import { Accents, Radius, Shadow, Space, Theme, Touch, Type, type AccentName } from '@/constants/theme';
+import { Accents, Radius, Shadow, Space, Theme, Type, type AccentName } from '@/constants/theme';
 
 /** Papel sobre papel: la tarjeta se levanta con luz y una sombra mínima, nunca con borde grueso. */
 export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
@@ -9,31 +9,14 @@ export function Card({ children, style }: { children: ReactNode; style?: ViewSty
 }
 
 /**
- * Título de bloque con subtítulo y acción de texto a la derecha.
+ * Título de bloque con subtítulo.
  * Es lo que ordena la pantalla: secciones separadas por aire, no por cajas.
  */
-export function SectionHeader({
-  title,
-  hint,
-  actionLabel,
-  onAction,
-}: {
-  title: string;
-  hint?: string;
-  actionLabel?: string;
-  onAction?: () => void;
-}) {
+export function SectionHeader({ title, hint }: { title: string; hint?: string }) {
   return (
     <View style={styles.header}>
-      <View style={styles.headerText}>
-        <Text style={[Type.section, styles.title]}>{title}</Text>
-        {!!hint && <Text style={[Type.hint, styles.hint]}>{hint}</Text>}
-      </View>
-      {!!actionLabel && !!onAction && (
-        <Pressable onPress={onAction} hitSlop={12} accessibilityRole="button">
-          <Text style={[Type.label, styles.action]}>{actionLabel} ›</Text>
-        </Pressable>
-      )}
+      <Text style={[Type.section, styles.title]}>{title}</Text>
+      {!!hint && <Text style={[Type.hint, styles.hint]}>{hint}</Text>}
     </View>
   );
 }
@@ -60,22 +43,14 @@ const styles = StyleSheet.create({
     gap: Space.md,
     ...Shadow.card,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: Space.md,
-    minHeight: Touch.icon,
-  },
-  headerText: { flex: 1, gap: 2 },
+  header: { gap: Space.xs },
   title: { color: Theme.text },
   hint: { color: Theme.textMuted },
-  action: { color: Theme.textMuted },
   tag: {
     alignSelf: 'flex-start',
     borderRadius: Radius.pill,
     paddingHorizontal: Space.md,
-    paddingVertical: 5,
+    paddingVertical: Space.xs,
   },
   tagLabel: { color: Theme.text, fontWeight: '600' },
   micro: { color: Theme.textMuted },
