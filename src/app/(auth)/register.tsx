@@ -1,13 +1,14 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
 import { Choice } from '@/components/ui/choice';
 import { StepDots } from '@/components/ui/step-dots';
-import { Radius, Shadow, Space, Theme, Touch, Type, type AccentName } from '@/constants/theme';
+import { Space, Theme, Type, type AccentName } from '@/constants/theme';
 import { ApiError, type RegisterInput } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import {
@@ -83,14 +84,7 @@ export default function RegisterScreen() {
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <View style={styles.header}>
-          <Pressable
-            onPress={back}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Atrás"
-            style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
-            <Text style={[Type.section, styles.backGlyph]}>←</Text>
-          </Pressable>
+          <BackButton onPress={back} />
           <View style={styles.flex}>
             <StepDots total={STEPS} current={step} accent={accent} />
           </View>
@@ -236,17 +230,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xl,
     paddingVertical: Space.md,
   },
-  back: {
-    width: Touch.icon,
-    height: Touch.icon,
-    borderRadius: Radius.pill,
-    backgroundColor: Theme.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadow.card,
-  },
-  backGlyph: { color: Theme.text },
-  pressed: { opacity: 0.9 },
   content: { paddingHorizontal: Space.xl, paddingTop: Space.md, paddingBottom: Space.xl, gap: Space.xl },
   // Titular y bajada van juntos: son un bloque, no dos secciones.
   intro: { gap: Space.sm },
