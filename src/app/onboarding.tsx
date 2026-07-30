@@ -92,6 +92,8 @@ export default function OnboardingScreen() {
   const [form, setForm] = useState<ProfileInput>(() => profileOf(user!));
   const [error, setError] = useState('');
   const [fields, setFields] = useState<Record<string, string>>({});
+  /** Lo que falta para poder avanzar. Es del paso actual, no del guardado. */
+  const [nudge, setNudge] = useState('');
   const [loading, setLoading] = useState(false);
   const thread = useRef<ScrollView>(null);
 
@@ -126,6 +128,18 @@ export default function OnboardingScreen() {
         ? form.birthDate !== null
         : true;
 
+  /**
+   * El boton NO se apaga: un primario en disabled deja su etiqueta en un contraste malisimo
+   * y se lee como app roto. Si falta la respuesta, el toque dice que falta.
+   */
+  const advance = () => {
+    if (ready) {
+      setNudge('');
+      return setStep((s) => s + 1);
+    }
+    setNudge(current?.kind === 'multi' ? 'Elige al menos uno para seguir.' : 'Revisa la fecha para seguir.');
+  };
+
   const save = async (withPush: boolean) => {
     setError('');
     setFields({});
@@ -136,11 +150,12 @@ export default function OnboardingScreen() {
       await finishOnboarding(form);
     } catch (e) {
       if (e instanceof ApiError) {
-        setError(e.message);
         setFields(e.fields);
         // Si el API rechazo un campo, se vuelve a su pregunta en vez de dejar un error suelto.
         const failed = STEPS.findIndex((s) => e.fields[s.key]);
         if (failed >= 0) setStep(failed);
+        // Y ahi el mensaje general se calla: el del campo ya dice lo mismo, mas concreto.
+        setError(failed >= 0 ? '' : e.message);
       } else {
         setError('Algo salió mal');
       }
@@ -179,18 +194,21 @@ export default function OnboardingScreen() {
         </ScrollView>
 
         <View style={[styles.answerZone, { backgroundColor: t.canvas, borderTopColor: t.line }]}>
-          <FormError message={error} />
+          <FormError message={error || nudge} />
 
           {current?.kind === 'multi' && (
             <>
               <Choice
                 options={current.options!}
                 value={form.focusAreas}
-                onChange={(v) => answer('focusAreas', v)}
+                onChange={(v) => {
+                  setNudge('');
+                  answer('focusAreas', v);
+                }}
                 max={current.max}
                 accent={accentName}
               />
-              <BigButton label="Seguir" disabled={!ready} onPress={() => setStep((s) => s + 1)} />
+              <BigButton label="Seguir" onPress={advance} />
             </>
           )}
 
@@ -218,11 +236,14 @@ export default function OnboardingScreen() {
               <DateField
                 label="Día, mes y año"
                 value={form.birthDate}
-                onChange={(v) => answer('birthDate', v)}
+                onChange={(v) => {
+                  setNudge('');
+                  answer('birthDate', v);
+                }}
                 accent={accentName}
                 error={fields.birthDate}
               />
-              <BigButton label="Seguir" disabled={!ready} onPress={() => setStep((s) => s + 1)} />
+              <BigButton label="Seguir" onPress={advance} />
             </>
           )}
 
