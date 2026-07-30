@@ -9,6 +9,14 @@ import { DIAGNOSIS, FOCUS_AREAS, PEAK_ENERGY, REMINDER_STYLE } from '@/features/
 
 type Options = readonly { value: string; label: string; emoji?: string }[];
 
+/** Por que importa: una cuenta de Google o Apple no tiene contraseña con la que entrar. */
+const ENTRY: Record<string, string> = {
+  password: 'Con tu correo y contraseña',
+  google: 'Con tu cuenta de Google',
+  apple: 'Con tu cuenta de Apple',
+  oauth: 'Con un proveedor externo',
+};
+
 const labelOf = (options: Options, value: string) =>
   options.find((o) => o.value === value)?.label ?? value;
 
@@ -85,8 +93,9 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.email}>
-          <Micro>Correo</Micro>
+          <Micro>Cómo entras</Micro>
           <Text style={[Type.body, styles.value]}>{user.email}</Text>
+          <Text style={[Type.hint, styles.muted]}>{ENTRY[user.authProvider ?? 'password']}</Text>
         </View>
 
         <BigButton label="Cerrar sesión" variant="ghost" accent="copper" onPress={signOut} />

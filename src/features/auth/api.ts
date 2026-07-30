@@ -25,6 +25,10 @@ export type User = {
    */
   emailVerified?: boolean;
   onboardedAt?: string | null;
+  /** Lo calcula el API a partir de las dos marcas de arriba; es la fuente buena. */
+  stage?: 'verify' | 'onboarding' | 'ready';
+  /** Como entra la cuenta. Una de Google o Apple no tiene contraseña con la que entrar. */
+  authProvider?: 'password' | 'google' | 'apple' | 'oauth';
 };
 
 export type RegisterInput = { name: string; email: string; password: string };
