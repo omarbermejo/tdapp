@@ -7,34 +7,38 @@ import { Accents } from '@/constants/theme';
  * No hay diagnostico ni tratamiento: son dato clinico que la app no usa y eran las dos
  * preguntas que mas gente dejaba a medias.
  *
- * ponytail: los chips van sin icono TODAVIA. Ya estan recoloreados en
- * assets/stickers/chips/ los de study, work, varies, gentle y firm, pero faltan 9 y el plan
- * Starter de Figma solo permite 6 lecturas del MCP al mes, agotadas. Mezclar dos chips con
- * sticker y cinco sin el dentro del mismo grupo se ve roto, asi que entran los 14 juntos o
- * ninguno. Para prenderlos: agregar `icon: require('@/assets/stickers/chips/<value>.svg')`
- * a cada opcion; Choice ya lo soporta.
+ * Los iconos son de Lucide (ISC, el aviso de licencia viaja dentro de cada .svg) con el
+ * trazo cambiado a la tinta de la marca. No son los stickers de Alteos a proposito: a 26pt
+ * dentro de un chip una ilustracion con trama de puntos se vuelve papilla, y el diseño de
+ * referencia usa justo iconos de linea en sus controles. Las ilustraciones de Alteos siguen
+ * siendo los heroes de pantalla (welcome y el ultimo paso del onboarding), asi que el sistema
+ * queda en dos niveles: ilustracion para heroes, linea para controles.
  */
 export const FOCUS_AREAS: readonly Option[] = [
-  { value: 'study', label: 'Estudio' },
-  { value: 'work', label: 'Trabajo' },
-  { value: 'home', label: 'Casa' },
-  { value: 'health', label: 'Salud' },
-  { value: 'money', label: 'Dinero' },
-  { value: 'relationships', label: 'Relaciones' },
-  { value: 'creativity', label: 'Creatividad' },
+  { value: 'study', label: 'Estudio', icon: require('@/assets/icons/chips/study.svg') },
+  { value: 'work', label: 'Trabajo', icon: require('@/assets/icons/chips/work.svg') },
+  { value: 'home', label: 'Casa', icon: require('@/assets/icons/chips/home.svg') },
+  { value: 'health', label: 'Salud', icon: require('@/assets/icons/chips/health.svg') },
+  { value: 'money', label: 'Dinero', icon: require('@/assets/icons/chips/money.svg') },
+  {
+    value: 'relationships',
+    label: 'Relaciones',
+    icon: require('@/assets/icons/chips/relationships.svg'),
+  },
+  { value: 'creativity', label: 'Creatividad', icon: require('@/assets/icons/chips/creativity.svg') },
 ];
 
 export const PEAK_ENERGY: readonly Option[] = [
-  { value: 'morning', label: 'Mañana' },
-  { value: 'afternoon', label: 'Tarde' },
-  { value: 'night', label: 'Noche' },
-  { value: 'varies', label: 'Cambia mucho' },
+  { value: 'morning', label: 'Mañana', icon: require('@/assets/icons/chips/morning.svg') },
+  { value: 'afternoon', label: 'Tarde', icon: require('@/assets/icons/chips/afternoon.svg') },
+  { value: 'night', label: 'Noche', icon: require('@/assets/icons/chips/night.svg') },
+  { value: 'varies', label: 'Cambia mucho', icon: require('@/assets/icons/chips/varies.svg') },
 ];
 
 export const REMINDER_STYLE: readonly Option[] = [
-  { value: 'gentle', label: 'Suave' },
-  { value: 'firm', label: 'Firme' },
-  { value: 'persistent', label: 'Insistente' },
+  { value: 'gentle', label: 'Suave', icon: require('@/assets/icons/chips/gentle.svg') },
+  { value: 'firm', label: 'Firme', icon: require('@/assets/icons/chips/firm.svg') },
+  { value: 'persistent', label: 'Insistente', icon: require('@/assets/icons/chips/persistent.svg') },
 ];
 
 /** El color no lleva icono: la muestra ES la opcion que se esta eligiendo. */
