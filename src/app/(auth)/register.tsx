@@ -8,9 +8,52 @@ import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
 import { StepDots } from '@/components/ui/step-dots';
 import { Stem } from '@/components/ui/stem';
-import { Space, Theme, Type } from '@/constants/theme';
+import { Accents, Radius, Space, Theme, Type } from '@/constants/theme';
 import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
+
+/** Lo unico que el API exige. Mantener sincronizado con MIN_PASSWORD de domain/user.js. */
+const MIN_PASSWORD = 8;
+const LEVELS = 3;
+
+/**
+ * Los 8 caracteres son el muro; el resto es consejo. Mientras la contrasena no llega al
+ * minimo el tono es neutro y dice cuanto falta: el rojo se guarda para un rechazo real.
+ */
+function strengthOf(password: string) {
+  if (password.length < MIN_PASSWORD) {
+    const left = MIN_PASSWORD - password.length;
+    return { level: 1, valid: false, hint: `Te ${left === 1 ? 'falta' : 'faltan'} ${left}` };
+  }
+
+  const variety = [/\d/, /[a-zA-Z]/, /[^\w\s]/].filter((rule) => rule.test(password)).length;
+  return variety >= 3 || password.length >= 12
+    ? { level: 3, valid: true, hint: 'Buena contraseña.' }
+    : { level: 2, valid: true, hint: 'Ya sirve. Un número o un símbolo la hacen más fuerte.' };
+}
+
+/** Tres tramos del mismo riel que usa la rama de progreso: un solo idioma en toda la app. */
+function PasswordMeter({ password }: { password: string }) {
+  const { level, valid, hint } = strengthOf(password);
+
+  return (
+    <View style={styles.meter}>
+      <View style={styles.meterRow}>
+        {Array.from({ length: LEVELS }, (_, i) => (
+          <View
+            key={i}
+            style={[
+              styles.segment,
+              !!password && i < level && (valid ? styles.segmentValid : styles.segmentShort),
+            ]}
+          />
+        ))}
+      </View>
+      {/* Alto fijo: al escribir el primer caracter no salta el campo de abajo. */}
+      <Text style={[Type.hint, styles.meterHint]}>{password ? hint : ''}</Text>
+    </View>
+  );
+}
 
 /**
  * Solo credenciales. El perfil TDAH se pide en el onboarding, despues de verificar el correo:
@@ -21,13 +64,26 @@ export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [repeat, setRepeat] = useState('');
   const [error, setError] = useState('');
   const [fields, setFields] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
+  const strength = strengthOf(password);
+  const matches = !!repeat && repeat === password;
+
   const submit = async () => {
     setError('');
     setFields({});
+
+    // Se valida aqui en vez de apagar el boton: un CTA apagado se lee como app roto, y
+    // ademas el disabled deja la etiqueta en un contraste malisimo. Tocar siempre da razon.
+    const local: Record<string, string> = {};
+    if (!strength.valid) local.password = `Mínimo ${MIN_PASSWORD} caracteres`;
+    // Que las dos coincidan es cosa nuestra: el API solo recibe una.
+    if (password !== repeat) local.repeat = 'Las dos contraseñas tienen que ser iguales';
+    if (Object.keys(local).length) return setFields(local);
+
     setLoading(true);
     try {
       // No navega: al quedar la sesion sin verificar, el guard del root salta al codigo.
@@ -65,7 +121,7 @@ export default function RegisterScreen() {
             <Text style={[Type.body, styles.subtitle]}>Lo demás lo ajustas después.</Text>
           </View>
 
-          <Stem filled={[!!name, !!email, !!password]}>
+          <Stem filled={[!!name, !!email, strength.valid, matches]}>
             <BigField
               label="¿Cómo te llamamos?"
               value={name}
@@ -85,16 +141,29 @@ export default function RegisterScreen() {
               autoComplete="email"
               error={fields.email}
             />
+            <View style={styles.withMeter}>
+              <BigField
+                label="Contraseña"
+                value={password}
+                onChangeText={setPassword}
+                placeholder={`Mínimo ${MIN_PASSWORD} caracteres`}
+                secureTextEntry
+                autoComplete="new-password"
+                error={fields.password}
+              />
+              <PasswordMeter password={password} />
+            </View>
             <BigField
-              label="Contraseña"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Mínimo 8 caracteres"
+              label="Repite la contraseña"
+              value={repeat}
+              onChangeText={setRepeat}
+              placeholder="La misma de arriba"
               secureTextEntry
               autoComplete="new-password"
               onSubmitEditing={submit}
               returnKeyType="go"
-              error={fields.password}
+              // El error aparece al escribir, no solo al mandar el formulario.
+              error={fields.repeat ?? (repeat && !matches ? 'No coinciden' : undefined)}
             />
           </Stem>
 
@@ -136,6 +205,15 @@ const styles = StyleSheet.create({
   hero: { gap: Space.sm },
   title: { color: Theme.text },
   subtitle: { color: Theme.textMuted },
+
+  withMeter: { gap: Space.sm },
+  meter: { gap: Space.xs },
+  meterRow: { flexDirection: 'row', gap: Space.xs },
+  segment: { flex: 1, height: 4, borderRadius: Radius.pill, backgroundColor: Theme.line },
+  segmentShort: { backgroundColor: Theme.textMuted },
+  segmentValid: { backgroundColor: Accents.olive.ink },
+  meterHint: { color: Theme.textMuted, minHeight: 20 },
+
   spacer: { flex: 1 },
   actions: { gap: Space.md },
   error: { color: Theme.danger },
