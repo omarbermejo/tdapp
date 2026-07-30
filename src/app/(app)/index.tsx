@@ -27,10 +27,8 @@ const tagOf = (value: string) => labelOf(FOCUS_AREAS, value);
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
-  if (!user) return null;
-
   const t = useTheme();
-  const accent = useAccent(user.accentColor);
+  const accent = useAccent(user?.accentColor);
   // El dia vive aqui porque lo comparten dos cosas: la tarjeta que lo pinta y el boton que
   // lo cambia. Antes vivia dentro de la tarjeta y el boton no tenia como avisarle.
   const day = useToday();
@@ -39,6 +37,10 @@ export default function HomeScreen() {
     day: 'numeric',
     month: 'long',
   });
+
+  // El guard va DESPUES de los hooks: al cerrar sesion el user se vuelve null, y salir antes
+  // dejaba a React con menos hooks que en el render anterior.
+  if (!user) return null;
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: t.canvas }]} edges={['top', 'bottom']}>

@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { ApiError, type Today } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 
 import { tasksApi } from './api';
+
+type State = {
+  today: Today | null;
+  error: string;
+  loading: boolean;
+  /** Cuando llego el dato: el cronometro del servidor se sigue contando desde aqui. */
+  fetchedAt: number;
+};
 
 /**
  * El dia del usuario, listo para pintar.
@@ -14,38 +22,36 @@ import { tasksApi } from './api';
  */
 export function useToday() {
   const { token } = useAuth();
-  const [today, setToday] = useState<Today | null>(null);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  /** Cuando llego el dato: el cronometro del servidor se sigue contando desde aqui. */
-  const [fetchedAt, setFetchedAt] = useState(() => Date.now());
-  const alive = useRef(true);
-
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
+  const [state, setState] = useState<State>({
+    today: null,
+    error: '',
+    loading: true,
+    fetchedAt: 0,
+  });
 
   const reload = useCallback(async () => {
     if (!token) return;
     try {
-      const data = await tasksApi.today(token);
-      if (!alive.current) return;
-      setToday(data);
-      setFetchedAt(Date.now());
-      setError('');
+      const today = await tasksApi.today(token);
+      // Sin guardas de "sigo montado": desde React 18 un setState tras desmontar no hace nada.
+      setState({ today, error: '', loading: false, fetchedAt: Date.now() });
     } catch (e) {
-      if (!alive.current) return;
-      setError(e instanceof ApiError ? e.message : 'No pudimos traer tu día');
-    } finally {
-      if (alive.current) setLoading(false);
+      const error = e instanceof ApiError ? e.message : 'No pudimos traer tu día';
+      setState((s) => ({ ...s, error, loading: false }));
     }
   }, [token]);
 
   useEffect(() => {
-    reload();
+    // La carga vive dentro del efecto y no llama a reload directo: asi no hay un setState
+    // sincrono en el cuerpo del efecto, que es lo que dispara renders en cascada.
+    let cancelled = false;
+    (async () => {
+      if (cancelled) return;
+      await reload();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [reload]);
 
   /** Arranca o para el cronometro y vuelve a traer el dia: el servidor es el que cuenta. */
@@ -56,11 +62,12 @@ export function useToday() {
         await tasksApi.timer(token, id, action);
         await reload();
       } catch (e) {
-        setError(e instanceof ApiError ? e.message : 'No pudimos con el cronómetro');
+        const error = e instanceof ApiError ? e.message : 'No pudimos con el cronómetro';
+        setState((s) => ({ ...s, error }));
       }
     },
     [token, reload]
   );
 
-  return { today, error, loading, fetchedAt, reload, toggleTimer };
+  return { ...state, reload, toggleTimer };
 }

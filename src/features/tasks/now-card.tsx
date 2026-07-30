@@ -9,15 +9,25 @@ import { FOCUS_AREAS } from '@/features/auth/options';
 
 import type { useToday } from './use-today';
 
-/** Re-render cada segundo, solo mientras algo corre. */
-function useTick(active: boolean) {
-  const [, setTick] = useState(0);
+/**
+ * Segundos transcurridos desde `from`, contados en el intervalo y NO en el render.
+ *
+ * Leer Date.now() al pintar es impuro y el React Compiler lo rechaza, con razon: dos renders
+ * del mismo estado darian numeros distintos. Aqui el reloj se lee dentro del tick.
+ *
+ * ponytail: al recargar el dia puede quedarse hasta un segundo con el delta anterior, porque
+ * el intervalo arranca de nuevo. Es un segundo en un cronometro de minutos.
+ */
+function useSecondsSince(active: boolean, from: number) {
+  const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    const id = setInterval(() => setSeconds(Math.floor((Date.now() - from) / 1000)), 1000);
     return () => clearInterval(id);
-  }, [active]);
+  }, [active, from]);
+
+  return active ? seconds : 0;
 }
 
 const clock = (total: number) => {
@@ -46,10 +56,9 @@ export function NowCard({ day }: { day: ReturnType<typeof useToday> }) {
 
   const task = today?.running ?? today?.next ?? null;
   const running = !!today?.running;
-  useTick(running);
-
   // El servidor manda los segundos ya sumados; desde que llegaron, los contamos aqui.
-  const elapsed = task ? task.elapsedSeconds + (running ? Math.floor((Date.now() - fetchedAt) / 1000) : 0) : 0;
+  const since = useSecondsSince(running, fetchedAt);
+  const elapsed = task ? task.elapsedSeconds + since : 0;
 
   if (loading && !today) {
     return (
