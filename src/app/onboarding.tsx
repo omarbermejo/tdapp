@@ -3,23 +3,17 @@ import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FormError } from '@/components/ui/form-error';
 import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
-import { BigField } from '@/components/ui/big-field';
 import { Choice } from '@/components/ui/choice';
+import { DateField } from '@/components/ui/date-field';
 import { StepDots } from '@/components/ui/step-dots';
 import { Stem } from '@/components/ui/stem';
 import { Accents, Radius, Space, Theme, Type, accentOf } from '@/constants/theme';
 import { ApiError, type ProfileInput, type User } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
-import {
-  ACCENT_COLOR,
-  DIAGNOSIS,
-  FOCUS_AREAS,
-  PEAK_ENERGY,
-  REMINDER_STYLE,
-  TREATMENT,
-} from '@/features/auth/options';
+import { ACCENT_COLOR, FOCUS_AREAS, PEAK_ENERGY, REMINDER_STYLE } from '@/features/auth/options';
 import { registerPushDevice } from '@/features/notifications/register-device';
 
 const STEPS = 3;
@@ -34,9 +28,7 @@ const REMINDER_WORD: Record<string, string> = {
 
 /** El registro ya devolvio el perfil con los defaults del backend: ese es el estado inicial. */
 const profileOf = (user: User): ProfileInput => ({
-  birthYear: user.birthYear,
-  diagnosis: user.diagnosis,
-  treatment: user.treatment,
+  birthDate: user.birthDate,
   focusAreas: user.focusAreas,
   peakEnergy: user.peakEnergy,
   reminderStyle: user.reminderStyle,
@@ -111,33 +103,16 @@ export default function OnboardingScreen() {
               <View style={styles.hero}>
                 <Text style={[Type.display, styles.title]}>Cuéntanos de ti.</Text>
                 <Text style={[Type.display, { color: accent.ink }]}>Solo si quieres.</Text>
-                <Text style={[Type.body, styles.subtitle]}>Nada de esto es obligatorio.</Text>
+                <Text style={[Type.body, styles.subtitle]}>No es obligatorio, y se cambia después.</Text>
               </View>
 
-              <Stem accent={accentName} filled={[touched('diagnosis'), touched('treatment'), form.birthYear !== null]}>
-                <Choice
-                  label="Tu TDAH es de tipo…"
-                  options={DIAGNOSIS}
-                  value={form.diagnosis}
-                  onChange={(v) => set('diagnosis', v)}
+              <Stem accent={accentName} filled={[form.birthDate !== null]}>
+                <DateField
+                  label="Fecha de nacimiento"
+                  value={form.birthDate}
+                  onChange={(v) => set('birthDate', v)}
                   accent={accentName}
-                />
-                <Choice
-                  label="¿Llevas algún tratamiento?"
-                  options={TREATMENT}
-                  value={form.treatment}
-                  onChange={(v) => set('treatment', v)}
-                  accent={accentName}
-                />
-                <BigField
-                  label="Año de nacimiento"
-                  value={form.birthYear ? String(form.birthYear) : ''}
-                  onChangeText={(v) => set('birthYear', v ? Number(v.replace(/\D/g, '')) : null)}
-                  placeholder="1995"
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  accent={accentName}
-                  error={fields.birthYear}
+                  error={fields.birthDate}
                 />
               </Stem>
             </>
@@ -218,7 +193,7 @@ export default function OnboardingScreen() {
             </>
           )}
 
-          {!!error && <Text style={[Type.hint, styles.error]}>{error}</Text>}
+          <FormError message={error} />
 
           <View style={styles.spacer} />
 
@@ -276,5 +251,4 @@ const styles = StyleSheet.create({
   sticker: { alignSelf: 'flex-end', width: '56%', aspectRatio: STICKER_RATIO },
   spacer: { flex: 1 },
   actions: { gap: Space.md },
-  error: { color: Theme.danger },
 });

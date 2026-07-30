@@ -5,9 +5,9 @@ import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro, SectionHeader, Tag } from '@/components/ui/card';
 import { Radius, Space, Theme, Touch, Type, accentOf } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
-import { DIAGNOSIS, FOCUS_AREAS, PEAK_ENERGY, REMINDER_STYLE } from '@/features/auth/options';
+import { FOCUS_AREAS, PEAK_ENERGY, REMINDER_STYLE } from '@/features/auth/options';
 
-type Options = readonly { value: string; label: string; emoji?: string }[];
+type Options = readonly { value: string; label: string }[];
 
 /** Por que importa: una cuenta de Google o Apple no tiene contraseña con la que entrar. */
 const ENTRY: Record<string, string> = {
@@ -20,11 +20,7 @@ const ENTRY: Record<string, string> = {
 const labelOf = (options: Options, value: string) =>
   options.find((o) => o.value === value)?.label ?? value;
 
-/** El emoji es ancla visual y solo viaja dentro de chips y tags, nunca en un titular. */
-const tagOf = (value: string) => {
-  const found = FOCUS_AREAS.find((o) => o.value === value);
-  return found ? `${found.emoji ?? ''} ${found.label}`.trim() : value;
-};
+const tagOf = (value: string) => labelOf(FOCUS_AREAS, value);
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
@@ -67,15 +63,23 @@ export default function HomeScreen() {
 
           <Card>
             <View style={styles.row}>
-              <Micro>Tipo</Micro>
-              <Text style={[Type.body, styles.value]}>{labelOf(DIAGNOSIS, user.diagnosis)}</Text>
-            </View>
-            <View style={styles.row}>
               <Micro>Recordatorios</Micro>
               <Text style={[Type.body, styles.value]}>
                 {labelOf(REMINDER_STYLE, user.reminderStyle)}
               </Text>
             </View>
+            {!!user.birthDate && (
+              <View style={styles.row}>
+                <Micro>Naciste</Micro>
+                <Text style={[Type.body, styles.value]}>
+                  {new Date(`${user.birthDate}T00:00:00`).toLocaleDateString('es-MX', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </Text>
+              </View>
+            )}
           </Card>
 
           <Card>

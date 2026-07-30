@@ -11,9 +11,8 @@ export type User = {
   id: number;
   email: string;
   name: string;
-  birthYear: number | null;
-  diagnosis: string;
-  treatment: string;
+  /** ISO 'YYYY-MM-DD'. */
+  birthDate: string | null;
   focusAreas: string[];
   peakEnergy: string;
   reminderStyle: string;
@@ -33,11 +32,9 @@ export type User = {
 
 export type RegisterInput = { name: string; email: string; password: string };
 
-/** Los 7 campos que afina el onboarding. Espeja el perfil que ya devuelve el registro. */
+/** Los campos que afina el onboarding. Espeja el perfil que ya devuelve el registro. */
 export type ProfileInput = {
-  birthYear: number | null;
-  diagnosis: string;
-  treatment: string;
+  birthDate: string | null;
   focusAreas: string[];
   peakEnergy: string;
   reminderStyle: string;
@@ -65,7 +62,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       headers: { 'Content-Type': 'application/json', ...init.headers },
     });
   } catch {
-    throw new ApiError(`No hay conexión con el servidor (${API_URL})`);
+    // La URL del servidor no es asunto de quien usa la app y en dev es la IP de la LAN:
+    // se queda en la consola, que solo existe en desarrollo.
+    if (__DEV__) console.warn(`[api] sin respuesta de ${API_URL}${path}`);
+    throw new ApiError('No hay conexión. Revisa tu internet e inténtalo de nuevo.');
   }
 
   const data = await res.json().catch(() => ({}));
