@@ -1,6 +1,8 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import Animated from 'react-native-reanimated';
 
-import { Accents, Radius, Space, Theme, Touch, Type, type AccentName } from '@/constants/theme';
+import { Radius, Space, Theme, Touch, Type, accentOf, type AccentName } from '@/constants/theme';
+import { usePressScale } from '@/hooks/use-press-scale';
 
 export type Option = { value: string; label: string; emoji?: string };
 
@@ -21,7 +23,7 @@ type Props = {
  * porque es el ancla visual que hace reconocible la opcion de un vistazo.
  */
 export function Choice({ label, options, value, onChange, accent = 'olive', max, hint }: Props) {
-  const tint = Accents[accent];
+  const tint = accentOf(accent);
   const multi = Array.isArray(value);
   const isOn = (v: string) => (multi ? (value as string[]).includes(v) : value === v);
 
@@ -38,28 +40,52 @@ export function Choice({ label, options, value, onChange, accent = 'olive', max,
       <Text style={[Type.micro, styles.label]}>{label}</Text>
       {!!hint && <Text style={[Type.hint, styles.hint]}>{hint}</Text>}
       <View style={styles.row}>
-        {options.map((option) => {
-          const on = isOn(option.value);
-          return (
-            <Pressable
-              key={option.value}
-              accessibilityRole={multi ? 'checkbox' : 'radio'}
-              accessibilityState={{ checked: on }}
-              onPress={() => toggle(option.value)}
-              style={({ pressed }) => [
-                styles.chip,
-                // El indicador de estado es el borde en ink (>=3:1 contra el papel);
-                // el tinte solo acompaña, porque soft contra surface no se distingue.
-                on && { backgroundColor: tint.soft, borderColor: tint.ink, borderWidth: 2 },
-                pressed && styles.pressed,
-              ]}>
-              {!!option.emoji && <Text style={styles.emoji}>{option.emoji}</Text>}
-              <Text style={[Type.label, styles.chipLabel]}>{option.label}</Text>
-            </Pressable>
-          );
-        })}
+        {options.map((option) => (
+          <Chip
+            key={option.value}
+            option={option}
+            on={isOn(option.value)}
+            multi={multi}
+            // El indicador de estado es el borde en ink (>=3:1 contra el papel);
+            // el tinte solo acompaña, porque soft contra surface no se distingue.
+            selectedStyle={{ backgroundColor: tint.soft, borderColor: tint.ink, borderWidth: 2 }}
+            onPress={() => toggle(option.value)}
+          />
+        ))}
       </View>
     </View>
+  );
+}
+
+/** Componente aparte porque cada chip necesita su propio shared value para la animacion. */
+function Chip({
+  option,
+  on,
+  multi,
+  selectedStyle,
+  onPress,
+}: {
+  option: Option;
+  on: boolean;
+  multi: boolean;
+  selectedStyle: ViewStyle;
+  onPress: () => void;
+}) {
+  const press = usePressScale({ to: 0.94 });
+
+  return (
+    <Animated.View style={press.style}>
+      <Pressable
+        accessibilityRole={multi ? 'checkbox' : 'radio'}
+        accessibilityState={{ checked: on }}
+        onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        style={[styles.chip, on && selectedStyle]}>
+        {!!option.emoji && <Text style={styles.emoji}>{option.emoji}</Text>}
+        <Text style={[Type.label, styles.chipLabel]}>{option.label}</Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -81,5 +107,4 @@ const styles = StyleSheet.create({
   },
   chipLabel: { color: Theme.text },
   emoji: { fontSize: 20 },
-  pressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
 });

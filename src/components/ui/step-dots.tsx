@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
-import { Accents, Space, Theme, type AccentName } from '@/constants/theme';
+import { Space, Theme, accentOf, type AccentName } from '@/constants/theme';
 
 import { BUD, Bud } from './stem';
 
@@ -24,7 +24,7 @@ export function StepDots({
       {/* El riel vive entre los centros de los brotes, no de borde a borde. */}
       <View pointerEvents="none" style={styles.rail}>
         <View style={styles.pending} />
-        <View style={[styles.done, { width: `${done * 100}%`, backgroundColor: Accents[accent].ink }]} />
+        <View style={[styles.done, { width: `${done * 100}%`, backgroundColor: accentOf(accent).ink }]} />
       </View>
       {Array.from({ length: total }, (_, i) => (
         <Bud key={i} on={i <= current} accent={accent} />

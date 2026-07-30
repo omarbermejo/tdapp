@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
-import { Accents, Radius, Shadow, Space, Theme, Type, type AccentName } from '@/constants/theme';
+import { Radius, Shadow, Space, Theme, Type, accentOf, type AccentName } from '@/constants/theme';
 
 /** Papel sobre papel: la tarjeta se levanta con luz y una sombra mínima, nunca con borde grueso. */
 export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
@@ -24,7 +24,7 @@ export function SectionHeader({ title, hint }: { title: string; hint?: string })
 /** Chip de categoría: tinte suave del acento y texto en tinta oscura para que se lea siempre. */
 export function Tag({ label, accent = 'olive' }: { label: string; accent?: AccentName }) {
   return (
-    <View style={[styles.tag, { backgroundColor: Accents[accent].soft }]}>
+    <View style={[styles.tag, { backgroundColor: accentOf(accent).soft }]}>
       <Text style={[Type.hint, styles.tagLabel]}>{label}</Text>
     </View>
   );

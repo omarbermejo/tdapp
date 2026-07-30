@@ -1,7 +1,10 @@
+import * as Haptics from 'expo-haptics';
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import Animated from 'react-native-reanimated';
 
-import { Accents, Radius, Shadow, Space, Theme, Touch, Type, type AccentName } from '@/constants/theme';
+import { Radius, Shadow, Space, Theme, Touch, Type, accentOf, type AccentName } from '@/constants/theme';
+import { usePressScale } from '@/hooks/use-press-scale';
 
 type Props = {
   label: string;
@@ -33,33 +36,39 @@ export function BigButton({
   const primary = variant === 'primary';
   const blocked = disabled || loading;
   // ink, no solid: los acentos medios sobre papel no llegan a 4.5:1 en 17pt.
-  const color = primary ? Theme.onDark : Accents[accent].ink;
+  const color = primary ? Theme.onDark : accentOf(accent).ink;
+  // El primario es la accion importante de la pantalla: golpe medio, no ligero.
+  const press = usePressScale(
+    primary ? { to: 0.97, haptic: Haptics.ImpactFeedbackStyle.Medium } : { to: 0.97 }
+  );
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !!blocked, busy: !!loading }}
-      onPress={onPress}
-      disabled={blocked}
-      style={({ pressed }) => [
-        styles.base,
-        primary && styles.primary,
-        variant === 'outline' && styles.outline,
-        variant === 'ghost' && styles.ghost,
-        blocked && styles.blocked,
-        pressed && !blocked && styles.pressed,
-        pressed && primary && !blocked && styles.primaryPressed,
-        style,
-      ]}>
-      {loading ? (
-        <ActivityIndicator color={color} />
-      ) : (
-        <View style={styles.content}>
-          {icon}
-          <Text style={[Type.button, { color }]}>{label}</Text>
-        </View>
-      )}
-    </Pressable>
+    <Animated.View style={[!blocked && press.style, style]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled: !!blocked, busy: !!loading }}
+        onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        disabled={blocked}
+        style={({ pressed }) => [
+          styles.base,
+          primary && styles.primary,
+          variant === 'outline' && styles.outline,
+          variant === 'ghost' && styles.ghost,
+          blocked && styles.blocked,
+          pressed && primary && !blocked && styles.primaryPressed,
+        ]}>
+        {loading ? (
+          <ActivityIndicator color={color} />
+        ) : (
+          <View style={styles.content}>
+            {icon}
+            <Text style={[Type.button, { color }]}>{label}</Text>
+          </View>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -81,6 +90,5 @@ const styles = StyleSheet.create({
     ...Shadow.card,
   },
   ghost: { minHeight: Touch.icon, backgroundColor: 'transparent' },
-  pressed: { opacity: 0.9, transform: [{ scale: 0.985 }] },
   blocked: { opacity: 0.4 },
 });

@@ -1,7 +1,7 @@
 import { Children, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Accents, Radius, Space, Theme, type AccentName } from '@/constants/theme';
+import { Radius, Space, Theme, accentOf, type AccentName } from '@/constants/theme';
 
 export const BUD = 12;
 /**
@@ -13,7 +13,9 @@ const STEM_LEFT = BUD / 2 - 1;
 
 /** El circulo del brote: hueco mientras falte, macizo cuando ya florecio. */
 export function Bud({ on, accent = 'olive' }: { on?: boolean; accent?: AccentName }) {
-  const ink = Accents[accent].ink;
+  // accentOf y no Accents[accent]: el acento puede venir de la base con un nombre viejo,
+  // y un color que no existe no debe tumbar la pantalla.
+  const ink = accentOf(accent).ink;
   return (
     <View
       pointerEvents="none"

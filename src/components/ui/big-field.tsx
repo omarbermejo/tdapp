@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 
-import { Accents, Radius, Space, Theme, Touch, Type, type AccentName } from '@/constants/theme';
+import { FormError } from './form-error';
+import { Radius, Space, Theme, Touch, Type, accentOf, type AccentName } from '@/constants/theme';
 
 type Props = TextInputProps & {
   label: string;
@@ -12,7 +13,7 @@ type Props = TextInputProps & {
 /** Campo de papel con hairline: al enfocar el borde se tine del acento, y el error se lee debajo. */
 export function BigField({ label, error, accent = 'olive', style, ...rest }: Props) {
   const [focused, setFocused] = useState(false);
-  const tint = Accents[accent].ink;
+  const tint = accentOf(accent).ink;
   const active = focused || !!error;
 
   return (
@@ -32,7 +33,7 @@ export function BigField({ label, error, accent = 'olive', style, ...rest }: Pro
         ]}
         {...rest}
       />
-      {!!error && <Text style={[Type.hint, styles.error]}>{error}</Text>}
+      <FormError message={error} />
     </View>
   );
 }
@@ -51,5 +52,4 @@ const styles = StyleSheet.create({
     ...Type.body,
   },
   inputActive: { borderWidth: 1.5 },
-  error: { color: Theme.danger },
 });
