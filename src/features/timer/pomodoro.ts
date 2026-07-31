@@ -1,6 +1,7 @@
-import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
+
+import { clearBlock, loadBlock, saveBlock, type Saved } from './vault';
 
 /**
  * El pomodoro como maquina de estados. Cuenta HACIA ABAJO, que es la mitad del punto: contar
@@ -83,14 +84,42 @@ export type Pomodoro = ReturnType<typeof usePomodoro>;
  * Con TDAH el problema no es que el reloj corra, es decidir empezar — y esa decision tiene que
  * ser un toque visible, no algo que ya paso sin ti.
  *
- * `onFinish` recibe la fase que ACABA de cerrar (no la que sigue). Se llama desde el callback del
- * intervalo, NO desde el cuerpo de un efecto: eso es lo que deja al que lo escucha hacer `setState`
- * con libertad. Un aviso disparado desde el cuerpo de un efecto convierte cada `setState` del
- * consumidor en un render en cascada — el mismo problema que el tick de abajo evita, y que el lint
- * no caza porque la llamada es indirecta.
+ * `onFinish` recibe la fase que ACABA de cerrar (no la que sigue) y los enfoques cerrados DESPUES de
+ * ese cierre. El segundo dato existe para que quien escuche pueda distinguir "cerre un bloque" de
+ * "cerre el ciclo entero" (`done >= ROUNDS`) sin rehacer la aritmetica del ciclo por su cuenta: en el
+ * render del consumidor, `done` todavia trae el valor viejo.
+ *
+ * Se llama desde el callback del intervalo, NO desde el cuerpo de un efecto: eso es lo que deja al
+ * que lo escucha hacer `setState` con libertad. Un aviso disparado desde el cuerpo de un efecto
+ * convierte cada `setState` del consumidor en un render en cascada — el mismo problema que el tick de
+ * abajo evita, y que el lint no caza porque la llamada es indirecta.
+ *
+ * El tercer argumento, `silent`, es `true` cuando el bloque se cerro con la app CERRADA y solo se
+ * descubrio al rehidratar. Ahi ya sono el aviso local en su momento, asi que celebrarlo al abrir seria
+ * un festejo con veinte minutos de retraso — pero el resto (apagar el cronometro del servidor,
+ * recargar el dia) si hay que hacerlo igual.
+ *
+ * El hook NO vibra ni suena por su cuenta: la celebracion es una decision de producto y vive en el
+ * consumidor (`features/timer/cheer.ts`). Un haptico aqui dentro se pisaria con el patron de alla.
+ *
+ * `taskId` entra solo para persistirlo junto al bloque; el hook no lo usa para nada mas. Se devuelve
+ * en `restoredTaskId` para que la pantalla pueda reengancharlo tras un reinicio.
  */
-export function usePomodoro({ onFinish }: { onFinish?: (closed: Phase) => void } = {}) {
+export function usePomodoro({
+  taskId = null,
+  onFinish,
+}: {
+  taskId?: number | null;
+  onFinish?: (closed: Phase, done: number, silent: boolean) => void;
+} = {}) {
   const [state, setState] = useState<State>(() => start(DEFAULT_MINUTES));
+  /**
+   * `false` hasta que se leyo el almacen. La pantalla no debe pintar numeros antes: mostrar 25:00 y
+   * saltar a 07:12 un frame despues se lee como un fallo.
+   */
+  const [ready, setReady] = useState(false);
+  /** La tarea que estaba enganchada en el bloque recuperado. `undefined` = todavia no se sabe. */
+  const [restoredTaskId, setRestoredTaskId] = useState<number | null | undefined>(undefined);
 
   /**
    * Espejo SINCRONO del estado. El tick corre desde un `setInterval`, o sea fuera de un render, y
@@ -102,9 +131,34 @@ export function usePomodoro({ onFinish }: { onFinish?: (closed: Phase) => void }
    */
   const live = useRef(state);
 
+  /** El taskId se lee de un ref para que `commit` no cambie de identidad al cambiar de tarea. */
+  const task = useRef(taskId);
+  useEffect(() => {
+    task.current = taskId;
+  }, [taskId]);
+
   const commit = useCallback((next: State) => {
     live.current = next;
     setState(next);
+    /**
+     * Se persiste en CADA cambio, incluido el tick del segundo. Suena a mucho, pero el tick solo
+     * escribe cuando cambia `leftMs` (o sea una vez por segundo) y lo que se guarda es el instante
+     * absoluto del final — barato, y es lo que hace que el bloque sobreviva a que iOS mate la app al
+     * fondo sin avisar. Un bloque armado sin morder no vale la pena guardarlo.
+     */
+    if (next.endsAt === null && next.leftMs === next.totalMs) {
+      clearBlock();
+      return;
+    }
+    saveBlock({
+      phase: next.phase,
+      focusMs: next.focusMs,
+      totalMs: next.totalMs,
+      endsAt: next.endsAt,
+      leftMs: next.leftMs,
+      done: next.done,
+      taskId: task.current,
+    });
   }, []);
 
   /**
@@ -116,6 +170,67 @@ export function usePomodoro({ onFinish }: { onFinish?: (closed: Phase) => void }
   useEffect(() => {
     finish.current = onFinish;
   }, [onFinish]);
+
+  /**
+   * Rehidratacion. Corre una vez al montar y es lo que arregla el bloque que se perdia al cerrar la app.
+   *
+   * El `setState` sale del `.then`, o sea de un callback de un sistema externo (el almacen), no del
+   * cuerpo del efecto: es el mismo patron con el que `auth-context` recupera la sesion.
+   *
+   * Los tres casos del bloque guardado:
+   * - **en pausa o armado** (`endsAt === null`): se restaura tal cual, con lo que quedaba.
+   * - **corriendo y con tiempo vivo**: se recalcula `leftMs` contra el reloj de AHORA. Aqui es donde
+   *   se ve que guardar el instante final y no los milisegundos restantes era lo correcto.
+   * - **corriendo y ya vencido**: se cumplio con la app cerrada. Se cierra el bloque, se arma el
+   *   siguiente y se avisa con `silent` — el aviso local ya sono cuando toco, y volver a celebrarlo
+   *   veinte minutos despues seria mentira.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    loadBlock().then((saved) => {
+      if (cancelled) return;
+      if (!saved) {
+        setRestoredTaskId(null);
+        setReady(true);
+        return;
+      }
+
+      const base: State = {
+        phase: saved.phase,
+        focusMs: saved.focusMs,
+        totalMs: saved.totalMs,
+        endsAt: saved.endsAt,
+        leftMs: saved.leftMs,
+        done: saved.done,
+      };
+
+      let restored = base;
+      let expired: { closed: Phase; done: number } | null = null;
+
+      if (saved.endsAt !== null) {
+        const left = saved.endsAt - Date.now();
+        if (left > 0) {
+          restored = { ...base, leftMs: left };
+        } else {
+          const next = nextPhase(saved.phase, saved.done);
+          restored = arm(base, next.phase, next.done);
+          expired = { closed: saved.phase, done: next.done };
+        }
+      }
+
+      live.current = restored;
+      setState(restored);
+      setRestoredTaskId(saved.taskId);
+      setReady(true);
+
+      if (expired) finish.current?.(expired.closed, expired.done, true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /**
    * El latido. Solo existe mientras hay `endsAt`, asi que un cronometro en pausa no despierta al
@@ -149,9 +264,7 @@ export function usePomodoro({ onFinish }: { onFinish?: (closed: Phase) => void }
       // El estado se cierra ANTES de avisar: asi el guard de arriba ya deja pasar un segundo tick
       // por las mismas fechas sin volver a avisar.
       commit(arm(s, next.phase, next.done));
-      // Success y no Impact: es el unico premio del bloque y tiene que sentirse distinto a un toque.
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      finish.current?.(closed);
+      finish.current?.(closed, next.done, false);
     };
 
     /**
@@ -220,6 +333,10 @@ export function usePomodoro({ onFinish }: { onFinish?: (closed: Phase) => void }
   );
 
   return {
+    /** `false` mientras se lee el almacen: la pantalla no debe pintar numeros todavia. */
+    ready,
+    /** La tarea del bloque recuperado. `undefined` hasta que se sabe. */
+    restoredTaskId,
     phase: state.phase,
     leftMs: state.leftMs,
     totalMs: state.totalMs,

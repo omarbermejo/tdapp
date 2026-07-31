@@ -21,6 +21,7 @@ import { useLocalToday } from '@/features/tasks/day';
 import { accentForFocus } from '@/features/tasks/focus-accent';
 import { useTasks } from '@/features/tasks/use-tasks';
 import { armAlarm, disarmAlarm, forgetAlarm } from '@/features/timer/alarm';
+import { cheer, coolCheer, warmCheer } from '@/features/timer/cheer';
 import { DIAL, Dial, litTicks } from '@/features/timer/dial';
 import { DialPicker } from '@/features/timer/dial-picker';
 import { useFocusMode } from '@/features/timer/focus-mode';
@@ -156,7 +157,7 @@ export default function TimerScreen() {
    * No va memoizado a mano y no importa: `usePomodoro` se protege con un contador de cierres, así
    * que aunque esta función cambie de identidad en cada render el aviso sale una vez por bloque.
    */
-  const onFinish = (closed: Phase) => {
+  const onFinish = (closed: Phase, done: number) => {
     // `forget` y NO `disarm`: el aviso esta agendado para este mismo instante y cancelarlo aqui
     // seria una carrera contra el sistema que puede dejar el bloque sin sonar.
     forgetAlarm();
@@ -164,6 +165,16 @@ export default function TimerScreen() {
     setSpan(null);
     // Sale del modo enfoque: el bloque acabó y hay que poder ir a otra parte.
     focus.setHidden(false);
+
+    /**
+     * Sonido y vibración en TODO cierre, también al acabar un descanso: el aviso de "ya" es lo que
+     * hace que el bloque sirva con el teléfono boca abajo, y volver a trabajar también hay que
+     * saberlo. Lo que cambia es el peso: el cuarto enfoque cierra el ciclo entero y ahí suena la
+     * versión larga.
+     */
+    cheer(closed === 'focus' && done >= ROUNDS ? 'cycle' : 'block');
+
+    // El confeti sí es solo del enfoque: acabar un descanso no es un logro que celebrar.
     if (closed !== 'focus') return;
     setParty((previous) => previous + 1);
     serverTimer(task?.id ?? null, 'stop');
@@ -181,14 +192,21 @@ export default function TimerScreen() {
   /** La carátula se gira solo sobre un enfoque intacto. Corriendo es un reloj, no un control. */
   const editable = pom.fresh && pom.phase === 'focus';
 
-  /** Al salir de la pantalla no queda ni aviso agendado ni actividad viva de un bloque huérfano. */
-  useEffect(
-    () => () => {
+  /**
+   * La sesión de audio y los sonidos se preparan al entrar: crearlos en el momento del cero hace que
+   * el sonido llegue medio segundo tarde, y un aviso que suena después del cero se siente roto.
+   *
+   * Al salir no queda nada suelto: ni aviso agendado, ni actividad viva de un bloque huérfano, ni
+   * players abiertos, ni vibraciones en vuelo.
+   */
+  useEffect(() => {
+    warmCheer();
+    return () => {
       disarmAlarm();
       hideBlock();
-    },
-    []
-  );
+      coolCheer();
+    };
+  }, []);
 
   const fallback: AccentName = user?.accentColor ?? 'olive';
   /**

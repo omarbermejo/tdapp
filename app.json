@@ -50,8 +50,8 @@
           "widgets": [
             {
               "name": "TodayWidget",
-              "displayName": "Tu d\u00eda",
-              "description": "Lo que sigue hoy y cu\u00e1nto te queda.",
+              "displayName": "Tu día",
+              "description": "Lo que sigue hoy y cuánto te queda.",
               "supportedFamilies": [
                 "systemSmall",
                 "systemMedium"
@@ -60,7 +60,8 @@
             }
           ]
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,
