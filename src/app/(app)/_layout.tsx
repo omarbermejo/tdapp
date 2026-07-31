@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
-import { Radius, Space, Touch, Type, useAccent, useScheme, useShadow, useTheme } from '@/constants/theme';
+import { Radius, Space, Type, useAccent, useScheme, useShadow, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
 import { usePressScale } from '@/hooks/use-press-scale';
 
@@ -33,11 +33,26 @@ function detectGlass(): boolean {
  */
 const GLASS = detectGlass();
 
+/**
+ * Geometria de la capsula. Vive aqui y no en `Touch` porque es de ESTE control: `Touch.icon` son
+ * los 44pt minimos del HIG, y la barra los pasa a proposito.
+ *
+ * Un hueco de 44 con 4 de aire dejaba una capsula de 52 de alto que se leia como una barrita de
+ * cromo pegada al borde. A 60 la capsula se lee como el objeto flotante que quiere ser, el area
+ * tactil crece un 36% (que en una barra que se toca a ciegas con el pulgar es justo donde se nota)
+ * y el vidrio tiene superficie suficiente para que el desenfoque signifique algo.
+ */
+const SLOT = 60;
+/** El aire entre huecos y contra el canto. Sube con el hueco: si no, la capsula queda apretada. */
+const GAP = Space.sm;
+/** El glifo crece con el hueco, pero menos: a 28 sigue habiendo anillo de vidrio alrededor. */
+const GLYPH = 28;
+
 /** El paso del resaltado: el ancho de un hueco mas el gap. Fijo, asi no hay que medir nada. */
-const SLOT_STEP = Touch.icon + Space.xs;
+const SLOT_STEP = SLOT + GAP;
 
 /** Alto de la capsula: un hueco mas el padding arriba y abajo. Entra en `TAB_DOCK`. */
-const BAR_H = Touch.icon + Space.xs * 2;
+const BAR_H = SLOT + GAP * 2;
 
 /**
  * Ancho exacto de la capsula para n pestañas: n huecos, n-1 gaps y el padding de los lados.
@@ -45,8 +60,11 @@ const BAR_H = Touch.icon + Space.xs * 2;
  * Va explicito y no lo deduce el flujo porque el vidrio necesita tamaño en su PRIMER layout:
  * medido en el simulador, un `GlassView` en position absolute dentro de un contenedor que
  * todavia no tiene medidas se monta con marco cero y se queda sin efecto para siempre.
+ *
+ * Con cuatro pestañas son 280pt. Cabe con aire en el telefono mas angosto que soporta la app (el
+ * SE deja 327 entre los margenes del dock), asi que la capsula sigue sin tocar los cantos.
  */
-const barWidth = (slots: number) => slots * Touch.icon + (slots + 1) * Space.xs;
+const barWidth = (slots: number) => slots * SLOT + (slots + 1) * GAP;
 
 /** El resaltado llega con inercia y se pasa un pelo. Si solo apareciera no se leeria liquido. */
 const SLIDE = { damping: 18, stiffness: 220 };
@@ -74,6 +92,8 @@ type Tab = {
  */
 const TABS: Tab[] = [
   { name: 'index', label: 'Hoy', ios: 'sun.max', android: 'wb_sunny', short: 'Hoy' },
+  // Segunda y no ultima: el cronometro es lo que se hace CON el dia, asi que va pegado al dia.
+  { name: 'timer', label: 'Enfoque', ios: 'timer', android: 'timer', short: 'Foco' },
   { name: 'calendar', label: 'Calendario', ios: 'calendar', android: 'calendar_month', short: 'Cal' },
   { name: 'profile', label: 'Perfil', ios: 'person', android: 'person', short: 'Yo' },
 ];
@@ -118,7 +138,7 @@ function TabSlot({
       <Animated.View style={press.style}>
         <SymbolView
           name={{ ios: tab.ios, android: tab.android, web: tab.android }}
-          size={24}
+          size={GLYPH}
           tintColor={tint}
           fallback={<Text style={[Type.micro, { color: tint }]}>{tab.short}</Text>}
         />
@@ -269,8 +289,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-    padding: Space.xs,
+    gap: GAP,
+    padding: GAP,
   },
   track: {
     position: 'absolute',
@@ -280,8 +300,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   slot: {
-    width: Touch.icon,
-    height: Touch.icon,
+    width: SLOT,
+    height: SLOT,
     borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -290,10 +310,10 @@ const styles = StyleSheet.create({
   // asi que la posicion es aritmetica y no hace falta medir con onLayout.
   highlight: {
     position: 'absolute',
-    top: Space.xs,
-    left: Space.xs,
-    width: Touch.icon,
-    height: Touch.icon,
+    top: GAP,
+    left: GAP,
+    width: SLOT,
+    height: SLOT,
     borderRadius: Radius.pill,
   },
 });

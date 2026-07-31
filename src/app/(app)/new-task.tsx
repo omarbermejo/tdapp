@@ -1,6 +1,7 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useIsFocused } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -130,7 +131,31 @@ const parseLabel = (date: string) => {
 /** '9 am' desde el valor del chip, para poder resumirlo en la pastilla. */
 const hourLabel = (value: string) => HOURS.find((h) => h.value === value)?.label ?? value;
 
+/**
+ * Lo que la palomita se queda en pantalla antes de irse al home. Suficiente para leerla como
+ * "quedo", corto para no convertir anotar en una espera: crear y desaparecer en el mismo frame
+ * se lee como que no paso nada, y dos segundos se leen como que la app se colgo.
+ */
+const CONFIRM_MS = 700;
+
 export default function NewTaskScreen() {
+  const focused = useIsFocused();
+
+  /**
+   * La ruta vive dentro de Tabs, y salir de una pestaña NO la desmonta: sin esto, volver a abrir
+   * "Nueva tarea" mostraba entera la anterior — el titulo escrito, el dia y la hora ya elegidos,
+   * el panel abierto donde lo dejaste.
+   *
+   * Desmontar el formulario en vez de limpiar campo por campo tambien vuelve a leer el reloj (de
+   * ahi salen los chips Hoy/Mañana y el hueco inicial) y devuelve el autoFocus del titulo: dos
+   * cosas que un puñado de setState no arregla.
+   */
+  if (!focused) return null;
+
+  return <NewTaskForm />;
+}
+
+function NewTaskForm() {
   const { user, token } = useAuth();
   const t = useTheme();
   const accent = user?.accentColor;
@@ -168,6 +193,22 @@ export default function NewTaskScreen() {
   const [fields, setFields] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  /** Ya quedo: el boton se queda en la palomita y la pantalla se va sola. */
+  const [done, setDone] = useState(false);
+
+  /**
+   * El salto al home vive en un efecto y no dentro de `create`: asi el timer se cancela con la
+   * pantalla y un back manual durante la confirmacion no arrastra una navegacion huerfana.
+   *
+   * replace y no back: la tarea recien creada se ve en el home (que recarga al enfocarse), y
+   * replace saca "Nueva tarea" del historial — volver atras desde el home ya no regresa al
+   * formulario que acabamos de vaciar.
+   */
+  useEffect(() => {
+    if (!done) return;
+    const timer = setTimeout(() => router.replace('/'), CONFIRM_MS);
+    return () => clearTimeout(timer);
+  }, [done]);
 
   // La pastilla resume el dia: si es uno de los tres chips usa su palabra, y si es "otro dia"
   // la fecha corta. Sin dia valido todavia, lo dice en vez de mentir con un valor viejo.
@@ -223,7 +264,9 @@ export default function NewTaskScreen() {
             : [Number(hour), 0]) as [number, number])
         ),
       });
-      router.back();
+      // El teclado se va antes de la palomita: abierto tapa justo el boton que confirma.
+      Keyboard.dismiss();
+      setDone(true);
     } catch (e) {
       if (e instanceof ApiError) {
         setFields(e.fields);
@@ -401,7 +444,13 @@ export default function NewTaskScreen() {
 
           <FormError message={error} />
 
-          <BigButton label="Crear" loading={saving} onPress={create} accent={accent} />
+          <BigButton
+            label="Crear"
+            loading={saving}
+            success={done}
+            onPress={create}
+            accent={accent}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

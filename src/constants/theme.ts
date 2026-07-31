@@ -1,6 +1,6 @@
 // expo-router lleva react-navigation dentro y reexporta su tipo de tema.
 import type { Theme as NavigationTheme } from 'expo-router';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, type TextStyle } from 'react-native';
 
 /**
  * Sistema visual: papel blanco, tinta verde profunda y acentos tierra.
@@ -280,6 +280,22 @@ export const Display = 'Outfit_800ExtraBold';
 
 export const Type = {
   display: { fontFamily: Display, fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
+  /**
+   * La cuenta atrás del cronómetro, y nada más. Es el único número de la app que se lee a un
+   * brazo de distancia — con el teléfono en la mesa mientras trabajas — así que se sale de la
+   * escala a proposito: `display` a 34 dentro de un dial de 260 se lee como una etiqueta.
+   *
+   * `tabular-nums` porque los dígitos cambian cada segundo: con figuras proporcionales el '1'
+   * es más angosto y el reloj entero se mueve al pasar de 10:00 a 09:59.
+   */
+  count: {
+    fontFamily: Display,
+    fontSize: 64,
+    lineHeight: 68,
+    letterSpacing: -1.5,
+    // El cast es por el `as const` de abajo: sin el, el array queda readonly y RN pide uno mutable.
+    fontVariant: ['tabular-nums'] as TextStyle['fontVariant'],
+  },
   title: { fontFamily: Display, fontSize: 26, lineHeight: 32, letterSpacing: -0.4 },
   section: { fontFamily: Display, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
   metric: { fontFamily: Display, fontSize: 30, lineHeight: 34, letterSpacing: -0.4 },

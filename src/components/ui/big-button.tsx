@@ -1,7 +1,13 @@
 import * as Haptics from 'expo-haptics';
-import type { ReactNode } from 'react';
+import { SymbolView } from 'expo-symbols';
+import { useEffect, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
-import Animated from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+} from 'react-native-reanimated';
 
 import {
   Radius,
@@ -24,9 +30,20 @@ type Props = {
   accent?: AccentName;
   variant?: 'primary' | 'outline' | 'ghost';
   loading?: boolean;
+  /**
+   * La accion ya salio bien. El boton deja de aceptar toques y se vuelve la confirmacion:
+   * palomita, un pop que se pasa un pelo y el golpe haptico de exito.
+   *
+   * Vive en el boton y no en la pantalla porque el boton ES donde se toco: confirmar en otro
+   * sitio obliga a buscar la respuesta, y con TDAH la respuesta inmediata es la mitad del efecto.
+   */
+  success?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
 };
+
+/** El pop de la confirmacion: se pasa un pelo y vuelve. Blando a proposito — es un "listo". */
+const POP = { damping: 12, stiffness: 320 };
 
 /**
  * Un solo boton solido por pantalla (`primary`); el resto son papel con hairline
@@ -43,6 +60,7 @@ export function BigButton({
   accent = 'olive',
   variant = 'primary',
   loading,
+  success,
   disabled,
   style,
 }: Props) {
@@ -53,7 +71,8 @@ export function BigButton({
   // dejaba a React con dos cuentas de hooks distintas y reventaba en el siguiente.
   const accentInk = useAccent(accent).ink;
   const primary = variant === 'primary';
-  const blocked = disabled || loading;
+  // La confirmacion tambien bloquea: dos toques seguidos crearian la cosa dos veces.
+  const blocked = disabled || loading || success;
   // ink, no solid: los acentos medios sobre papel no llegan a 4.5:1 en 17pt.
   const color = primary ? t.onInk : accentInk;
   // El primario es la accion importante de la pantalla: golpe medio, no ligero.
@@ -61,10 +80,28 @@ export function BigButton({
     primary ? { to: 0.97, haptic: Haptics.ImpactFeedbackStyle.Medium } : { to: 0.97 }
   );
 
+  // Shared value propio y no el de `usePressScale`: el hundido del toque ya termino cuando
+  // llega la respuesta del servidor, y mezclar los dos en la misma escala se pisa.
+  const pop = useSharedValue(1);
+  const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.get() }] }));
+
+  useEffect(() => {
+    if (!success) return;
+    // Crece y vuelve: un pop que solo crece deja el boton grande y se lee como un bug.
+    pop.set(withSequence(withSpring(1.06, POP), withSpring(1, POP)));
+    // El haptico de exito es otro patron que el del toque: tres golpes cortos, no uno.
+    // En web no hay motor, y el catch evita ensuciar la consola (igual que en usePressScale).
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }, [success, pop]);
+
   return (
-    <Animated.View style={[!blocked && press.style, style]}>
+    // El pop reemplaza al hundido y no se suma: con `success` el boton ya esta bloqueado,
+    // asi que `press.style` esta apagado y las dos escalas nunca coinciden en el array.
+    <Animated.View style={[!blocked && press.style, success && popStyle, style]}>
       <Pressable
         accessibilityRole="button"
+        // Con la palomita no queda texto que leer, asi que el nombre lo pone esto.
+        accessibilityLabel={success ? `${label}: listo` : undefined}
         accessibilityState={{ disabled: !!blocked, busy: !!loading }}
         onPress={onPress}
         onPressIn={press.onPressIn}
@@ -79,10 +116,20 @@ export function BigButton({
             shadow,
           ],
           variant === 'ghost' && styles.ghost,
-          blocked && styles.blocked,
+          // La confirmacion NO se apaga: un boton al 40% se lee como deshabilitado, y esto
+          // es lo contrario — es la unica cosa que hay que mirar en ese momento.
+          blocked && !success && styles.blocked,
           pressed && primary && !blocked && { backgroundColor: t.inkPressed },
         ]}>
-        {loading ? (
+        {success ? (
+          <SymbolView
+            name={{ ios: 'checkmark', android: 'check', web: 'check' }}
+            size={26}
+            tintColor={color}
+            // Sin el simbolo la palomita sigue siendo una palomita: el glifo de texto basta.
+            fallback={<Text style={[Type.button, { color }]}>✓</Text>}
+          />
+        ) : loading ? (
           <ActivityIndicator color={color} />
         ) : (
           <View style={styles.content}>
