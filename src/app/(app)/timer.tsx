@@ -20,7 +20,7 @@ import { tasksApi } from '@/features/tasks/api';
 import { useLocalToday } from '@/features/tasks/day';
 import { accentForFocus } from '@/features/tasks/focus-accent';
 import { useTasks } from '@/features/tasks/use-tasks';
-import { armAlarm, disarmAlarm } from '@/features/timer/alarm';
+import { armAlarm, disarmAlarm, forgetAlarm } from '@/features/timer/alarm';
 import { DIAL, Dial, litTicks } from '@/features/timer/dial';
 import { DialPicker } from '@/features/timer/dial-picker';
 import { useFocusMode } from '@/features/timer/focus-mode';
@@ -157,7 +157,9 @@ export default function TimerScreen() {
    * que aunque esta función cambie de identidad en cada render el aviso sale una vez por bloque.
    */
   const onFinish = (closed: Phase) => {
-    disarmAlarm();
+    // `forget` y NO `disarm`: el aviso esta agendado para este mismo instante y cancelarlo aqui
+    // seria una carrera contra el sistema que puede dejar el bloque sin sonar.
+    forgetAlarm();
     hideBlock();
     setSpan(null);
     // Sale del modo enfoque: el bloque acabó y hay que poder ir a otra parte.

@@ -153,5 +153,10 @@ export function DialPicker({
 }
 
 const styles = StyleSheet.create({
-  wrap: { width: DIAL, height: DIAL },
+  /**
+   * `alignSelf` importa: la carátula suelta se centra ella misma, pero envuelta aquí el que manda es
+   * esta caja, y con ancho fijo dentro de un contenedor `stretch` se quedaba pegada a la izquierda —
+   * o sea que el dial se descentraba solo al poder girarse.
+   */
+  wrap: { width: DIAL, height: DIAL, alignSelf: 'center' },
 });

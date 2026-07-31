@@ -1,5 +1,5 @@
 import { HStack, Image, ProgressView, Spacer, Text, VStack } from '@expo/ui/swift-ui';
-import { font, foregroundColor, lineLimit } from '@expo/ui/swift-ui/modifiers';
+import { font, foregroundColor, lineLimit, padding, tint } from '@expo/ui/swift-ui/modifiers';
 import { createLiveActivity, type LiveActivityEnvironment } from 'expo-widgets';
 
 /**
@@ -90,7 +90,11 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
      * EN QUE estabas, que es justo el dato que se pierde al soltar el telefono.
      */
     banner: (
-      <VStack spacing={8}>
+      /**
+       * El padding es propio y no del sistema: medido en el simulador, el banner de la pantalla de
+       * bloqueo deja el contenido a ras del canto y el punteo del ciclo salia cortado por la derecha.
+       */
+      <VStack spacing={8} modifiers={[padding({ horizontal: 4, vertical: 2 })]}>
         <HStack spacing={6}>
           {glyph(13)}
           <Text
@@ -116,7 +120,9 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
 
         {/* Se vacia sola por el mismo timerInterval: dos lenguajes para el mismo dato, y el que
             se lee sin numeros es el que sirve de reojo. */}
-        <ProgressView timerInterval={range} countsDown modifiers={[foregroundColor(props.tint)]} />
+        {/* `tint` y no `foregroundColor`: SwiftUI colorea la barra de un ProgressView con el tinte,
+            y el foreground se lo pasa por alto — se veia con el azul del sistema. */}
+        <ProgressView timerInterval={range} countsDown modifiers={[tint(props.tint)]} />
       </VStack>
     ),
 
@@ -142,7 +148,9 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
         <Text modifiers={[font({ size: 15, weight: 'semibold' }), lineLimit(1)]}>
           {props.task || (resting ? 'Suelta el telefono' : 'Enfoque libre')}
         </Text>
-        <ProgressView timerInterval={range} countsDown modifiers={[foregroundColor(props.tint)]} />
+        {/* `tint` y no `foregroundColor`: SwiftUI colorea la barra de un ProgressView con el tinte,
+            y el foreground se lo pasa por alto — se veia con el azul del sistema. */}
+        <ProgressView timerInterval={range} countsDown modifiers={[tint(props.tint)]} />
       </VStack>
     ),
   };

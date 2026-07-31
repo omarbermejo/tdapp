@@ -103,6 +103,18 @@ export async function armAlarm(seconds: number, title: string, body: string) {
   }
 }
 
+/**
+ * Suelta el aviso SIN cancelarlo, para cuando el bloque llego a cero.
+ *
+ * Existe por una carrera real: el aviso esta agendado para el instante exacto del final, y el tick
+ * que detecta el cero corre en esos mismos milisegundos. Llamar `disarmAlarm()` ahi cancelaria la
+ * notificacion justo antes de que el sistema la entregue — el bloque acabaria en silencio, que es
+ * precisamente lo que el aviso existe para evitar. Ya cumplio: solo hay que olvidar su id.
+ */
+export function forgetAlarm() {
+  armedId = null;
+}
+
 /** Cancela el aviso vivo. Se llama al pausar, reiniciar, saltar y al salir de la pantalla. */
 export async function disarmAlarm() {
   if (!armedId) return;
