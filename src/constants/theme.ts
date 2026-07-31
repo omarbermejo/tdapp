@@ -193,7 +193,17 @@ const ACCENTS: Record<Scheme, Record<AccentName, Accent>> = {
   dark: {
     forest: { solid: Palette.blackForest[700], soft: Palette.blackForest[400], ink: Palette.blackForest[800] },
     olive: { solid: Palette.oliveLeaf[600], soft: Palette.oliveLeaf[200], ink: Palette.oliveLeaf[700] },
-    leaf: { solid: Palette.blackForest[700], soft: Palette.oliveLeaf[300], ink: Palette.blackForest[800] },
+    /**
+     * `leaf` sube un paso MÁS que `forest` en oscuro, y no es cosmético: los dos compartían
+     * `solid` (#80ac4d) e `ink` (#aac987) exactos, así que en modo oscuro elegir Bosque u Hoja en el
+     * selector de color del perfil no cambiaba nada visible — y ahí la repintada ES la confirmación
+     * de que se guardó. Solo diferían en `soft`, que la muestra de color no usa.
+     *
+     * Medido sobre `surface` oscuro (#141414): #aac987 da 10.0:1 y #d5e4c3 13.8:1, así que los dos
+     * pasan AA de sobra; y entre el `solid` de forest y el de leaf ahora hay 1.44:1, que es la
+     * diferencia que hace que se lean como dos colores y no como uno repetido.
+     */
+    leaf: { solid: Palette.blackForest[800], soft: Palette.oliveLeaf[300], ink: Palette.blackForest[900] },
     clay: { solid: Palette.sunlitClay[500], soft: Palette.sunlitClay[200], ink: Palette.sunlitClay[600] },
     copper: { solid: Palette.copperwood[500], soft: Palette.copperwood[200], ink: Palette.copperwood[700] },
   },

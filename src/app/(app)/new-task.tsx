@@ -4,10 +4,8 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -17,17 +15,17 @@ import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
 import { Micro } from '@/components/ui/card';
+import { Pill } from '@/components/ui/pill';
 import { Choice, type Option } from '@/components/ui/choice';
 import { DateField } from '@/components/ui/date-field';
 import { FormError } from '@/components/ui/form-error';
 import { TimeField } from '@/components/ui/time-field';
-import { Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import { Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
 import { ApiError, type Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { FOCUS_AREAS } from '@/features/auth/options';
 import { isoAt, localDate, tasksApi } from '@/features/tasks/api';
 
-import { usePressScale } from '@/hooks/use-press-scale';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 /**
@@ -460,52 +458,6 @@ export default function NewTaskScreen() {
   );
 }
 
-/**
- * Una decision como pastilla: arriba lo que es, abajo lo que vale ahora.
- *
- * Componente aparte porque cada una necesita su propio shared value para el toque, y porque
- * mostrar el VALOR en vez de las opciones es lo que deja la pantalla en tres lineas.
- */
-function Pill({
-  label,
-  value,
-  active,
-  accent,
-  onPress,
-}: {
-  label: string;
-  value: string;
-  active: boolean;
-  accent?: AccentName;
-  onPress: () => void;
-}) {
-  const t = useTheme();
-  const tint = useAccent(accent);
-  const press = usePressScale({ to: 0.96 });
-
-  return (
-    <Animated.View style={press.style}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: active }}
-        accessibilityLabel={`${label}: ${value}`}
-        onPress={onPress}
-        onPressIn={press.onPressIn}
-        onPressOut={press.onPressOut}
-        style={[
-          styles.pill,
-          { backgroundColor: t.surface, borderColor: t.line },
-          active && { backgroundColor: tint.soft, borderColor: tint.ink },
-        ]}>
-        <Text style={[Type.micro, { color: t.textMuted }]}>{label}</Text>
-        <Text style={[Type.label, { color: t.text }]} numberOfLines={1}>
-          {value}
-        </Text>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: {
@@ -518,15 +470,6 @@ const styles = StyleSheet.create({
   title: { minHeight: Touch.button, paddingTop: Space.sm, textAlignVertical: 'top' },
   rule: { height: 1 },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  pill: {
-    minHeight: Touch.chip,
-    gap: 2,
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    justifyContent: 'center',
-  },
   // El dia y la hora son una sola decision: van mas juntos entre si que del resto.
   panel: { gap: Space.lg },
 });

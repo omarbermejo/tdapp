@@ -2,6 +2,8 @@ import * as SecureStore from 'expo-secure-store';
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 
+import { syncTodayWidget } from '@/features/widgets/sync-today';
+
 import { ApiError, api, type ProfileInput, type RegisterInput, type User } from './api';
 
 // ponytail: clave nueva (antes solo el token). Las sesiones de dev se caen una vez y ya.
@@ -35,6 +37,16 @@ const storage = {
   clear: raw.clear,
 };
 
+/**
+ * Cola de uno para los guardados del perfil.
+ *
+ * `update-profile.js` en el API hace `findById` → `createProfile` → `saveProfile` SIN transaccion, asi
+ * que dos PATCH en vuelo se pisan: el segundo lee el perfil de antes del primero y le devuelve el
+ * campo viejo. Tocar dos chips rapido es exactamente eso. Encadenando por esta promesa, el segundo
+ * espera al primero — y no hay debounce, porque un debounce descartaria el guardado intermedio.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+
 /** En que punto del alta esta el usuario. Se deriva del user, nunca se guarda aparte. */
 export type Stage = 'guest' | 'verify' | 'onboarding' | 'ready';
 
@@ -62,6 +74,14 @@ type AuthValue = {
   verify: (code: string) => Promise<void>;
   resend: () => Promise<void>;
   finishOnboarding: (input: ProfileInput) => Promise<void>;
+  /**
+   * Cambia UN campo (o varios) del perfil desde el perfil ya hecho. Optimista: la UI se repinta antes
+   * de que el servidor conteste, y si falla se revierte y relanza el error.
+   *
+   * Es hermano de `finishOnboarding` y NO lo reusa: aquel tira confeti, y celebrar por cambiar la hora
+   * de un aviso sería absurdo. El API es el mismo (`PATCH /me/profile` mergea por campo).
+   */
+  updateProfile: (patch: Partial<ProfileInput>) => Promise<void>;
   signOut: () => Promise<void>;
   /**
    * Se acaba de terminar el onboarding. Vive aqui y no en la pantalla porque al guardar el
@@ -125,6 +145,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Primero la fiesta y luego el commit: el commit es lo que voltea el guard.
         setCelebrating(true);
         await withUser(user);
+      },
+      updateProfile: async (patch) => {
+        const previous = session?.user;
+        if (!token || !previous) return;
+
+        /**
+         * Optimista y desde AQUI, no desde la pantalla. Es lo que hace que la confirmacion funcione:
+         * al cambiar el color, el avatar del perfil y la capsula de pestañas (que lee
+         * `useAccent(user?.accentColor)` de este mismo contexto) se repintan en el mismo frame. Con un
+         * borrador local de la pantalla, el chip se teñiria al instante y la barra seguiria del color
+         * viejo medio segundo — la repintada como confirmacion fallaria justo en su momento estrella.
+         *
+         * `setSession` y no `start`: no se escribe el almacen con algo que el servidor no confirmo.
+         */
+        setSession({ token, user: { ...previous, ...patch } });
+
+        queue = queue.then(async () => {
+          try {
+            const { user } = await api.onboard(token, patch);
+            // Ahora si: commit de verdad, con el user del servidor y escribiendo el almacen.
+            await start({ token, user });
+            // El widget lleva el acento en sus props, asi que un color nuevo lo deja mintiendo.
+            if (patch.accentColor) void syncTodayWidget(token);
+          } catch (error) {
+            // Vuelve a lo que habia. Quien llamo se encarga de contarlo; aqui no se traga nada.
+            setSession({ token, user: previous });
+            throw error;
+          }
+        });
+
+        return queue as Promise<void>;
       },
       signOut: async () => {
         setCelebrating(false);

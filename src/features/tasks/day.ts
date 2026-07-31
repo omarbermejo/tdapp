@@ -49,3 +49,18 @@ export const dayLabel = (date: string, today: string) => {
   const label = at.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric' });
   return label.charAt(0).toUpperCase() + label.slice(1);
 };
+
+/**
+ * La inicial del dia de la semana de una fecha 'YYYY-MM-DD': L M M J V S D.
+ *
+ * Sale de la locale y no de un array escrito a mano, que es la unica forma de que siga al idioma del
+ * telefono. `es-MX` devuelve 'lun.' con punto, de ahi el replace.
+ *
+ * Se construye con numeros y no con `new Date(iso)`: parsear 'YYYY-MM-DD' lo trata como UTC, y al
+ * oeste de Greenwich eso devuelve el dia anterior — la tira entera saldria corrida.
+ */
+export const weekdayInitial = (date: string): string => {
+  const [y, m, d] = date.split('-').map(Number);
+  const short = new Date(y, m - 1, d).toLocaleDateString('es-MX', { weekday: 'short' });
+  return short.replace('.', '').charAt(0).toUpperCase();
+};

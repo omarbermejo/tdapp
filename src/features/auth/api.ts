@@ -161,8 +161,14 @@ export const api = {
   resend: (token: string) =>
     request<void>('/auth/resend', { method: 'POST', headers: bearer(token) }),
 
-  /** Guarda el perfil del onboarding; el API sella onboardedAt la primera vez. */
-  onboard: (token: string, input: ProfileInput) =>
+  /**
+   * Guarda el perfil; el API sella `onboardedAt` la primera vez.
+   *
+   * `Partial` porque es un PATCH de verdad: mergea sobre lo que ya hay, asi que el mismo endpoint sirve
+   * para el onboarding completo y para cambiar un solo campo desde el perfil (lo dice su propio
+   * comentario en `application/update-profile.js`).
+   */
+  onboard: (token: string, input: Partial<ProfileInput>) =>
     request<{ user: User }>('/me/profile', {
       method: 'PATCH',
       headers: bearer(token),
