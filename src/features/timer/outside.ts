@@ -133,6 +133,31 @@ export async function hideBlock(inks?: { tint: string; tintDark: string }) {
  * asi que la de la sesion anterior se adopta en vez de tirarse.
  */
 export async function adoptBlock(block: Block | null) {
+  /**
+   * El widget se reconcilia SIEMPRE y antes que nada, en las dos plataformas.
+   *
+   * Faltaba, y era un agujero real: `adoptBlock` arreglaba la Live Activity al arrancar la app pero no
+   * tocaba el widget, asi que despues de reiniciar con un bloque recuperado la Isla decia la verdad y
+   * el widget de la pantalla de bloqueo se quedaba con la timeline vieja — visto en el simulador, con
+   * la cuenta atras congelada de un bloque que ya no existia.
+   *
+   * Y no basta con que `showBlock` lo haga: `adoptBlock` es el UNICO camino en el arranque.
+   */
+  await (block
+    ? showFocusWidget({
+        phase: block.phase,
+        resting: block.resting,
+        task: block.task,
+        startedAt: block.startedAt,
+        endsAt: block.endsAt,
+        pausedAt: block.pausedAt,
+        done: block.done,
+        rounds: block.rounds,
+        tint: block.tintOnLight,
+        tintDark: block.tint,
+      })
+    : clearFocusWidget({ tint: '', tintDark: '' }));
+
   if (!IOS) {
     if (!block) await hideOngoing();
     else await showOngoing(block);

@@ -1,5 +1,14 @@
-import { AccessoryWidgetBackground, Gauge, HStack, Image, Text, VStack, ZStack } from '@expo/ui/swift-ui';
-import { font, foregroundColor, lineLimit, monospacedDigit, widgetURL } from '@expo/ui/swift-ui/modifiers';
+import { AccessoryWidgetBackground, HStack, Image, Text, VStack, ZStack } from '@expo/ui/swift-ui';
+import {
+  fixedSize,
+  font,
+  foregroundColor,
+  frame,
+  lineLimit,
+  monospacedDigit,
+  opacity,
+  widgetURL,
+} from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
 /**
@@ -52,15 +61,36 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
   const circular = family === 'accessoryCircular';
   const rectangular = family === 'accessoryRectangular';
   const inline = family === 'accessoryInline';
-  const lock = circular || rectangular || inline;
 
   /**
-   * En la pantalla de bloqueo el sistema pinta todo de un blanco monocromo (`widgetRenderingMode`
-   * 'vibrant') y un color propio se ve sucio o se ignora. Ahi se deja el color del sistema; en la
-   * pantalla de inicio manda el acento, y cual de los dos pasos depende del esquema en que se dibuje.
+   * El color se decide por `widgetRenderingMode`, NO por la familia.
+   *
+   * La familia era un proxy — "si es de pantalla de bloqueo, monocromo" — y falla en un caso real: los
+   * iconos TEÑIDOS de la pantalla de inicio (iOS 18+). Ahi la familia sigue siendo `systemSmall`, pero
+   * el modo es 'accented' y iOS desatura lo que pintes: el acento salia lavado y sucio en vez de
+   * dejarle mandar al sistema. 'fullColor' es el unico modo en que un color propio significa algo.
+   *
+   * El `?? 'fullColor'` es para iOS 15, donde el campo no llega: ahi solo existe pantalla de inicio a
+   * todo color, asi que asumirlo es correcto.
    */
-  const ink = lock ? undefined : environment.colorScheme === 'dark' ? props.tintDark : props.tint;
+  const full = (environment.widgetRenderingMode ?? 'fullColor') === 'fullColor';
+  const ink = full ? (environment.colorScheme === 'dark' ? props.tintDark : props.tint) : undefined;
   const paint = ink ? [foregroundColor(ink)] : [];
+
+  /**
+   * Reclama el ancho disponible y ancla a la izquierda. Reemplaza a `Spacer` en la pantalla de bloqueo:
+   * un Spacer solo empuja si el padre tiene espacio SIN RESTRINGIR, y ahi el widget se pinta como
+   * snapshot con presupuesto y no lo tiene. `Infinity` y no un numero grande: con propuesta acotada dan
+   * lo mismo, y sin acotar `.infinity` cae al tamaño ideal en vez de tomarse el numero literal.
+   */
+  const fill = frame({ maxWidth: Infinity, alignment: 'leading' as const });
+
+  /**
+   * Pantalla siempre encendida (iPhone 14 Pro y posteriores): el sistema baja el brillo y pide que las
+   * formas GRANDES Y MACIZAS se apaguen. El texto se queda como esta —bajarle el contraste es lo
+   * contrario de lo que hace falta a un metro de distancia— y lo que cede es la decoracion.
+   */
+  const dim = environment.isLuminanceReduced ? 0.55 : 1;
 
   const paused = props.pausedAt > 0;
   // `lower <= upper` es requisito de TextView.swift; si no, cae al camino de texto plano y sale vacio.
@@ -76,7 +106,37 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
       timerInterval={range}
       countsDown
       pauseTime={pauseTime}
-      modifiers={[font({ size, weight: 'bold', design: 'rounded' }), monospacedDigit(), ...paint]}
+      modifiers={[
+        font({ size, weight: 'bold', design: 'rounded' }),
+        monospacedDigit(),
+        /**
+         * `fixedSize` horizontal, y esto es LA pieza que faltaba.
+         *
+         * Un `Text(timerInterval:)` no se mide como un texto normal: reclama un marco mucho mas ancho
+         * que sus digitos y centra el contenido dentro. Consecuencias medidas en la pantalla de bloqueo
+         * real: el reloj nunca llegaba al canto derecho aunque el texto de al lado reclamara el ancho
+         * con `maxWidth: Infinity`, y la fila entera se pasaba del ancho de la tarjeta — lo que hacia
+         * que el sistema la centrara y el rotulo de arriba saliera CORTADO por la izquierda. Los dos
+         * sintomas, un solo origen.
+         *
+         * `fixedSize` lo colapsa a su ancho real. El precio es que al pasar de '10:00' a '9:59' el
+         * ancho cambia un caracter, una vez por bloque — contra un reloj descolocado todo el rato.
+         */
+        fixedSize({ horizontal: true }),
+        /**
+         * `lineLimit(1)` si, `minimumScaleFactor` NO.
+         *
+         * Lo intente con `minimumScaleFactor(0.6)` para que el reloj encogiera antes que recortarse, y
+         * es peor: en un widget, un `Text` de tiempo con minimumScaleFactor se dibuja SIEMPRE en la
+         * escala minima en vez de en la mayor que quepa. Es un bug de Apple abierto desde iOS 17 (hilos
+         * del foro de developer.apple.com sobre `Text` con fecha relativa en widgets). El resultado fue
+         * un reloj diminuto en las tres presentaciones.
+         *
+         * El sitio donde de verdad no cabia era el aro, y eso se arreglo quitandole el Gauge de debajo.
+         */
+        lineLimit(1),
+        ...paint,
+      ]}
     />
   );
 
@@ -85,6 +145,9 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
       systemName={paused ? 'pause.fill' : props.resting ? 'cup.and.saucer.fill' : 'timer'}
       size={size}
       color={ink}
+      // El glifo es la unica forma maciza que queda aqui, asi que es lo que cede en la pantalla
+      // siempre encendida. El reloj no se toca: es el dato por el que se mira esto de reojo.
+      modifiers={[opacity(dim)]}
     />
   );
 
@@ -124,14 +187,19 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
   if (circular) {
     return (
       <ZStack modifiers={[open]}>
-        {/* El fondo traslucido del sistema: sin el, el aro flota sobre el fondo de pantalla. */}
+        {/* El fondo traslucido del sistema: sin el, el reloj flota sobre el fondo de pantalla. */}
         <AccessoryWidgetBackground />
         {/*
-          El Gauge es la unica forma de un arco de progreso aqui: no existe
-          progressViewStyle('accessoryCircular') en @expo/ui (solo automatic/linear/circular), y el
-          estilo por defecto de un Gauge en accessoryCircular YA es el aro que pinta el sistema.
+          SIN Gauge, y es la unica forma de que el reloj se lea.
+
+          Tenia un aro con el punteo del ciclo y el reloj encima. Es un bug conocido de Apple: en
+          `accessoryCircular`, un `Gauge` reserva un hueco MINIMO para su etiqueta y recorta lo que le
+          pongas dentro o encima — pasa incluso con dos caracteres. Con '24:42' se veia ':42' pegado a
+          un disco de color, que es exactamente la captura que llego.
+
+          Asi que el circulo hace UNA cosa: el reloj. El punteo del ciclo ya vive en el rectangular y en
+          la pantalla de inicio, que es donde hay sitio para dos datos.
         */}
-        <Gauge value={props.done} min={0} max={props.rounds} />
         {countdown(15)}
       </ZStack>
     );
@@ -144,8 +212,14 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
      * se ve bien en un preview dentro de la app y desaparece en la pantalla de bloqueo real: el preview
      * propone un ancho comodo y iOS propone el suyo, y el anidamiento colapsa.
      */
+    /**
+     * `alignment="leading"` explicito: un VStack centra a sus hijos por default, asi que tres lineas de
+     * anchos distintos quedaban centradas UNA SOBRE OTRA en vez de compartir el borde izquierdo — se
+     * leia como si cada linea empezara donde le toco. Y `maxWidth: Infinity` reclama el ancho de la
+     * baldosa: sin el, el bloque se encoge a su ancho ideal y el sistema lo centra dentro del widget.
+     */
     return (
-      <VStack spacing={1} modifiers={[open]}>
+      <VStack alignment="leading" spacing={1} modifiers={[open, fill]}>
         <HStack spacing={4}>
           {glyph(12)}
           <Text modifiers={[font({ size: 12, weight: 'semibold' }), lineLimit(1)]}>

@@ -39,11 +39,30 @@ const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) 
   const family = environment.widgetFamily;
   const rectangular = family === 'accessoryRectangular';
   const inline = family === 'accessoryInline';
-  const lock = rectangular || inline;
 
-  // En la pantalla de bloqueo el sistema pinta monocromo: un color propio se ignora o se ve sucio.
-  const ink = lock ? undefined : environment.colorScheme === 'dark' ? props.tintDark : props.tint;
+  /**
+   * El color se decide por `widgetRenderingMode`, NO por la familia.
+   *
+   * La familia era un proxy — "si es de pantalla de bloqueo, monocromo" — y falla en los iconos TEÑIDOS
+   * de la pantalla de inicio (iOS 18+): ahi la familia sigue siendo `systemSmall` pero el modo es
+   * 'accented' y iOS desatura lo que pintes, asi que el acento salia lavado. 'fullColor' es el unico
+   * modo en que un color propio significa algo. El `?? 'fullColor'` cubre iOS 15, donde el campo no
+   * llega y solo existe pantalla de inicio a todo color.
+   */
+  const full = (environment.widgetRenderingMode ?? 'fullColor') === 'fullColor';
+  const ink = full ? (environment.colorScheme === 'dark' ? props.tintDark : props.tint) : undefined;
   const paint = ink ? [foregroundColor(ink)] : [];
+
+  /**
+   * Reclama el ancho disponible y ancla a la izquierda. Reemplaza a `Spacer` en la pantalla de bloqueo:
+   * un Spacer solo empuja si el padre tiene espacio SIN RESTRINGIR, y ahi el widget se pinta como
+   * snapshot con presupuesto y no lo tiene. `Infinity` y no un numero grande: con propuesta acotada dan
+   * lo mismo, y sin acotar `.infinity` cae al tamaño ideal en vez de tomarse el numero literal.
+   */
+  const fill = frame({ maxWidth: Infinity, alignment: 'leading' as const });
+
+  /** Pantalla siempre encendida: el sistema baja el brillo y pide apagar las formas macizas. */
+  const dim = environment.isLuminanceReduced ? 0.55 : 1;
 
   const label = props.days === 1 ? '1 día' : `${props.days} días`;
   const open = widgetURL('tdapp:///');
@@ -68,8 +87,12 @@ const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) 
         key={index}
         modifiers={[
           frame({ width: size, height: size }),
-          opacity(closed ? 1 : isToday ? 0.45 : 0.18),
-          ...(lock ? [] : [foregroundColor(closed || isToday ? (ink as string) : 'secondary')]),
+          // `dim` apaga el punteo en la pantalla siempre encendida: son siete formas macizas y es justo
+          // lo que Apple pide bajar ahi. El numero de la racha no se toca — es lo que se viene a leer.
+          opacity((closed ? 1 : isToday ? 0.45 : 0.18) * dim),
+          // Se decide por `ink` y no por la familia: donde el sistema manda el color, `ink` ya es
+          // undefined. Antes esto necesitaba un `as string` para tapar justo esa contradiccion.
+          ...(ink ? [foregroundColor(closed || isToday ? ink : 'secondary')] : []),
         ]}
       />
     );
@@ -77,8 +100,14 @@ const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) 
 
   if (rectangular) {
     // Filas planas en un solo VStack: anidar stacks colapsa en la pantalla de bloqueo real.
+    /**
+     * `alignment="leading"` explicito: un VStack centra a sus hijos por default, asi que tres lineas de
+     * anchos distintos quedaban centradas UNA SOBRE OTRA en vez de compartir el borde izquierdo — se
+     * leia como si cada linea empezara donde le toco. Y `maxWidth: Infinity` reclama el ancho de la
+     * baldosa: sin el, el bloque se encoge a su ancho ideal y el sistema lo centra dentro del widget.
+     */
     return (
-      <VStack spacing={2} modifiers={[open]}>
+      <VStack alignment="leading" spacing={2} modifiers={[open, fill]}>
         <Text modifiers={[font({ size: 12, weight: 'semibold' }), lineLimit(1)]}>
           {`RACHA · ${label}`}
         </Text>

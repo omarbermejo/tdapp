@@ -1,14 +1,37 @@
 import { Outfit_800ExtraBold } from '@expo-google-fonts/outfit/800ExtraBold';
 import { useFonts } from 'expo-font';
 import { Stack, ThemeProvider } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Confetti } from '@/components/ui/confetti';
+import { hydratePreference } from '@/constants/scheme-store';
 import { useAccent, useNavTheme, useScheme, useTheme } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/features/auth/auth-context';
 import { useWidgetSync } from '@/features/widgets/use-widget-sync';
+
+/**
+ * El splash se queda hasta que la app tiene todo lo que necesita para pintar la primera pantalla de
+ * verdad. Va a nivel de módulo y no en un efecto: en un efecto llegaría después del primer render, que
+ * es justo cuando el sistema ya lo habría escondido.
+ *
+ * El `catch` es obligatorio: en web el módulo nativo no existe y esto rechaza, y una promesa rechazada
+ * a nivel de módulo tumba el arranque.
+ */
+void SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/** Se va con un fundido en vez de un corte. 260ms: lo suficiente para leerse como una transición. */
+SplashScreen.setOptions({ fade: true, duration: 260 });
+
+/**
+ * Tope de seguridad. Si algo de lo que esperamos nunca llega (una fuente que no baja, una sesión que
+ * se cuelga), el splash NO se puede quedar puesto para siempre — eso se lee como una app muerta. A los
+ * cuatro segundos se va y la pantalla enseña lo que tenga, aunque sea el indicador de carga.
+ */
+const SPLASH_CAP_MS = 4000;
 
 function RootNavigator() {
   const t = useTheme();
@@ -19,7 +42,32 @@ function RootNavigator() {
   // Los titulares son la fuente cargada: sin ella la primera pantalla parpadea con otra tipografia.
   const [fontsLoaded, fontError] = useFonts({ Outfit_800ExtraBold });
 
-  if (loading || (!fontsLoaded && !fontError)) {
+  /**
+   * `fontError` cuenta como listo: si la fuente no bajó, la app se pinta con la del sistema y eso es
+   * mejor que quedarse en el splash.
+   */
+  const ready = !loading && (fontsLoaded || fontError);
+
+  /**
+   * Aquí muere el doble arranque.
+   *
+   * Antes la secuencia era splash → indicador de carga → app: el sistema escondía el splash en cuanto
+   * el bundle cargaba, y entonces esta pantalla pintaba un `ActivityIndicator` mientras leía la sesión y
+   * las fuentes. O sea DOS pantallas de espera seguidas, y la segunda es exactamente lo que un splash
+   * existe para evitar. Manteniéndolo hasta `ready`, el indicador de abajo ya casi nunca se ve — solo si
+   * salta el tope de seguridad.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    void SplashScreen.hideAsync().catch(() => {});
+  }, [ready]);
+
+  useEffect(() => {
+    const id = setTimeout(() => void SplashScreen.hideAsync().catch(() => {}), SPLASH_CAP_MS);
+    return () => clearTimeout(id);
+  }, []);
+
+  if (!ready) {
     return (
       <View style={[styles.loading, { backgroundColor: t.canvas }]}>
         <ActivityIndicator size="large" color={olive} />
@@ -59,6 +107,19 @@ export default function RootLayout() {
   const navTheme = useNavTheme();
   // La barra de estado se invierte con el esquema: iconos oscuros sobre papel, claros sobre tinta.
   const scheme = useScheme();
+
+  /**
+   * Lee el tema guardado. Una vez y nada más, así que las dependencias van vacías.
+   *
+   * Mientras no ha leído, la preferencia es `system` — el default correcto —, así que un arranque no
+   * parpadea salvo que la persona haya forzado un tema distinto al del teléfono; y ahí el salto dura
+   * lo que tarda el Keychain. Guardar el tema fuera del perfil del servidor es a propósito: es una
+   * decisión de ESTE aparato (el mismo usuario puede querer oscuro en el teléfono y claro en la tablet)
+   * y tiene que funcionar antes de que haya sesión.
+   */
+  useEffect(() => {
+    hydratePreference();
+  }, []);
 
   return (
     // En iOS RNGH parcha la root view y los gestos cuelan sin esto; en Android no: sin esta

@@ -34,10 +34,18 @@ const CaptureWidget = (props: CaptureWidgetProps, environment: WidgetEnvironment
 
   const family = environment.widgetFamily;
   const inline = family === 'accessoryInline';
-  const lock = inline || family === 'accessoryCircular' || family === 'accessoryRectangular';
 
-  // En la pantalla de bloqueo el sistema pinta monocromo y un color propio se ignora o se ve sucio.
-  const ink = lock ? undefined : environment.colorScheme === 'dark' ? props.tintDark : props.tint;
+  /**
+   * El color se decide por `widgetRenderingMode`, NO por la familia.
+   *
+   * La familia era un proxy — "si es de pantalla de bloqueo, monocromo" — y falla en los iconos TEÑIDOS
+   * de la pantalla de inicio (iOS 18+): ahi la familia sigue siendo `systemSmall` pero el modo es
+   * 'accented' y iOS desatura lo que pintes, asi que el acento salia lavado. 'fullColor' es el unico
+   * modo en que un color propio significa algo. El `?? 'fullColor'` cubre iOS 15, donde el campo no
+   * llega y solo existe pantalla de inicio a todo color.
+   */
+  const full = (environment.widgetRenderingMode ?? 'fullColor') === 'fullColor';
+  const ink = full ? (environment.colorScheme === 'dark' ? props.tintDark : props.tint) : undefined;
 
   /**
    * `Link` envuelve TODO el widget, no solo el texto: en un widget de pantalla de inicio el area de

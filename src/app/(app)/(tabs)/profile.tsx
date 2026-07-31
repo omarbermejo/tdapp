@@ -2,6 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro } from '@/components/ui/card';
+import { SchemeToggle } from '@/components/ui/scheme-toggle';
 import { Radius, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
 import { ProfileFields } from '@/features/profile/profile-fields';
@@ -87,6 +88,13 @@ export default function ProfileScreen() {
               <Text style={[Type.micro, { color: t.textMuted }]}>{since.toUpperCase()}</Text>
             )}
           </View>
+
+          {/*
+            El tema va AQUI y no como una pastilla más abajo: es lo único de esta pantalla que no
+            describe a la persona sino al aparato, y su confirmación es que la pantalla entera cambia de
+            color — no hace falta que diga su valor, porque el valor se ve.
+          */}
+          <SchemeToggle />
         </View>
 
         <StreakCard streak={streak} accent={user.accentColor} />

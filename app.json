@@ -33,9 +33,14 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#faf9f4",
-          "image": "./assets/brand/splash-mark.png",
-          "imageWidth": 140
+          "backgroundColor": "#ffffff",
+          "image": "./assets/brand/splash-mark-light.png",
+          "imageWidth": 140,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#000000",
+            "image": "./assets/brand/splash-mark-dark.png"
+          }
         }
       ],
       "expo-secure-store",
@@ -48,8 +53,8 @@
           "widgets": [
             {
               "name": "TodayWidget",
-              "displayName": "Tu d\u00eda",
-              "description": "Lo que sigue hoy y cu\u00e1nto te queda.",
+              "displayName": "Tu día",
+              "description": "Lo que sigue hoy y cuánto te queda.",
               "supportedFamilies": [
                 "systemSmall",
                 "systemMedium",
@@ -63,7 +68,7 @@
             {
               "name": "FocusWidget",
               "displayName": "Enfoque",
-              "description": "El bloque de enfoque en curso, con la cuenta atr\u00e1s.",
+              "description": "El bloque de enfoque en curso, con la cuenta atrás.",
               "supportedFamilies": [
                 "systemSmall",
                 "accessoryCircular",
@@ -76,7 +81,7 @@
             {
               "name": "StreakWidget",
               "displayName": "Racha",
-              "description": "Cu\u00e1ntos d\u00edas seguidos cerraste algo.",
+              "description": "Cuántos días seguidos cerraste algo.",
               "supportedFamilies": [
                 "systemSmall",
                 "systemMedium",

@@ -31,17 +31,47 @@ export type FocusSnapshot = {
   tintDark: string;
 };
 
-async function push(props: FocusWidgetProps) {
+async function push(entries: { date: Date; props: FocusWidgetProps }[]) {
   try {
     const { default: FocusWidget } = await import('@/widgets/focus-widget');
-    FocusWidget.updateSnapshot(props);
+    FocusWidget.updateTimeline(entries);
   } catch (error) {
     if (__DEV__) console.warn('[widget] no se pudo actualizar el enfoque', error);
   }
 }
 
-/** Hay bloque: el widget lo pinta con su cuenta atras. */
-export const showFocusWidget = (block: FocusSnapshot) => push({ live: true, ...block });
+/**
+ * Cuando el bloque acaba, el widget deja de mentir SOLO.
+ *
+ * Con un snapshot suelto la cuenta atras llegaba a `0:00` y **se quedaba ahi para siempre** hasta que
+ * alguien abriera la app — porque nadie estaba corriendo para avisar del final. `Text(timerInterval:)`
+ * hace que el numero baje solo, pero no puede cambiar de estado: eso es un cambio de LAYOUT y el
+ * layout solo cambia entre entradas de la timeline.
+ *
+ * Asi que se manda el futuro entero de una vez: ahora el bloque vivo, y en `endsAt` la invitacion a
+ * empezar otro. WidgetKit cambia de entrada por su cuenta, con la app suspendida o muerta.
+ *
+ * En PAUSA no se programa nada: el reloj esta clavado, asi que `endsAt` ya no es cuando acaba. Una
+ * entrada futura ahi apagaria un bloque que sigue esperandote.
+ *
+ * La entrada de relleno a las 12 horas no es adorno. Si TODAS las entradas quedan en el pasado,
+ * WidgetKit vuelve a pedir la timeline, recibe lo mismo, y vuelve a pedirla — quemando el presupuesto
+ * de refrescos del widget. Con un ancla en el futuro no hay bucle, y a las 12 horas la app ya se
+ * abrio y empujo otra.
+ */
+export const showFocusWidget = (block: FocusSnapshot) => {
+  const live: FocusWidgetProps = { live: true, ...block };
+  const idle: FocusWidgetProps = { ...live, live: false };
+  const now = Date.now();
+  const entries = [{ date: new Date(now), props: live }];
+
+  if (block.pausedAt === 0 && block.endsAt > now) {
+    entries.push({ date: new Date(block.endsAt), props: idle });
+    entries.push({ date: new Date(block.endsAt + 12 * 60 * 60_000), props: idle });
+  }
+
+  return push(entries);
+};
 
 /**
  * No hay bloque: el widget invita a empezar uno en vez de quedarse con el ultimo congelado.
@@ -51,15 +81,20 @@ export const showFocusWidget = (block: FocusSnapshot) => push({ live: true, ...b
  * bandera.
  */
 export const clearFocusWidget = (inks: { tint: string; tintDark: string }) =>
-  push({
-    live: false,
-    phase: 'Enfoque',
-    resting: false,
-    task: '',
-    startedAt: 0,
-    endsAt: 0,
-    pausedAt: 0,
-    done: 0,
-    rounds: 0,
-    ...inks,
-  });
+  push([
+    {
+      date: new Date(),
+      props: {
+        live: false,
+        phase: 'Enfoque',
+        resting: false,
+        task: '',
+        startedAt: 0,
+        endsAt: 0,
+        pausedAt: 0,
+        done: 0,
+        rounds: 0,
+        ...inks,
+      },
+    },
+  ]);

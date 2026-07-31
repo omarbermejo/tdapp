@@ -1,6 +1,9 @@
 // expo-router lleva react-navigation dentro y reexporta su tipo de tema.
 import type { Theme as NavigationTheme } from 'expo-router';
+import { useSyncExternalStore } from 'react';
 import { useColorScheme, type TextStyle } from 'react-native';
+
+import { getPreference, subscribe } from './scheme-store';
 
 /**
  * Sistema visual: papel blanco, tinta verde profunda y acentos tierra.
@@ -213,11 +216,22 @@ const ACCENTS: Record<Scheme, Record<AccentName, Accent>> = {
 export const ACCENT_NAMES = Object.keys(ACCENTS.light) as AccentName[];
 
 /**
- * El esquema del sistema. 'unspecified' (Android sin preferencia) cae en claro.
- * useColorScheme ya re-renderiza solo cuando el sistema cambia.
+ * El esquema en el que se pinta la app.
+ *
+ * Sale de dos cosas: lo que el teléfono dice y lo que la persona decidió en su perfil. La preferencia
+ * manda; con `system` (el default) gana el teléfono. 'unspecified' (Android sin preferencia) cae en
+ * claro.
+ *
+ * Los dos hooks re-renderizan solos: `useColorScheme` cuando el sistema cambia y
+ * `useSyncExternalStore` cuando se toca el interruptor. Y de este hook cuelga TODO el color de la app
+ * (`useTheme`, `useAccent`, `useShadow`, `useNavTheme`), así que cambiar la preferencia repinta la
+ * pantalla entera sin que nadie más se entere de que existe un interruptor.
  */
 export function useScheme(): Scheme {
-  return useColorScheme() === 'dark' ? 'dark' : 'light';
+  const system = useColorScheme();
+  const preference = useSyncExternalStore(subscribe, getPreference, getPreference);
+  if (preference !== 'system') return preference;
+  return system === 'dark' ? 'dark' : 'light';
 }
 
 /** Los tokens de color del esquema actual. Todo color de la UI sale de aquí. */

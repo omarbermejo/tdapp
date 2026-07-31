@@ -1,8 +1,9 @@
-import { Capsule, HStack, Image, ProgressView, Spacer, Text, VStack } from '@expo/ui/swift-ui';
+import { Capsule, HStack, Image, ProgressView, Text, VStack } from '@expo/ui/swift-ui';
 import {
   font,
   foregroundColor,
   frame,
+  fixedSize,
   kerning,
   lineLimit,
   monospacedDigit,
@@ -147,6 +148,20 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
          * en cada tick. Es la misma razon del `tabular-nums` de `Type.count` en la app.
          */
         monospacedDigit(),
+        /**
+         * `fixedSize` horizontal, y esto es LA pieza que faltaba.
+         *
+         * Un `Text(timerInterval:)` no se mide como un texto normal: reclama un marco mucho mas ancho
+         * que sus digitos y centra el contenido dentro. Consecuencias medidas en la pantalla de bloqueo
+         * real: el reloj nunca llegaba al canto derecho aunque el texto de al lado reclamara el ancho
+         * con `maxWidth: Infinity`, y la fila entera se pasaba del ancho de la tarjeta — lo que hacia
+         * que el sistema la centrara y el rotulo de arriba saliera CORTADO por la izquierda. Los dos
+         * sintomas, un solo origen.
+         *
+         * `fixedSize` lo colapsa a su ancho real. El precio es que al pasar de '10:00' a '9:59' el
+         * ancho cambia un caracter, una vez por bloque — contra un reloj descolocado todo el rato.
+         */
+        fixedSize({ horizontal: true }),
         foregroundColor(ink),
       ]}
     />
@@ -171,20 +186,26 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
    *
    * `textCase` y no `.toUpperCase()`: la que sabe de acentos y de locale es la plataforma.
    */
-  const micro = (
-    <Text
-      modifiers={[
-        font({ size: S.micro, weight: 'semibold' }),
-        textCase('uppercase'),
-        kerning(0.9),
-        foregroundColor('secondary'),
-        // La region leading de la Isla expandida es angosta: 'DESCANSO CORTO' se recorta antes de
-        // partirse en dos lineas y desalinear la fila entera.
-        lineLimit(1),
-      ]}>
-      {label}
-    </Text>
-  );
+  const microStyle = [
+    font({ size: S.micro, weight: 'semibold' }),
+    textCase('uppercase'),
+    kerning(0.9),
+    foregroundColor('secondary'),
+    // La region leading de la Isla expandida es angosta: 'DESCANSO CORTO' se recorta antes de
+    // partirse en dos lineas y desalinear la fila entera.
+    lineLimit(1),
+  ];
+  const micro = <Text modifiers={microStyle}>{label}</Text>;
+
+  /**
+   * Reclama todo el ancho disponible y ancla el contenido a la izquierda. Es el reemplazo de `Spacer`
+   * en todo este archivo — ver el comentario del banner.
+   *
+   * `Infinity` y no un numero grande: con una propuesta de ancho acotada las dos hacen lo mismo, pero
+   * si la propuesta llega SIN acotar (que es justo el caso que rompia el Spacer) un 10000 se tomaria
+   * literal y `.infinity` cae al tamaño ideal, que es lo que se quiere.
+   */
+  const fill = frame({ maxWidth: Infinity, alignment: 'leading' as const });
 
   /**
    * El ciclo como marcas y no como '2/4': un numero hay que LEERLO, y cuatro marcas se cuentan de
@@ -267,7 +288,7 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
        * El padding es propio y no del sistema: medido en el simulador, el banner de la pantalla de
        * bloqueo deja el contenido a ras del canto y el punteo del ciclo salia cortado por la derecha.
        */
-      <VStack spacing={S.gap} modifiers={[padding({ horizontal: 4, vertical: 2 })]}>
+      <VStack alignment="leading" spacing={S.gap} modifiers={[padding({ horizontal: 4, vertical: 2 }), fill]}>
         {/*
           Tres filas HERMANAS y ningun stack anidado.
 
@@ -283,10 +304,16 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
           rotulo, la tarea y la barra arrancan en la misma x. El glifo se gana su sitio en la Isla,
           donde no cabe una palabra.
         */}
+        {/*
+          `fill` en vez de `<Spacer />`, y no es estilo: un Spacer solo empuja si el padre tiene
+          espacio SIN RESTRINGIR, y en el render de la pantalla de bloqueo eso no existe (se pinta como
+          snapshot con presupuesto). Con Spacer el reparto colapsaba al ancho ideal del contenido, la
+          tarjeta lo centraba, y el resultado era el rotulo cortado por la izquierda y el reloj sin
+          llegar al canto derecho. La forma que aguanta es reclamar el ancho explicitamente.
+        */}
         <HStack spacing={7}>
-          {micro}
+          <Text modifiers={[...microStyle, fill]}>{label}</Text>
           {cycle}
-          <Spacer />
         </HStack>
 
         <HStack spacing={10}>
@@ -296,8 +323,9 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
             faltaba de verdad — el `layoutPriority` que le puse al reloj para lo mismo era el que se
             comia la fila completa en el ancho real de iOS.
           */}
-          <Text modifiers={[font({ size: S.line, weight: 'semibold' }), lineLimit(1)]}>{line}</Text>
-          <Spacer />
+          <Text modifiers={[font({ size: S.line, weight: 'semibold' }), lineLimit(1), fill]}>
+            {line}
+          </Text>
           {countdown(S.bannerCount)}
         </HStack>
 
