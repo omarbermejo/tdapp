@@ -30,8 +30,21 @@ const OUT = join(ROOT, 'assets/icons3d');
 
 /** Lado del asset final. El tope de render de un icono 3D es 96pt, y 256 cubre @3x con holgura. */
 const SIZE = 256;
-/** Aire alrededor del objeto, como fraccion del lado. Fijo para todos: es lo que empareja el peso. */
+/** Aire minimo alrededor del objeto, como fraccion del lado: ningun icono llega al borde. */
 const PAD = 0.08;
+/**
+ * Cuanta tinta cubre un icono, como fraccion del cuadro. Es la medida que empareja el peso entre
+ * una figura maciza y una de trazos.
+ *
+ * Medido sobre los seis de la prueba antes de normalizar: casa 0.618, calendario 0.538, reloj
+ * 0.518, trofeo 0.398, birrete 0.310, usuario 0.249. Dos y medio a uno entre el mas pesado y el
+ * mas liviano, con todos ocupando la misma caja.
+ *
+ * El objetivo va por debajo de la mediana a proposito: los densos encogen y los ligeros se quedan
+ * como estan, topados por la caja. Subirlo no agranda a los ligeros — solo los deja igual y encoge
+ * a todos los demas.
+ */
+const INK = 0.34;
 /** Debajo de esto un pixel es borde suavizado y no define el rango tonal del objeto. */
 const SOLID = 200;
 
@@ -101,56 +114,131 @@ export async function bake(dir, loHex, hiHex) {
   const lo = rgb(loHex);
   const hi = rgb(hiHex);
 
+  // 1. Quitarle al compuesto el sangrado de la sombra.
+  //
+  //    Figma no exporta el marco a secas: lo agranda para que quepa la sombra, y ese margen es
+  //    ASIMETRICO. La sombra del set es `radio 100, desplazamiento (±60, 60)`, asi que el marco
+  //    crece 200 de ancho y 200 de alto SIEMPRE, repartidos segun la variante:
+  //      R (-60, 60)  ->  160 a la izquierda,  40 arriba
+  //      L ( 60, 60)  ->   40 a la izquierda,  40 arriba
+  //      centro (0,60)-> 100 a la izquierda,  40 arriba
+  //    Arriba siempre 40, asi que lo unico en duda es el margen izquierdo, y son tres valores. Se
+  //    prueban los tres y gana el que deje la silueta del bitmap de origen encima de pixeles de
+  //    icono en vez de encima de sombra. Medir le gana a confiar en el nombre de la capa.
   const src = join(dir, 'export.png');
-  const { width, height } = await sharp(src).metadata();
-  const { data } = await sharp(src).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const sheet = await sharp(src).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const frameW = sheet.info.width - BLEED;
+  const frameH = sheet.info.height - BLEED;
 
-  // El estarcido cubre el cuadro del icono (width x width). Lo que sobra abajo es el sangrado de la
-  // sombra de Figma, que se va entero.
-  const stencil = await sharp(await pickStencil(dir))
-    .resize(width, width).extractChannel('alpha').raw().toBuffer();
+  const mask = await sharp(await pickStencil(dir))
+    .resize(frameW, frameW, { fit: 'fill' })
+    .extractChannel('alpha').raw().toBuffer();
+
+  let left = BLEED_LEFT[0];
+  let bestScore = -1;
+  for (const candidate of BLEED_LEFT) {
+    let hits = 0;
+    for (let y = 0; y < frameW; y++) {
+      for (let x = 0; x < frameW; x++) {
+        if (mask[y * frameW + x] < SOLID) continue;
+        const i = ((y + BLEED_TOP) * sheet.info.width + x + candidate) * 4;
+        const d = sheet.data;
+        const lum = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+        if (lum < BG_LUM && d[i + 2] - d[i] < SHADOW_BLUE) hits++;
+      }
+    }
+    if (hits > bestScore) { bestScore = hits; left = candidate; }
+  }
+
+  const { data, info } = await sharp(src)
+    .extract({ left, top: BLEED_TOP, width: frameW, height: frameH })
+    .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { width, height } = info;
+
+  // 2. El alfa sale del bitmap de origen. Cubre el cuadro del icono; lo que sobra abajo es el
+  //    "Element" que se desborda del marco, y ahi no hay silueta que conservar.
+  const stencil = new Uint8Array(width * height);
+  stencil.set(mask.subarray(0, Math.min(mask.length, stencil.length)));
 
   const n = width * height;
   const lum = new Float32Array(n);
-  const alpha = new Uint8Array(n);
   let min = 255;
   let max = 0;
 
   for (let i = 0, p = 0; p < n; i += 4, p++) {
-    const a = p < width * width ? stencil[p] : 0;
-    alpha[p] = a;
-    if (!a) continue;
+    if (!stencil[p]) continue;
     lum[p] = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
-    if (a < SOLID) continue;
+    if (stencil[p] < SOLID) continue;
     if (lum[p] < min) min = lum[p];
     if (lum[p] > max) max = lum[p];
   }
 
-  // El rango tonal real del render. El rojo de origen no ocupa 0-255: sin estirarlo se tira la
-  // mayor parte del modelado antes de empezar.
+  // 3. El mapa de degradado. El rojo de origen no ocupa 0-255: sin estirar su rango real se tira
+  //    la mayor parte del modelado antes de empezar.
   const span = max - min || 1;
   for (let i = 0, p = 0; p < n; i += 4, p++) {
-    data[i + 3] = alpha[p];
-    if (!alpha[p]) continue;
+    data[i + 3] = stencil[p];
+    if (!stencil[p]) continue;
     const g = Math.min(1, Math.max(0, (lum[p] - min) / span));
     for (let c = 0; c < 3; c++) data[i + c] = Math.round(lo[c] + g * (hi[c] - lo[c]));
   }
 
-  // Recortar el aire del marco de Figma y volver a padear IGUAL para todos.
+  // 4. Encajar todos con el MISMO PESO OPTICO.
   //
-  // Sin el recorte, un glifo de 32pt muestra ~24pt de objeto y se ve mas chico que el icono de
-  // linea que reemplaza; sin el padeo parejo vuelve el problema de peso optico desigual que hizo
-  // dejar SF Symbols (ver el comentario de la barra en app/(app)/(tabs)/_layout.tsx).
-  const inner = Math.round(SIZE * (1 - 2 * PAD));
+  //    No basta con recortar y meter cada uno en la misma caja: un reloj es un circulo lleno y un
+  //    birrete son cuatro trazos, asi que a igual caja el reloj pesa el doble. Es exactamente la
+  //    queja que hizo dejar SF Symbols por Lucide — ahi la perilla era `strokeWidth`, y un PNG no
+  //    tiene ninguna. La perilla equivalente es el AREA: se escala cada icono para que cubra la
+  //    misma tinta, con la caja como tope para que ninguno se salga.
   const clear = { r: 0, g: 0, b: 0, alpha: 0 };
+  const box = Math.round(SIZE * (1 - 2 * PAD));
+  const trimmed = await sharp(data, { raw: { width, height, channels: 4 } })
+    .trim({ threshold: 1 }).png().toBuffer({ resolveWithObject: true });
 
-  return sharp(data, { raw: { width, height, channels: 4 } })
-    .trim({ threshold: 1 })
-    .resize(inner, inner, { fit: 'inside', background: clear })
-    .resize(SIZE, SIZE, { fit: 'contain', background: clear })
+  let ink = 0;
+  for (const a of await sharp(trimmed.data).extractChannel('alpha').raw().toBuffer()) ink += a;
+  ink /= 255;
+
+  const fit = box / Math.max(trimmed.info.width, trimmed.info.height);
+  const even = Math.sqrt((INK * SIZE * SIZE) / ink);
+  const scale = Math.min(fit, even);
+  const w = Math.round(trimmed.info.width * scale);
+  const h = Math.round(trimmed.info.height * scale);
+
+  // Se PADEA, no se reencaja: un `resize` con `fit: 'contain'` volveria a estirar hasta llenar el
+  // cuadro y borraria la normalizacion que se acaba de calcular.
+  return sharp(trimmed.data)
+    .resize(w, h)
+    .extend({
+      left: (SIZE - w) >> 1,
+      right: SIZE - w - ((SIZE - w) >> 1),
+      top: (SIZE - h) >> 1,
+      bottom: SIZE - h - ((SIZE - h) >> 1),
+      background: clear,
+    })
     .webp({ quality: 82, alphaQuality: 100, effort: 6 })
     .toBuffer();
 }
+
+/**
+ * Como se reconoce un pixel de icono. Medido sobre los exports, no adivinado:
+ *
+ *   fondo del marco   255,255,255                 neutro,  luminancia 255
+ *   sombra de Figma   240,242,245 -> 252,252,254  azulada, B-R entre 2 y 5
+ *   detalle blanco    241,241,241                 neutro,  luminancia ~242
+ *   cuerpo rojo       241,43,66                   B-R -175
+ *
+ * O sea: es icono lo que no llega a blanco puro y no viene teñido de azul. Un umbral de luminancia
+ * a secas no alcanza — el blanco del icono y el del fondo se pisan — y por eso el tinte azul de la
+ * sombra (`#102D61`) es el que decide.
+ */
+const BG_LUM = 253;
+const SHADOW_BLUE = 2;
+
+/** Cuanto agranda Figma el marco para que quepa la sombra: radio 100 mas y menos el desplazamiento 60. */
+const BLEED = 200;
+const BLEED_TOP = 40;
+const BLEED_LEFT = [160, 40, 100];
 
 /**
  * Que rampa usa cada icono.
@@ -170,8 +258,16 @@ export const AREA_RAMP = {
   creativity: 'sunlitClay',
 };
 
-/** Los dos pasos de la rampa entre los que se estira el modelado. */
-export const WINDOW = ['300', '800'];
+/**
+ * Los dos pasos de la rampa entre los que se estira el modelado.
+ *
+ * Se probaron 200-700, 200-800 y 300-800 con los seis iconos de la prueba a 24, 28, 32, 44 y 88pt,
+ * sobre papel y sobre tarjeta, y dentro de una maqueta de la capsula. Gana 200-700 porque es el que
+ * mas contraste interno deja en los tamaños CHICOS — a 32pt las rayas del calendario y la manecilla
+ * del reloj son lo unico que separa un icono de una mancha. Las otras dos ventanas se ven mejor a
+ * 88 y peor a 32, y el tamaño que decide es el de la barra.
+ */
+export const WINDOW = ['200', '700'];
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const palette = await loadPalette();
