@@ -102,9 +102,17 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
     islandGlyph: 14,
     islandCount: 18,
     bannerCount: 28,
+    /**
+     * Ancho reservado para el reloj EN EL BANNER. Va aqui y no en el helper: las regiones de la Isla se
+     * dimensionan por contenido, y clavarles un ancho de banner rompe la capsula.
+     *
+     * 86 cubre el peor caso: '60:00' a 28pt bold rounded con `monospacedDigit` son cuatro digitos de
+     * ~17pt mas el dos puntos, ~77pt. El resto es aire para que nunca trunque.
+     */
+    bannerClock: 86,
     /** El micro-rotulo de la fase. `Type.micro` es 12; aqui baja a 11 porque compite con menos. */
     micro: 11,
-    /** La tarea. A 15 contra 28 la jerarquia se lee sin que el numero aplaste la fila. */
+    /** La tarea. Va en su propia fila, encima del reloj. */
     line: 15,
     tick: { width: 3, height: 9 },
     /** El aire entre filas del banner y de la Isla expandida. */
@@ -261,10 +269,14 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
      */
     banner: (
       /**
-       * El padding es propio y no del sistema: medido en el simulador, el banner de la pantalla de
-       * bloqueo deja el contenido a ras del canto y el punteo del ciclo salia cortado por la derecha.
+       * Padding SOLO vertical.
+       *
+       * El horizontal (4pt por lado) se puso para que el punteo del ciclo no saliera a ras del canto, y
+       * resulto ser el que rompia la fila: sumaba 8pt al ancho pedido, la fila del reloj ya venia
+       * justa, y al pasarse del ancho de la tarjeta el sistema centraba el bloque entero — de ahi el
+       * rotulo CORTADO por la izquierda. El canto lo da el sistema, que ya mete su propio margen.
        */
-      <VStack alignment="leading" spacing={S.gap} modifiers={[padding({ horizontal: 4, vertical: 2 })]}>
+      <VStack alignment="leading" spacing={S.gap} modifiers={[padding({ vertical: 2 })]}>
         {/*
           Tres filas HERMANAS y ningun stack anidado.
 
@@ -281,34 +293,43 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
           donde no cabe una palabra.
         */}
         {/*
-          Con `<Spacer />`, aunque no reparta bien.
-
-          La documentacion de SwiftUI recomienda `frame(maxWidth:, alignment:)` en vez de Spacer para
-          este caso, porque un Spacer solo empuja si el padre tiene espacio sin restringir y el render
-          de la pantalla de bloqueo (snapshot con presupuesto) no lo tiene. Lo probe y **mata la
-          extension**: el crash log dice `LayoutSubview.place(at:anchor:dimensions:)` ->
-          `_assertionFailure` dentro de `GeometryReaderLayout.placeSubviews`. Con `Infinity` y con un
-          tope finito de 400, igual — no es el valor, es meterle un `frame` al arbol del banner.
-
-          Asi que el reparto imperfecto se queda: el reloj no llega al canto derecho porque un
-          `Text(timerInterval:)` reclama un marco mas ancho que sus digitos y centra el contenido
-          dentro. Feo, pero vivo. NO volver a intentarlo con `frame` sin leer el crash log primero.
+          Sin `Spacer` en ninguna fila: el punteo del ciclo va pegado al rotulo, leyendose como una
+          unidad ("ENFOQUE, dos de cuatro"), en vez de exiliado en el canto derecho. Es lo que queda
+          cuando el reparto horizontal no se puede controlar — ver el comentario de abajo.
         */}
         <HStack spacing={7}>
-          <Text modifiers={[...microStyle]}>{label}</Text>
+          {micro}
           {cycle}
         </HStack>
 
-        <HStack spacing={10}>
-          {/*
-            Una linea, y es lo que sostiene la fila: con `lineLimit(1)` un Text se TRUNCA en vez de
-            exigir su ancho ideal, asi que el reloj de al lado nunca se queda sin sitio. Era lo que
-            faltaba de verdad — el `layoutPriority` que le puse al reloj para lo mismo era el que se
-            comia la fila completa en el ancho real de iOS.
-          */}
+        {/*
+          La fila "tarea ....... reloj", que vuelve porque por fin se sabe por que crasheaba.
+
+          La causa NO era `frame` ni `fixedSize` en si: es que en el renderer de widgets los modifiers
+          de un `<Text>` se aplican DOS VECES. `UIBaseView.swift:21` los aplica, y `TextView.swift:42`
+          los vuelve a aplicar sobre el mismo array. Verificado con grep: `applyModifiers` solo aparece
+          en TextView (y en la ruta in-app), asi que HStack, VStack, Capsule y Circle lo hacen UNA vez.
+          Por eso `frame(S.tick)` en el punteo nunca crasheo y en el reloj si.
+
+          Con el modifier duplicado, `frame(maxWidth:)` se convertia en dos marcos flexibles anidados
+          sobre un hijo que ya reclama un ancho de peor caso -> propuesta no finita ->
+          `LayoutSubview.place(at:)` -> `_assertionFailure`. Y explica que el tope finito de 400 tambien
+          matara: es la misma rama `frame(minWidth:idealWidth:maxWidth:)`, no el numero.
+
+          LA REGLA: ningun modifier de layout sobre un `<Text>`. Si hace falta geometria, va en un
+          `<HStack>` de un solo hijo. Ahi se aplica una vez y usa la rama `frame(width:height:)`, que es
+          la que Apple usa en su propio ejemplo de ActivityKit para acotar un timer text.
+
+          `minLength={0}` en el Spacer: sin el, `SpacerView.swift` pasa `nil` y eso significa el
+          espaciado del sistema (~8pt) como MINIMO OBLIGATORIO, que se suma al ancho pedido. Era la
+          otra mitad del recorte de `ENFOQUE` por la izquierda.
+        */}
+        <HStack spacing={8}>
           <Text modifiers={[font({ size: S.line, weight: 'semibold' }), lineLimit(1)]}>{line}</Text>
-          <Spacer />
-          {countdown(S.bannerCount)}
+          <Spacer minLength={0} />
+          <HStack modifiers={[frame({ width: S.bannerClock, alignment: 'trailing' as const })]}>
+            {countdown(S.bannerCount)}
+          </HStack>
         </HStack>
 
         {bar}
