@@ -65,13 +65,6 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
   const ink = full ? (environment.colorScheme === 'dark' ? props.tintDark : props.tint) : undefined;
   const paint = ink ? [foregroundColor(ink)] : [];
 
-  /**
-   * Reclama el ancho disponible y ancla a la izquierda. Reemplaza a `Spacer` en la pantalla de bloqueo:
-   * un Spacer solo empuja si el padre tiene espacio SIN RESTRINGIR, y ahi el widget se pinta como
-   * snapshot con presupuesto y no lo tiene. `Infinity` y no un numero grande: con propuesta acotada dan
-   * lo mismo, y sin acotar `.infinity` cae al tamaño ideal en vez de tomarse el numero literal.
-   */
-  const fill = frame({ maxWidth: Infinity, alignment: 'leading' as const });
 
   /** Pantalla siempre encendida: el sistema baja el brillo y pide apagar las formas macizas. */
   const dim = environment.isLuminanceReduced ? 0.55 : 1;
@@ -114,11 +107,11 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
     /**
      * `alignment="leading"` explicito: un VStack centra a sus hijos por default, asi que tres lineas de
      * anchos distintos quedaban centradas UNA SOBRE OTRA en vez de compartir el borde izquierdo — se
-     * leia como si cada linea empezara donde le toco. Y `maxWidth: Infinity` reclama el ancho de la
+     * leia como si cada linea empezara donde le toco. Y `fill` reclama el ancho de la
      * baldosa: sin el, el bloque se encoge a su ancho ideal y el sistema lo centra dentro del widget.
      */
     return (
-      <VStack alignment="leading" spacing={2} modifiers={[open, fill]}>
+      <VStack alignment="leading" spacing={2} modifiers={[open]}>
         <Text modifiers={[font({ size: 12, weight: 'semibold' }), lineLimit(1)]}>
           {total === 0 ? 'NADA HOY' : `${props.done}/${total}`}
         </Text>

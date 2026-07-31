@@ -1,9 +1,7 @@
 import { AccessoryWidgetBackground, HStack, Image, Text, VStack, ZStack } from '@expo/ui/swift-ui';
 import {
-  fixedSize,
   font,
   foregroundColor,
-  frame,
   lineLimit,
   monospacedDigit,
   opacity,
@@ -77,13 +75,6 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
   const ink = full ? (environment.colorScheme === 'dark' ? props.tintDark : props.tint) : undefined;
   const paint = ink ? [foregroundColor(ink)] : [];
 
-  /**
-   * Reclama el ancho disponible y ancla a la izquierda. Reemplaza a `Spacer` en la pantalla de bloqueo:
-   * un Spacer solo empuja si el padre tiene espacio SIN RESTRINGIR, y ahi el widget se pinta como
-   * snapshot con presupuesto y no lo tiene. `Infinity` y no un numero grande: con propuesta acotada dan
-   * lo mismo, y sin acotar `.infinity` cae al tamaño ideal en vez de tomarse el numero literal.
-   */
-  const fill = frame({ maxWidth: Infinity, alignment: 'leading' as const });
 
   /**
    * Pantalla siempre encendida (iPhone 14 Pro y posteriores): el sistema baja el brillo y pide que las
@@ -109,20 +100,6 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
       modifiers={[
         font({ size, weight: 'bold', design: 'rounded' }),
         monospacedDigit(),
-        /**
-         * `fixedSize` horizontal, y esto es LA pieza que faltaba.
-         *
-         * Un `Text(timerInterval:)` no se mide como un texto normal: reclama un marco mucho mas ancho
-         * que sus digitos y centra el contenido dentro. Consecuencias medidas en la pantalla de bloqueo
-         * real: el reloj nunca llegaba al canto derecho aunque el texto de al lado reclamara el ancho
-         * con `maxWidth: Infinity`, y la fila entera se pasaba del ancho de la tarjeta — lo que hacia
-         * que el sistema la centrara y el rotulo de arriba saliera CORTADO por la izquierda. Los dos
-         * sintomas, un solo origen.
-         *
-         * `fixedSize` lo colapsa a su ancho real. El precio es que al pasar de '10:00' a '9:59' el
-         * ancho cambia un caracter, una vez por bloque — contra un reloj descolocado todo el rato.
-         */
-        fixedSize({ horizontal: true }),
         /**
          * `lineLimit(1)` si, `minimumScaleFactor` NO.
          *
@@ -215,11 +192,11 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
     /**
      * `alignment="leading"` explicito: un VStack centra a sus hijos por default, asi que tres lineas de
      * anchos distintos quedaban centradas UNA SOBRE OTRA en vez de compartir el borde izquierdo — se
-     * leia como si cada linea empezara donde le toco. Y `maxWidth: Infinity` reclama el ancho de la
+     * leia como si cada linea empezara donde le toco. Y `fill` reclama el ancho de la
      * baldosa: sin el, el bloque se encoge a su ancho ideal y el sistema lo centra dentro del widget.
      */
     return (
-      <VStack alignment="leading" spacing={1} modifiers={[open, fill]}>
+      <VStack alignment="leading" spacing={1} modifiers={[open]}>
         <HStack spacing={4}>
           {glyph(12)}
           <Text modifiers={[font({ size: 12, weight: 'semibold' }), lineLimit(1)]}>
