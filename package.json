@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@expo-google-fonts/fraunces": "^0.4.1",
     "@expo-google-fonts/outfit": "^0.4.3",
     "@expo/ui": "~57.0.8",
     "expo": "~57.0.9",
@@ -54,7 +55,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "check:widgets": "node scripts/check-widget-layout.js"
+    "check:widgets": "node scripts/check-widget-layout.js",
+    "build:icons3d": "node scripts/build-icons3d.mjs"
   },
   "private": true
 }

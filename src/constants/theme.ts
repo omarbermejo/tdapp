@@ -6,11 +6,20 @@ import { useColorScheme, type TextStyle } from 'react-native';
 import { getPreference, subscribe } from './scheme-store';
 
 /**
- * Sistema visual: papel blanco, tinta verde profunda y acentos tierra.
+ * Sistema visual: papel cálido, tinta verde profunda y acentos tierra.
  *
- * La armonía viene del diseño de referencia (Pace): fondo plano, tarjetas que se separan
- * por un tono de luz en vez de bordes gruesos, radios generosos, jerarquía por tamaño y
- * color de texto (no por cajas), y un solo CTA sólido por pantalla.
+ * La armonía viene de Pace: fondo plano, tarjetas que se separan sin bordes gruesos, radios
+ * generosos, jerarquía por tamaño y color de texto (no por cajas), y un solo CTA sólido por
+ * pantalla.
+ *
+ * **El papel es cálido y la tarjeta es blanca.** Es la inversión del escalón anterior (papel
+ * blanco, tarjeta crema) y es una decisión sensorial antes que estética: es lo que hace Tiimo,
+ * que diseña para el mismo público, y su argumento es que el blanco puro a pantalla completa es
+ * un estímulo que cansa. Además los iconos 3D de la app traen su propio modelado en gris, y sobre
+ * blanco puro flotan sin asentarse.
+ *
+ * De ahí sale la regla de temperatura: **una sola, y se hace cumplir**. Un gris frío sobre papel
+ * cálido se ve sucio, así que en modo claro no hay grises neutros — todo neutro es cálido.
  *
  * Regla: ningún hex vive fuera de este archivo. Los componentes consumen tokens, y los
  * de color SOLO a través de `useTheme()` / `useAccent()` — un import estático se
@@ -80,44 +89,39 @@ export const Palette = {
     900: '#f6e1cf',
   },
   /**
-   * Neutros del modo claro. Las rampas de marca solo van hacia el crema, y sobre blanco
-   * un crema no separa nada: para levantar una tarjeta hay que bajar en gris, no subir
-   * en amarillo.
+   * Neutros CÁLIDOS del modo claro. Son todos los neutros que hay: ver la regla de temperatura
+   * arriba.
    *
-   * El papel de la app es el blanco puro de aqui, y no se toca. Lo que cambio es lo que se
-   * levanta encima: eso ahora sale de `sand`.
+   * El orden va de la tarjeta hacia abajo, y el papel NO es el primer paso — es el segundo. Eso es
+   * el cambio: lo que se levanta es blanco y lo que está detrás tiene cuerpo.
+   *
+   * Ninguno sale de la rampa `cornsilk`, que se va al amarillo saturado en cuanto baja
+   * (`cornsilk[400]` ya es #fbeb84). Son el mismo crema desaturado, que es lo que deja bajar sin
+   * ensuciarse.
    */
   paper: {
+    /** La tarjeta. Blanco puro, y solo aquí: es lo único que se levanta. */
     0: '#ffffff',
-    50: '#fafaf7',
-    100: '#f1f1ea',
-    200: '#e6e6dc',
+    /**
+     * El papel de la app. Medido: la tinta encima da 12.0:1 y la tarjeta se separa 1.07:1 — poco
+     * a propósito, porque lo que levanta una tarjeta es su sombra (`Elevation.raised`), no un
+     * escalón de valor. Un escalón fuerte convierte cada tarjeta en una caja, que es justo lo que
+     * la referencia no hace.
+     */
+    50: '#faf7ef',
+    /** Lo hundido: chips sin seleccionar, pistas de progreso, avatares. `textMuted` encima da 6.7:1. */
+    100: '#f1ede0',
+    /** Hairline de 1pt. Un paso más abajo que lo hundido, para que un borde sobre relleno se vea. */
+    200: '#e7e1d0',
   },
   /**
-   * Neutros CÁLIDOS: la tarjeta y lo que se hunde dentro de ella.
-   *
-   * El papel de la app es blanco (`paper[0]`) y ahi se queda — eso es decision de Omar. Lo que
-   * gana el crema de la marca (`cornsilk`, que existia en la paleta sin usarse en ningun sitio)
-   * es la TARJETA: sobre blanco, un crema separa por temperatura en vez de por un gris, que era
-   * lo que hacia que las tarjetas casi no se vieran.
-   *
-   * Los dos pasos de abajo no salen de la rampa `cornsilk` porque esa se va al amarillo saturado
-   * en cuanto baja (`cornsilk[400]` ya es #fbeb84): son el mismo crema oscurecido, y sirven para
-   * el relleno apagado y el hairline sin ensuciarse.
+   * El crema de la marca. Ya no es la tarjeta: es la superficie de ACENTO — la tarjeta que quiere
+   * decir "esto es distinto" (el hero del día, un bloque de sección), sin gastar el acento del
+   * usuario, que tiene que quedar libre para el estado.
    */
   sand: {
-    /** La tarjeta: el `cornsilk` de la marca, tal cual. */
     0: '#fefae0',
-    /**
-     * Lo hundido DENTRO de la tarjeta crema: chips sin seleccionar, pistas de progreso, avatares.
-     *
-     * El primer intento fue #f7f1d5 y era demasiado cerca del crema — los chips del perfil se leían
-     * como fantasmas, solo por su borde. Este paso separa 0.131 de luminancia contra la tarjeta, o
-     * sea un pelo MÁS que el par blanco/#f1f1ea de antes (0.123), así que el escalón que ya
-     * funcionaba se mantiene. Y `textMuted` encima da 4.8:1, que pasa AA.
-     */
     100: '#f4ecc9',
-    /** Hairline. Un paso más abajo que lo hundido, para que un borde sobre relleno todavía se vea. */
     200: '#ece4bf',
   },
   /**
@@ -151,13 +155,27 @@ export type Scheme = 'light' | 'dark';
 export type Tokens = {
   canvas: string;
   surface: string;
+  /** La tarjeta que dice "esto es distinto", sin gastar el acento del usuario. */
+  surfaceAlt: string;
   sunken: string;
   line: string;
+  /**
+   * El borde punteado. Es UNA regla para tres cosas que son la misma: la casilla sin marcar, el
+   * hueco por llenar y el "agregar". Sale de Abode, donde el punteado dice "esto te espera" sin
+   * gastar un icono ni una etiqueta.
+   */
+  dashed: string;
   text: string;
   textMuted: string;
   ink: string;
   inkPressed: string;
   onInk: string;
+  /**
+   * Cerrado. Existe aparte del acento porque "hecho" no puede depender del color que la persona
+   * eligió en su perfil: con el acento puesto, una tarea cerrada y una tarea con área se pintaban
+   * igual y la palomita dejaba de significar algo.
+   */
+  success: string;
   danger: string;
   /** Velo detras de una hoja o un dialogo: sin el no se lee que el resto quedo inactivo. */
   scrim: string;
@@ -165,23 +183,33 @@ export type Tokens = {
 
 const TOKENS: Record<Scheme, Tokens> = {
   light: {
-    /** Blanco puro. El papel de la app no se discute. */
-    canvas: Palette.paper[0],
-    /** La tarjeta: el crema de la marca, que separa por temperatura y no por un gris. */
-    surface: Palette.sand[0],
+    /** El papel cálido. 12.0:1 con la tinta encima. */
+    canvas: Palette.paper[50],
+    /** La tarjeta: blanco, y lo único blanco. Se separa por sombra, no por escalón de valor. */
+    surface: Palette.paper[0],
+    /** El crema de la marca, ahora como superficie de acento. 12.2:1 con la tinta encima. */
+    surfaceAlt: Palette.sand[0],
     /** Relleno apagado: pistas de progreso, chips sin seleccionar, avatares. */
-    sunken: Palette.sand[100],
+    sunken: Palette.paper[100],
     /** Hairline de 1pt. Nunca bordes gruesos: el peso lo carga la tipografía. */
-    line: Palette.sand[200],
+    line: Palette.paper[200],
+    dashed: Palette.sand[200],
 
     text: Palette.blackForest[500],
-    textMuted: Palette.oliveLeaf[500],
+    /**
+     * Sube un paso (era `oliveLeaf[500]`). Sobre el papel cálido ese daba 5.3:1 y este da 7.3:1 —
+     * el papel tiene menos luz que el blanco de antes, así que mantener el paso viejo habría sido
+     * perder contraste sin que se notara en ninguna revisión.
+     */
+    textMuted: Palette.oliveLeaf[400],
 
     ink: Palette.blackForest[500],
     inkPressed: Palette.blackForest[400],
     onInk: Palette.paper[0],
 
-    /** 6.9:1 sobre blanco: el mensaje de error es justo el que hay que poder leer. */
+    /** 5.2:1 sobre el papel. Verde, no del acento: cerrar algo se ve igual para todo el mundo. */
+    success: Palette.blackForest[600],
+    /** 5.4:1 sobre el papel: el mensaje de error es justo el que hay que poder leer. */
     danger: Palette.copperwood[400],
     // Tinta de la marca al 40%, no negro puro: el velo tambien es de la paleta.
     scrim: 'rgba(40, 54, 24, 0.40)',
@@ -189,8 +217,10 @@ const TOKENS: Record<Scheme, Tokens> = {
   dark: {
     canvas: Palette.carbon[0],
     surface: Palette.carbon[900],
+    surfaceAlt: Palette.carbon[800],
     sunken: Palette.carbon[800],
     line: Palette.carbon[700],
+    dashed: Palette.carbon[700],
 
     text: Palette.carbon[100],
     textMuted: Palette.carbon[200],
@@ -200,6 +230,7 @@ const TOKENS: Record<Scheme, Tokens> = {
     inkPressed: Palette.carbon[200],
     onInk: Palette.carbon[0],
 
+    success: Palette.blackForest[800],
     /** 8.9:1 sobre negro; el copper medio se hunde en el fondo. */
     danger: Palette.copperwood[700],
     // Mas opaco que en claro: sobre un canvas negro un velo suave no separa nada.
@@ -314,19 +345,45 @@ export function accentInks(name?: string | null): { light: string; dark: string 
 }
 
 /**
- * La sombra de tarjeta solo existe en claro: en oscuro una sombra negra sobre fondo
- * oscuro no se ve, y lo que separa es el escalón de luz de `surface`.
+ * Las sombras solo existen en claro: en oscuro una sombra negra sobre fondo oscuro no se ve, y lo
+ * que separa es el escalón de luz de `surface`.
+ *
+ * Son tres y antes era una. La razón es el papel cálido: con la tarjeta blanca a 1.07:1 contra el
+ * papel, la sombra dejó de ser un adorno y pasó a ser LO que separa, así que necesita decir a qué
+ * altura está cada cosa. Y todas usan la tinta de la marca, nunca negro: una sombra negra sobre
+ * papel cálido lo agrisa.
  */
-export function useShadow() {
-  return useScheme() === 'light' ? SHADOW_CARD : null;
+export type Elevation = 'raised' | 'floating' | 'pressed';
+
+export function useShadow(level: Elevation = 'raised') {
+  return useScheme() === 'light' ? SHADOWS[level] : null;
 }
 
-const SHADOW_CARD = {
-  shadowColor: Palette.blackForest[500],
-  shadowOpacity: 0.06,
-  shadowRadius: 16,
-  shadowOffset: { width: 0, height: 6 },
-  elevation: 2,
+const SHADOWS = {
+  /** La tarjeta apoyada en el papel. */
+  raised: {
+    shadowColor: Palette.blackForest[500],
+    shadowOpacity: 0.07,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  /** Lo que flota POR ENCIMA del contenido y lo deja pasar por debajo: la barra, una hoja. */
+  floating: {
+    shadowColor: Palette.blackForest[500],
+    shadowOpacity: 0.12,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
+  },
+  /** Hundido contra el papel mientras se mantiene el dedo. Corta y cerrada, o no se lee como tacto. */
+  pressed: {
+    shadowColor: Palette.blackForest[500],
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
 } as const;
 
 /** Para que el navegador (fondos de transición, gestos) use el mismo papel que la app. */
@@ -352,10 +409,11 @@ export function useNavTheme(): NavigationTheme {
   };
 }
 
-export const Radius = { sm: 4, md: 18, lg: 24, xl: 32, pill: 999 } as const;
+/** `xxl` es para lo que ocupa el ancho de la pantalla: el hero del día, una hoja. */
+export const Radius = { sm: 4, md: 18, lg: 24, xl: 32, xxl: 40, pill: 999 } as const;
 
 /** Ritmo vertical del diseño de referencia: pocos valores, muy espaciados. */
-export const Space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, huge: 48 } as const;
+export const Space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, huge: 48, breath: 64 } as const;
 
 /** Mínimo 44pt de área táctil (HIG); los controles primarios van más altos. */
 export const Touch = { input: 56, button: 58, chip: 48, icon: 44 } as const;
@@ -406,7 +464,15 @@ export const Motion = {
 } as const;
 
 /**
- * Tres roles, dos familias.
+ * Cuatro roles, tres familias.
+ *
+ * `Serif` (Fraunces SemiBold) le pone CARA AL DÍA, y a nada más. Es el único lugar donde entra una
+ * serif: el titular de Hoy. Sale de Tiimo, cuya app real pone una serif cálida en el título del día
+ * y sans en el 100% de lo demás — es lo que hace que se lea como un objeto tranquilo y no como
+ * software, y cuesta una familia y un peso. La regla que la acompaña es que **media adopción se ve
+ * como error**: o el título entero o ninguno. Fraunces y no Recoleta porque Recoleta no es libre, y
+ * de las que hay en Google Fonts es la que más se le parece (old-style cálida, terminaciones
+ * suaves).
  *
  * `Display` (Outfit ExtraBold) grita: números y titulares. `Brand`/`BrandMedium` (Outfit 600/500)
  * son la voz de los CONTROLES — micro-rótulos, valores de pastilla, etiquetas de botón. Eso salía
@@ -415,18 +481,26 @@ export const Motion = {
  *
  * La PROSA se queda en la fuente del sistema (`body`, `hint`). No es pereza: San Francisco está
  * dibujada para leerse en cuerpo pequeño, con óptica por tamaño, y cambiarla pagaría legibilidad
- * por personalidad en el único texto que de verdad hay que leer. La regla queda: la app habla en
- * Outfit y explica en la del sistema.
+ * por personalidad en el único texto que de verdad hay que leer. La regla queda: la app le pone
+ * cara al día en Fraunces, habla en Outfit y explica en la del sistema.
  *
  * Cada estilo nombra su familia y NINGUNO lleva fontWeight: pedir un peso que la familia cargada
- * no tiene la tira a sans-serif en Android. Los tres pesos se cargan en `app/_layout.tsx`.
+ * no tiene la tira a sans-serif en Android. Los cuatro pesos se cargan en `app/_layout.tsx`.
  */
+export const Serif = 'Fraunces_600SemiBold';
 export const Display = 'Outfit_800ExtraBold';
 export const Brand = 'Outfit_600SemiBold';
 export const BrandMedium = 'Outfit_500Medium';
 
 export const Type = {
+  /**
+   * El día, y nada más. Grande porque es lo primero que se lee al abrir la app y porque una serif
+   * a cuerpo chico pierde justo lo que la hace valer: el contraste de trazo.
+   */
+  day: { fontFamily: Serif, fontSize: 44, lineHeight: 50, letterSpacing: -0.5 },
   display: { fontFamily: Display, fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
+  /** El número grande de una métrica: el hero del día, la racha, un total de Progreso. */
+  hero: { fontFamily: Display, fontSize: 44, lineHeight: 48, letterSpacing: -1 },
   /**
    * La cuenta atrás del cronómetro, y nada más. Es el único número de la app que se lee a un
    * brazo de distancia — con el teléfono en la mesa mientras trabajas — así que se sale de la

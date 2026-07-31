@@ -241,33 +241,44 @@ const BLEED_TOP = 40;
 const BLEED_LEFT = [160, 40, 100];
 
 /**
- * Que rampa usa cada icono.
+ * Los dos pasos de la rampa entre los que se estira el modelado, por acento.
  *
- * Una sola para todo el cromo: sesenta iconos cada uno de su color es ruido, no sistema. Las siete
- * areas de enfoque son la excepcion, porque ahi el color ES el dato. Los nombres siguen a
- * `src/features/tasks/focus-accent.ts`.
+ * La ventana se probo con los seis iconos de la prueba a 24, 28, 32, 44 y 88pt, sobre papel y sobre
+ * tarjeta, y dentro de una maqueta de la capsula. Gana 200-700 porque es la que mas contraste
+ * interno deja en los tamaños CHICOS — a 32pt las rayas del calendario y la manecilla del reloj son
+ * lo unico que separa un icono de una mancha. 200-800 y 300-800 se ven mejor a 88 y peor a 32, y el
+ * tamaño que decide es el de la barra.
+ *
+ * `leaf` sube la ventana en la misma rampa que `forest` por la misma razon que en `theme.ts`:
+ * comparten familia y sin separarlos se leen como un solo color.
  */
-export const CHROME = 'blackForest';
-export const AREA_RAMP = {
-  study: 'oliveLeaf',
-  work: 'blackForest',
-  home: 'blackForest',
-  health: 'oliveLeaf',
-  money: 'copperwood',
-  relationships: 'sunlitClay',
-  creativity: 'sunlitClay',
+export const TINT = {
+  forest: ['blackForest', '200', '700'],
+  olive: ['oliveLeaf', '200', '700'],
+  leaf: ['blackForest', '400', '900'],
+  clay: ['sunlitClay', '200', '700'],
+  copper: ['copperwood', '200', '700'],
 };
 
 /**
- * Los dos pasos de la rampa entre los que se estira el modelado.
+ * Que acento usa cada icono.
  *
- * Se probaron 200-700, 200-800 y 300-800 con los seis iconos de la prueba a 24, 28, 32, 44 y 88pt,
- * sobre papel y sobre tarjeta, y dentro de una maqueta de la capsula. Gana 200-700 porque es el que
- * mas contraste interno deja en los tamaños CHICOS — a 32pt las rayas del calendario y la manecilla
- * del reloj son lo unico que separa un icono de una mancha. Las otras dos ventanas se ven mejor a
- * 88 y peor a 32, y el tamaño que decide es el de la barra.
+ * Uno solo para todo el cromo: dieciocho iconos cada uno de su color es ruido, no sistema. Las
+ * siete areas de enfoque son la excepcion, porque ahi el color ES el dato — y el reparto no se
+ * inventa aqui, es el mismo `FAMILY` de `src/features/tasks/focus-accent.ts`: verdes para
+ * produccion, calidos para vida, cobre para dinero. Que casa, salud y relaciones compartan tono es
+ * la intencion, no un descuido: el icono distingue dentro de la familia.
  */
-export const WINDOW = ['200', '700'];
+export const CHROME = 'forest';
+export const AREA_ACCENT = {
+  work: 'forest',
+  study: 'olive',
+  creativity: 'leaf',
+  home: 'clay',
+  health: 'clay',
+  relationships: 'clay',
+  money: 'copper',
+};
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const palette = await loadPalette();
@@ -278,8 +289,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
 
   for (const slug of slugs.sort()) {
-    const ramp = palette[AREA_RAMP[slug] ?? CHROME];
-    const webp = await bake(join(RAW, slug), ramp[WINDOW[0]], ramp[WINDOW[1]]);
+    const [ramp, lo, hi] = TINT[AREA_ACCENT[slug] ?? CHROME];
+    const webp = await bake(join(RAW, slug), palette[ramp][lo], palette[ramp][hi]);
     await writeFile(join(OUT, `${slug}.webp`), webp);
     console.log(`${slug.padEnd(16)} ${(webp.length / 1024).toFixed(1)} KB`);
   }

@@ -68,3 +68,41 @@ export function useTasks(date: string) {
     reload,
   };
 }
+
+/**
+ * Lo que quedo atras: pendiente de un dia anterior, o anotado sin fecha.
+ *
+ * Existe porque hasta ahora esas tareas NO SALIAN EN NINGUNA PANTALLA. `list` filtra por fecha
+ * exacta, Hoy pide hoy y Planear pide de hoy en adelante, asi que una tarea que se te paso
+ * desaparecia en silencio y nunca te enterabas. En una app para TDAH ese es el modo de falla que
+ * importa, no el que se te olvide algo: es que la app te lo esconda.
+ *
+ * Comparte forma con `useTasks` a proposito — mismo estado, mismo `useFocusEffect`, mismo descarte
+ * del dia viejo — pero no se fusionan en un hook con bandera: son dos preguntas distintas y una
+ * pantalla hace las dos a la vez.
+ */
+export function useBacklog(today: string) {
+  const { token } = useAuth();
+  const [state, setState] = useState<State>({ for: null, tasks: null, error: '' });
+
+  const reload = useCallback(async () => {
+    if (!token || !today) return;
+    try {
+      const { tasks } = await tasksApi.list(token, { backlog: today, status: 'pending' });
+      setState({ for: today, tasks, error: '' });
+    } catch {
+      // Sin mensaje: el backlog es una seccion secundaria y un error suyo no debe robarle la
+      // pantalla al dia. Si falla, no aparece.
+      setState({ for: today, tasks: null, error: '' });
+    }
+  }, [token, today]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void reload();
+    }, [reload])
+  );
+
+  const fresh = state.for === today;
+  return { tasks: fresh ? state.tasks : null, reload };
+}
