@@ -1,6 +1,7 @@
 import type { LiveActivity, LiveActivityFactory } from 'expo-widgets';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
+import { canNotify, ensureChannel, ensureHandler } from '@/features/notifications/local';
 import { clearFocusWidget, showFocusWidget } from '@/features/widgets/sync-focus';
 import type { FocusActivityProps } from '@/widgets/focus-activity';
 
@@ -191,10 +192,58 @@ export async function adoptBlock(block: Block | null) {
 // --- iOS ---------------------------------------------------------------------------------------
 
 /**
+ * El bloque que quedo pendiente de pintar porque la app todavia no estaba al frente, y el oyente que
+ * espera a que lo este. Uno solo de cada: si llegan dos bloques, manda el ultimo.
+ */
+let waiting: Block | null = null;
+let watcher: { remove: () => void } | null = null;
+
+/**
+ * Reintenta cuando la app vuelva a estar activa.
+ *
+ * `Activity.request()` SOLO funciona con la app al frente — iOS lo rechaza con "Target is not
+ * foreground"— y eso es exactamente el estado en el que corre `adoptBlock` al arrancar: la pantalla
+ * del cronometro monta mientras el splash todavia esta puesto, asi que la app esta `inactive`. El
+ * error se tragaba en silencio y nadie lo volvia a intentar, asi que un bloque recuperado se quedaba
+ * SIN Isla hasta que alguien pausara o reanudara a mano. Medido en el simulador: el `start` fallaba en
+ * cada arranque con un bloque vivo.
+ *
+ * Un solo oyente y un solo bloque pendiente: el estado va a nivel de modulo, igual que `activity`.
+ */
+function paintWhenActive(block: Block) {
+  waiting = block;
+  if (watcher) return;
+
+  watcher = AppState.addEventListener('change', (state) => {
+    if (state !== 'active') return;
+    // Se lee ANTES de olvidar: `forgetWaiting` es tambien quien lo borra.
+    const pending = waiting;
+    forgetWaiting();
+    if (pending) void showActivity(pending);
+  });
+}
+
+/** Cancela el reintento. Se llama al quitar el bloque: pintarlo despues seria resucitar un muerto. */
+function forgetWaiting() {
+  watcher?.remove();
+  watcher = null;
+  waiting = null;
+}
+
+/**
  * `start()` para la primera y `update()` para las siguientes: arrancar una nueva cada vez apilaria
  * actividades en la pantalla de bloqueo (iOS permite varias del mismo tipo).
  */
 async function showActivity(block: Block) {
+  /**
+   * Solo `start` necesita el frente; `update` funciona con la app suspendida (es lo que hace que la
+   * pausa se vea sin abrir nada). Asi que el guard va antes de arrancar y no antes de actualizar.
+   */
+  if (!activity && AppState.currentState !== 'active') {
+    paintWhenActive(block);
+    return;
+  }
+
   try {
     const { default: FocusActivity } = await import('@/widgets/focus-activity');
     const props = {
@@ -236,6 +285,9 @@ async function showActivity(block: Block) {
  */
 async function hideActivity() {
   activity = null;
+  // Y el reintento pendiente, si habia: el bloque se acabo, pintarlo cuando la app vuelva al frente
+  // seria resucitar uno que ya no existe.
+  forgetWaiting();
   try {
     const { default: FocusActivity } = await import('@/widgets/focus-activity');
     await endStrays(FocusActivity);
@@ -261,20 +313,22 @@ async function endStrays(factory: LiveActivityFactory<FocusActivityProps>) {
  * Notificacion fija con la hora de fin. `sticky` la vuelve no-descartable con swipe y
  * `autoDismiss: false` evita que tocarla la borre.
  *
- * `sound: false` y `shouldPlaySound` apagado en el handler: esta notificacion es un cartel
- * permanente, no un aviso. La que suena es la del final del bloque, que vive en `alarm.ts`.
+ * `sound: false` y `quiet: true`: esta notificacion es un cartel permanente, no un aviso. La que
+ * suena es la del final del bloque, que vive en `alarm.ts`.
+ *
+ * El `kind` no es decoracion. Antes esta notificacion no llevaba ninguno, y el handler global
+ * —registrado por `armAlarm`— solo dejaba pasar el del cronometro: `showBlock` corre con la app AL
+ * FRENTE, asi que el cartel no se llegaba a postear nunca desde primer plano. Con el prefijo puesto
+ * pasa el filtro, y con `quiet` pasa sin sonar.
  */
 async function showOngoing(block: Block) {
   try {
     const Notifications = await import('expo-notifications');
 
-    await Notifications.setNotificationChannelAsync(CHANNEL, {
-      name: 'Cronómetro',
-      importance: Notifications.AndroidImportance.MAX,
-    });
-
-    const permissions = await Notifications.getPermissionsAsync();
-    if (!permissions.granted) return;
+    ensureHandler(Notifications);
+    await ensureChannel(Notifications, CHANNEL);
+    // Sin `ask`: si el permiso no esta, no se interrumpe con un dialogo por un cartel.
+    if (!(await canNotify(Notifications))) return;
 
     await Notifications.scheduleNotificationAsync({
       identifier: ONGOING_ID,
@@ -287,6 +341,7 @@ async function showOngoing(block: Block) {
         autoDismiss: false,
         sound: false,
         color: block.tint,
+        data: { kind: 'tdapp.timer.ongoing', quiet: true },
       },
       trigger: null,
     });

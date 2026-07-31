@@ -1,15 +1,14 @@
 import { useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { OtpInput, type OtpInputRef } from 'react-native-otp-entry';
+import { type OtpInputRef } from 'react-native-otp-entry';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/ui/big-button';
+import { CodeField } from '@/components/ui/code-field';
 import { StepDots } from '@/components/ui/step-dots';
-import { Radius, Space, Touch, Type, useAccent, useShadow, useTheme } from '@/constants/theme';
+import { Space, Type, useAccent, useTheme } from '@/constants/theme';
 import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
-
-const DIGITS = 6;
 
 /**
  * Codigo de verificacion. No hay boton oscuro a proposito: `onFilled` verifica solo, asi que
@@ -26,7 +25,6 @@ export default function VerifyScreen() {
   const [error, setError] = useState('');
 
   const th = useTheme();
-  const shadow = useShadow();
   const tint = useAccent('olive').ink;
 
   const submit = async (code: string) => {
@@ -80,33 +78,12 @@ export default function VerifyScreen() {
           <Text style={[Type.label, { color: th.text }]}>{user?.email}</Text>
         </View>
 
-        <OtpInput
+        <CodeField
           ref={input}
-          numberOfDigits={DIGITS}
-          type="numeric"
-          autoFocus
-          blurOnFilled
-          focusColor={tint}
-          disabled={state === 'checking'}
-          onTextChange={() => error && setError('')}
           onFilled={submit}
-          // No pasar autoComplete aqui: la libreria ya pone oneTimeCode / sms-otp y esto
-          // se hace spread despues, asi que los pisaria.
-          textInputProps={{ accessibilityLabel: 'Código de 6 dígitos', autoCorrect: false }}
-          theme={{
-            containerStyle: styles.cells,
-            pinCodeContainerStyle: {
-              ...styles.cell,
-              borderColor: th.textMuted,
-              backgroundColor: th.surface,
-              ...(error && { borderColor: th.danger, borderWidth: 1.5 }),
-            },
-            filledPinCodeContainerStyle: { borderColor: th.text },
-            focusedPinCodeContainerStyle: { borderWidth: 1.5, ...shadow },
-            disabledPinCodeContainerStyle: { backgroundColor: th.sunken, borderColor: th.line },
-            pinCodeTextStyle: { ...styles.digit, color: th.text },
-            focusStickStyle: { ...styles.stick, backgroundColor: tint },
-          }}
+          onType={() => error && setError('')}
+          error={!!error}
+          disabled={state === 'checking'}
         />
 
         <Text
@@ -137,20 +114,6 @@ const styles = StyleSheet.create({
     gap: Space.xl,
   },
   hero: { gap: Space.sm },
-
-  cells: { gap: Space.sm },
-  cell: {
-    // flex gana sobre el width: 44 de la libreria, asi las 6 celdas reparten el ancho
-    // desde un iPhone SE hasta un Max sin numeros magicos.
-    flex: 1,
-    height: Touch.input,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    // El borde vacio ES la instruccion ("hay seis huecos"), asi que va en muted, no en line.
-  },
-  // letterSpacing 0 pisa el tracking negativo de metric: en un glifo solo lo descuadra.
-  digit: { ...Type.metric, letterSpacing: 0 },
-  stick: { width: 2, height: 24, borderRadius: Radius.pill },
 
   // Alto fijo para dos lineas: el mensaje cambia sin mover las celdas ni los botones.
   status: { minHeight: 40 },

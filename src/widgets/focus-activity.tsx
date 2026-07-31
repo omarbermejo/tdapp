@@ -78,8 +78,14 @@ export type FocusActivityProps = {
  * la saca del look de la pantalla de bloqueo — y en la Isla, Apple lo dice explicito: es un lienzo
  * de vistas en primer plano, no una tarjeta. El unico color es el acento, y solo en la cuenta, el
  * icono y el punteo, igual que en la app, donde el color dice de que familia es el bloque.
+ *
+ * Se EXPORTA con nombre solo para el banco de pruebas (`app/la-preview.tsx`). En runtime esto no es
+ * una funcion: el directive `'widget'` la sustituye por un string con su propio codigo fuente (ver
+ * `babel-preset-expo/plugins/widgets-plugin`), y el preview lo rearma con `new Function` para pintar
+ * las mismas secciones dentro de la app. Nada mas debe importarlo — quien quiera la actividad usa el
+ * default.
  */
-const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvironment) => {
+export const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvironment) => {
   'widget';
 
   /**
@@ -90,25 +96,47 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
    * Esta junto para poder afinarlo sin buscar: cambiar un numero aqui y recargar Metro basta, no
    * hace falta recompilar nada.
    *
-   * La Isla la dimensiona el SISTEMA a partir de lo que le metes, no hay un ancho que fijar: la
-   * capsula compacta crece con el cuerpo de la cuenta atras, y la expandida crece de alto con cada
-   * fila que le pongas. Asi que hacerla mas chica es exactamente esto — numeros mas chicos y menos
-   * filas. La compacta baja de 15 a 13 y la expandida se queda en tres bandas (icono, reloj, barra)
-   * en vez de cuatro: la tarea y el ciclo solo viven en el banner, que es el que tiene sitio.
+   * La Isla la dimensiona su CONTENIDO: cada region pide un ancho y el sistema arma la capsula
+   * alrededor del hueco de la camara. Por eso los `*Clock` de aqui no son cosmetica — son lo que
+   * decide el ancho de la capsula compacta, y sin ellos la cuenta atras pide el maximo (120.67pt por
+   * region) y la Isla se queda estirada de lado a lado. Ver el comentario de `countdown`.
+   *
+   * De alto, la expandida crece con cada fila que le pongas, asi que se queda en tres bandas (icono,
+   * reloj, barra) y no cuatro: la tarea y el ciclo solo viven en el banner, que es el que tiene sitio.
    */
   const S = {
     compactGlyph: 13,
     compactCount: 13,
-    minimalCount: 12,
+    /**
+     * La caja del reloj en la capsula compacta. 42 es '60:00' a 13pt bold rounded con cifras de ancho
+     * fijo (~36pt) mas aire: el peor caso, porque un bloque no pasa de una vuelta del dial.
+     *
+     * Con esto la capsula queda en ~190pt —el icono, el hueco de la camara y el reloj— en vez de los
+     * 367 que pedia antes.
+     */
+    compactClock: 42,
+    /**
+     * La minima es un GLIFO y no una cuenta atras: ver la seccion `minimal` de abajo. 15 y no 13
+     * porque aqui el icono es lo unico que hay, y en un circulo de ~24pt un glifo de 13 se ve
+     * perdido en el centro.
+     */
+    minimalGlyph: 15,
     islandGlyph: 14,
-    islandCount: 18,
+    /**
+     * 20 y no 18: en la Isla expandida el reloj es el UNICO dato grande, y con el rotulo de 11 al
+     * lado la diferencia de dos puntos es la que hace que se lea primero. '60:00' a 20pt bold
+     * rounded con cifras de ancho fijo son ~62pt, y la region trailing de la expandida da mas.
+     */
+    islandCount: 20,
+    /**
+     * La caja del reloj en la Isla expandida: '60:00' a 20pt son ~55pt. Lo que sobra del ancho se lo
+     * queda la region de la izquierda, que es la que tenia el rotulo recortado.
+     */
+    islandClock: 62,
     bannerCount: 28,
     /**
-     * Ancho reservado para el reloj EN EL BANNER. Va aqui y no en el helper: las regiones de la Isla se
-     * dimensionan por contenido, y clavarles un ancho de banner rompe la capsula.
-     *
-     * 86 cubre el peor caso: '60:00' a 28pt bold rounded con `monospacedDigit` son cuatro digitos de
-     * ~17pt mas el dos puntos, ~77pt. El resto es aire para que nunca trunque.
+     * 86 cubre el peor caso del banner: '60:00' a 28pt bold rounded con `monospacedDigit` son cuatro
+     * digitos de ~17pt mas el dos puntos, ~77pt. El resto es aire para que nunca trunque.
      */
     bannerClock: 86,
     /** El micro-rotulo de la fase. `Type.micro` es 12; aqui baja a 11 porque compite con menos. */
@@ -118,6 +146,12 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
     tick: { width: 3, height: 9 },
     /** El aire entre filas del banner y de la Isla expandida. */
     gap: 6,
+    /**
+     * La sangria de las filas del banner. 14 no es un gusto: el radio de la tarjeta del sistema son
+     * ~22pt, asi que a 8pt del borde de arriba la curva todavia entra 5pt — con menos sangria, la
+     * esquina se come la primera letra del rotulo.
+     */
+    edge: 14,
   };
 
   // `lower <= upper` es requisito de TextView.swift: sin eso cae al camino de texto plano y se
@@ -141,35 +175,79 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
    */
   const label = paused ? 'En pausa' : props.phase;
 
-  /** La cuenta atras. Es el unico dato que de verdad importa, asi que se repite en cada seccion. */
-  const countdown = (size: number) => (
-    <Text
-      timerInterval={range}
-      countsDown
-      pauseTime={pauseTime}
-      modifiers={[
-        font({ size, weight: 'bold', design: 'rounded' }),
-        /**
-         * Cifras de ancho fijo, y no es pulido: los digitos cambian cada segundo y con figuras
-         * proporcionales el '1' es mas angosto que el '8', asi que el reloj entero se mueve al
-         * pasar de 10:00 a 09:59. En la Isla es peor que un temblor — la capsula se REDIMENSIONA
-         * en cada tick. Es la misma razon del `tabular-nums` de `Type.count` en la app.
-         */
-        monospacedDigit(),
-        /**
-         * El `alignment` del `frame` que acota el reloj en el banner NO mueve sus digitos: SwiftUI lo
-         * ignora en un `Text(timerInterval:)` y un DTS de Apple lo reconoce sin arreglo (foro 758531).
-         * Quien los pega al canto derecho de su caja es esto.
-         *
-         * Es idempotente, asi que sobrevive a que en este renderer los modifiers de un `<Text>` se
-         * apliquen DOS veces (`UIBaseView.swift:21` y otra vez `TextView.swift:42`). Esa duplicacion es
-         * la causa raiz de los cuatro crashes: convertia un `frame(maxWidth:)` en dos marcos flexibles
-         * anidados. Por eso la geometria del reloj vive en un `<HStack>` envolvente y no aqui.
-         */
-        multilineTextAlignment('trailing'),
-        foregroundColor(ink),
-      ]}
-    />
+  /**
+   * Lo mismo en UNA palabra, para la Isla expandida.
+   *
+   * La region leading de la expandida es angosta —comparte el ancho con el hueco de la camara y con
+   * el reloj de la derecha— y 'DESCANSO CORTO' a 11pt en mayusculas con interletraje no cabe: salia
+   * 'DESCANSO COR…', que es exactamente lo que hace que la isla se lea como algo roto. Y no se
+   * arregla bajando la fuente: el rotulo es lo que se lee de reojo.
+   *
+   * La version larga se queda en el banner, que si tiene ancho. Aqui basta con de que FAMILIA es el
+   * bloque —trabajo o descanso—, y eso es una palabra. Cuanto dura ese descanso no cambia nada de lo
+   * que estas haciendo, que es no mirar el telefono.
+   */
+  const islandLabel = paused ? 'En pausa' : resting ? 'Descanso' : 'Enfoque';
+
+  /**
+   * La cuenta atras. Es el unico dato que de verdad importa, asi que se repite en cada seccion.
+   *
+   * **Va SIEMPRE dentro de una caja de ancho fijo, y esa es la causa raiz de la Isla gigante.**
+   *
+   * `Text(timerInterval:)` no se puede medir: SwiftUI no sabe cuanto va a ocupar un texto que cambia
+   * solo, asi que en vez de pedir un ancho ideal se queda con TODO el que le propongan. En el banner
+   * no se nota (la tarjeta tiene un ancho fijo), pero las regiones de la Isla se dimensionan por
+   * contenido — y el log del sistema lo dice con numeros: `compactLeading` y `compactTrailing` son
+   * `width=Dynamic<0.00, 120.67>` con una obstruccion de 125.33 en medio, o sea que una capsula que
+   * pide el maximo mide 120.67·2 + 125.33 = 366.67pt. Exactamente lo que medía: la cuenta atras se
+   * comia el ancho entero y la capsula no se encogia nunca. Con dos `<Text>` planos en las mismas
+   * regiones, la misma capsula medía 155pt.
+   *
+   * Y explicaba tambien lo de la expandida: ahi el reloj le robaba el ancho al rotulo de la
+   * izquierda, que es por lo que 'DESCANSO CORTO' se recortaba.
+   *
+   * La caja va en un `<HStack>` envolvente y NO en el `<Text>`: en este renderer los modifiers de un
+   * `<Text>` se aplican DOS veces (`UIBaseView.swift:21` y otra vez `TextView.swift:42`), y un
+   * `frame` duplicado sobre un texto que ya reclama el peor caso es la causa de los cuatro crashes de
+   * layout que costo entender. En un `HStack` se aplica una vez y usa la rama `frame(width:height:)`,
+   * que es la que Apple usa en su propio ejemplo de ActivityKit para acotar un timer.
+   *
+   * `box` es el ancho de esa caja: el peor caso del reloj a ese tamaño, con un poco de aire. Un bloque
+   * no pasa de 60 minutos (una vuelta del dial), asi que el texto mas largo es '60:00'.
+   */
+  const countdown = (size: number, box: number) => (
+    <HStack modifiers={[frame({ width: box, alignment: 'trailing' as const })]}>
+      <Text
+        timerInterval={range}
+        countsDown
+        pauseTime={pauseTime}
+        modifiers={[
+          font({ size, weight: 'bold', design: 'rounded' }),
+          /**
+           * Cifras de ancho fijo, y no es pulido: los digitos cambian cada segundo y con figuras
+           * proporcionales el '1' es mas angosto que el '8', asi que el reloj entero se mueve al
+           * pasar de 10:00 a 09:59. En la Isla es peor que un temblor — la capsula se REDIMENSIONA
+           * en cada tick. Es la misma razon del `tabular-nums` de `Type.count` en la app.
+           */
+          monospacedDigit(),
+          /**
+           * El `alignment` del `frame` que acota el reloj NO mueve sus digitos: SwiftUI lo ignora en un
+           * `Text(timerInterval:)` y un DTS de Apple lo reconoce sin arreglo (foro 758531). Quien los
+           * pega al canto derecho de su caja es esto.
+           */
+          multilineTextAlignment('trailing'),
+          /**
+           * Una linea SIEMPRE: si el reloj no cabe, que recorte y no que se parta. Un texto de dos
+           * lineas en la Isla compacta la engorda de ALTO, y ahi no hay alto que dar.
+           *
+           * Es de los pocos modifiers que se pueden poner en un `<Text>` aqui: es idempotente, asi que
+           * sobrevive a que este renderer los aplique dos veces.
+           */
+          lineLimit(1),
+          foregroundColor(ink),
+        ]}
+      />
+    </HStack>
   );
 
   /**
@@ -200,7 +278,8 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
     // partirse en dos lineas y desalinear la fila entera.
     lineLimit(1),
   ];
-  const micro = <Text modifiers={microStyle}>{label}</Text>;
+  /** El mismo rotulo con dos textos distintos: el largo en el banner, el de una palabra en la Isla. */
+  const micro = (text: string) => <Text modifiers={microStyle}>{text}</Text>;
 
 
   /**
@@ -269,6 +348,9 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
     <ProgressView timerInterval={range} countsDown modifiers={barPaint} />
   );
 
+  /** La sangria de las filas del banner, en un solo sitio. Ver el comentario del banner. */
+  const edge = padding({ horizontal: S.edge });
+
   return {
     /**
      * Pantalla de bloqueo y centro de notificaciones. Es la unica seccion con sitio para decir EN
@@ -281,14 +363,24 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
      */
     banner: (
       /**
-       * Padding SOLO vertical.
+       * El aire: vertical en el VStack, horizontal en cada FILA. La diferencia no es de estilo, es la
+       * unica forma que funciona — y explica el bug que llevaba dos intentos.
        *
-       * El horizontal (4pt por lado) se puso para que el punteo del ciclo no saliera a ras del canto, y
-       * resulto ser el que rompia la fila: sumaba 8pt al ancho pedido, la fila del reloj ya venia
-       * justa, y al pasarse del ancho de la tarjeta el sistema centraba el bloque entero — de ahi el
-       * rotulo CORTADO por la izquierda. El canto lo da el sistema, que ya mete su propio margen.
+       * Un `padding({ horizontal })` AQUI, en el contenedor, se pasa del ancho de la tarjeta: la barra
+       * de progreso es golosa (un `ProgressView` se come todo el ancho que le propongan), asi que el
+       * VStack ya pide el ancho entero y el padding le suma 8pt por fuera. El sistema entonces centra
+       * el bloque y se come lo que sobra por los dos lados: de ahi el rotulo CORTADO por la izquierda.
+       *
+       * Puesto en la fila, el mismo padding es gratis: la fila recibe el ancho de la tarjeta como
+       * propuesta y mete su contenido HACIA DENTRO, sin pedir mas. Y sigue habiendo aire, que es lo que
+       * faltaba: sin nada de horizontal, el contenido queda a ras del canto y la ESQUINA REDONDEADA de
+       * la tarjeta se come la primera letra de 'ENFOQUE' — medido en la pantalla de bloqueo del
+       * simulador con iOS 26. El sistema no mete margen propio aqui, al contrario de lo que suponia la
+       * version anterior.
+       *
+       * El vertical sube de 2 a 8 por lo mismo: la primera fila caia dentro de la curva de la esquina.
        */
-      <VStack alignment="leading" spacing={S.gap} modifiers={[padding({ vertical: 2 })]}>
+      <VStack alignment="leading" spacing={S.gap} modifiers={[padding({ vertical: 8 })]}>
         {/*
           Tres filas HERMANAS y ningun stack anidado.
 
@@ -309,8 +401,8 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
           como una unidad ("ENFOQUE, dos de cuatro"). Y de paso esta fila no pide ancho de mas, que es
           justo lo que la de abajo si hace.
         */}
-        <HStack spacing={7}>
-          {micro}
+        <HStack spacing={7} modifiers={[edge]}>
+          {micro(label)}
           {cycle}
         </HStack>
 
@@ -336,24 +428,39 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
           espaciado del sistema (~8pt) como MINIMO OBLIGATORIO, que se suma al ancho pedido. Era la
           otra mitad del recorte de `ENFOQUE` por la izquierda.
         */}
-        <HStack spacing={8}>
+        <HStack spacing={8} modifiers={[edge]}>
           <Text modifiers={[font({ size: S.line, weight: 'semibold' }), lineLimit(1)]}>{line}</Text>
           <Spacer minLength={0} />
-          <HStack modifiers={[frame({ width: S.bannerClock, alignment: 'trailing' as const })]}>
-            {countdown(S.bannerCount)}
-          </HStack>
+          {countdown(S.bannerCount, S.bannerClock)}
         </HStack>
 
-        {bar}
+        {/*
+          La barra tambien va sangrada, y por eso lleva su propio HStack: el padding no se le puede
+          poner al `ProgressView` sin tocar su geometria (ver su comentario), y en un HStack de un solo
+          hijo se aplica una vez y no la convierte en "ocupo mi ancho ideal" — sigue golosa, solo que
+          dentro de la sangria.
+        */}
+        <HStack modifiers={[edge]}>{bar}</HStack>
       </VStack>
     ),
 
     /** Isla compacta: icono a la izquierda, reloj a la derecha. Es la convencion del sistema. */
     compactLeading: glyph(S.compactGlyph),
-    compactTrailing: countdown(S.compactCount),
+    compactTrailing: countdown(S.compactCount, S.compactClock),
 
-    /** La forma minima (con otra actividad al lado): solo el reloj, sin icono que lo estorbe. */
-    minimal: countdown(S.minimalCount),
+    /**
+     * La forma minima —cuando otra actividad comparte la Isla— es el GLIFO, no el reloj.
+     *
+     * Tenia la cuenta atras y era el sitio mas roto de todo esto: la minima es un CIRCULO de unos
+     * 24pt y 'm:ss' son cinco caracteres. No es que se vieran chicos, es que iOS recorta lo que no
+     * cabe, asi que quedaba un tajo de digitos ('24:' o ':59') dentro de un circulo — el mismo
+     * sintoma que ya habia costado quitar el Gauge del widget circular. Apple lo dice explicito para
+     * esta presentacion: un glifo o un par de caracteres, no un dato.
+     *
+     * No se pierde nada: la minima solo aparece con DOS actividades vivas, y ahi su trabajo es decir
+     * QUE te espera, no cuanto falta. Un toque la expande y el reloj esta ahi.
+     */
+    minimal: glyph(S.minimalGlyph),
 
     /**
      * Isla expandida al tocarla: tres bandas y nada mas — el icono con la fase, el reloj y la barra.
@@ -366,10 +473,10 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
     expandedLeading: (
       <HStack spacing={6}>
         {glyph(S.islandGlyph)}
-        {micro}
+        {micro(islandLabel)}
       </HStack>
     ),
-    expandedTrailing: countdown(S.islandCount),
+    expandedTrailing: countdown(S.islandCount, S.islandClock),
     expandedBottom: bar,
   };
 };

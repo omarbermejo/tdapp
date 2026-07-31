@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 
+import { clearReminders } from '@/features/notifications/reminders';
 import { syncTodayWidget } from '@/features/widgets/sync-today';
 
 import { ApiError, api, type ProfileInput, type RegisterInput, type User } from './api';
@@ -82,6 +83,16 @@ type AuthValue = {
    * de un aviso sería absurdo. El API es el mismo (`PATCH /me/profile` mergea por campo).
    */
   updateProfile: (patch: Partial<ProfileInput>) => Promise<void>;
+  /**
+   * Cambia la contraseña con el codigo del correo. Vive aqui y no en la pantalla —al contrario que
+   * `api.forgot`— porque devuelve sesion: es un `start`, como `signUp` y `verify`.
+   */
+  resetPassword: (email: string, code: string, password: string) => Promise<void>;
+  /**
+   * Borra la cuenta y cierra la sesion. `password` va sin valor en cuentas de Google o Apple: no
+   * tienen ninguna, y el API decide por `authProvider` a quien se la pide.
+   */
+  deleteAccount: (password?: string) => Promise<void>;
   signOut: () => Promise<void>;
   /**
    * Se acaba de terminar el onboarding. Vive aqui y no en la pantalla porque al guardar el
@@ -102,6 +113,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const start = useCallback(async (next: Session) => {
     await storage.set(next);
     setSession(next);
+  }, []);
+
+  /**
+   * El final de la sesion. Lo comparten cerrar sesion y borrar la cuenta porque es el mismo final:
+   * quedarse sin sesion devuelve `stage` a 'guest' y el guard del root desmonta `(app)`.
+   */
+  const wipe = useCallback(async () => {
+    setCelebrating(false);
+    // Obligatorio, no cortesia: el recordatorio diario es un trigger DAILY que repite para siempre
+    // sin que la app corra, asi que sin esto una cuenta cerrada seguiria recibiendolo hasta que
+    // alguien desinstale la app. Cancela solo lo suyo, por prefijo.
+    void clearReminders();
+    await storage.clear();
+    setSession(null);
   }, []);
 
   useEffect(() => {
@@ -177,15 +202,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return queue as Promise<void>;
       },
-      signOut: async () => {
-        setCelebrating(false);
-        await storage.clear();
-        setSession(null);
+      resetPassword: async (email, code, password) => start(await api.reset(email, code, password)),
+      deleteAccount: async (password) => {
+        await api.deleteAccount(token!, password);
+        // No hay nada mas que limpiar: al quedarse sin sesion el guard desmonta `(app)`, y ese
+        // desmontaje ya cierra la Live Activity y la alarma del cronometro (ver (tabs)/timer.tsx).
+        await wipe();
       },
+      signOut: wipe,
       celebrating,
       stopCelebrating: () => setCelebrating(false),
     };
-  }, [session, loading, start, celebrating]);
+  }, [session, loading, start, wipe, celebrating]);
 
   return <AuthContext value={value}>{children}</AuthContext>;
 }

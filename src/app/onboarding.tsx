@@ -18,7 +18,7 @@ import {
   REMINDER_HOUR,
   REMINDER_STYLE,
 } from '@/features/auth/options';
-import { registerPushDevice } from '@/features/notifications/register-device';
+import { askForNotifications } from '@/features/notifications/local';
 
 /**
  * Onboarding como conversacion: la app pregunta en burbujas, tu respuesta se queda en el hilo,
@@ -87,7 +87,7 @@ const profileOf = (user: User): ProfileInput => ({
 });
 
 export default function OnboardingScreen() {
-  const { user, token, finishOnboarding } = useAuth();
+  const { user, finishOnboarding } = useAuth();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<ProfileInput>(() => profileOf(user!));
   const [error, setError] = useState('');
@@ -140,13 +140,15 @@ export default function OnboardingScreen() {
     setNudge(current?.kind === 'multi' ? 'Elige al menos uno para seguir.' : 'Revisa la fecha para seguir.');
   };
 
-  const save = async (withPush: boolean) => {
+  const save = async (withAlerts: boolean) => {
     setError('');
     setFields({});
     setLoading(true);
     try {
       // Primero el permiso y despues el guardado: el guardado voltea el guard y desmonta esto.
-      if (withPush && token) await registerPushDevice(token);
+      // Se llamaba `withPush` y era mentira: no hay push, y lo que se pide aqui es el permiso del
+      // sistema, que es lo que necesitan los avisos locales.
+      if (withAlerts) await askForNotifications();
       await finishOnboarding(form);
     } catch (e) {
       if (e instanceof ApiError) {

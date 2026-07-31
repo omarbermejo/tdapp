@@ -73,6 +73,17 @@ export default function LoginScreen() {
 
           <FormError message={error} />
 
+          {/*
+            Aqui y no abajo con los otros: queda justo debajo del "Correo o contraseña incorrectos",
+            que es el instante exacto en que hace falta. Y `actions` no se convierte en tres botones
+            apilados donde el CTA deja de destacar.
+          */}
+          <BigButton
+            label="Olvidé mi contraseña"
+            variant="ghost"
+            onPress={() => router.push('/forgot')}
+          />
+
           <View style={styles.spacer} />
 
           <View style={styles.actions}>

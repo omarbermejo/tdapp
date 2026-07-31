@@ -7,57 +7,12 @@ import { FormError } from '@/components/ui/form-error';
 import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
+import { MIN_PASSWORD, PasswordMeter, strengthOf } from '@/components/ui/password-meter';
 import { StepDots } from '@/components/ui/step-dots';
 import { Stem } from '@/components/ui/stem';
-import { Radius, Space, Type, useAccent, useTheme } from '@/constants/theme';
+import { Space, Type, useTheme } from '@/constants/theme';
 import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
-
-/** Lo unico que el API exige. Mantener sincronizado con MIN_PASSWORD de domain/user.js. */
-const MIN_PASSWORD = 8;
-const LEVELS = 3;
-
-/**
- * Los 8 caracteres son el muro; el resto es consejo. Mientras la contrasena no llega al
- * minimo el tono es neutro y dice cuanto falta: el rojo se guarda para un rechazo real.
- */
-function strengthOf(password: string) {
-  if (password.length < MIN_PASSWORD) {
-    const left = MIN_PASSWORD - password.length;
-    return { level: 1, valid: false, hint: `Te ${left === 1 ? 'falta' : 'faltan'} ${left}` };
-  }
-
-  const variety = [/\d/, /[a-zA-Z]/, /[^\w\s]/].filter((rule) => rule.test(password)).length;
-  return variety >= 3 || password.length >= 12
-    ? { level: 3, valid: true, hint: 'Buena contraseña.' }
-    : { level: 2, valid: true, hint: 'Ya sirve. Un número o un símbolo la hacen más fuerte.' };
-}
-
-/** Tres tramos del mismo riel que usa la rama de progreso: un solo idioma en toda la app. */
-function PasswordMeter({ password }: { password: string }) {
-  const t = useTheme();
-  const olive = useAccent('olive');
-  const { level, valid, hint } = strengthOf(password);
-
-  return (
-    <View style={styles.meter}>
-      <View style={styles.meterRow}>
-        {Array.from({ length: LEVELS }, (_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.segment,
-              { backgroundColor: t.line },
-              !!password && i < level && { backgroundColor: valid ? olive.ink : t.textMuted },
-            ]}
-          />
-        ))}
-      </View>
-      {/* Alto fijo: al escribir el primer caracter no salta el campo de abajo. */}
-      <Text style={[Type.hint, styles.meterHint, { color: t.textMuted }]}>{password ? hint : ''}</Text>
-    </View>
-  );
-}
 
 /**
  * Solo credenciales. El perfil TDAH se pide en el onboarding, despues de verificar el correo:
@@ -210,10 +165,6 @@ const styles = StyleSheet.create({
   hero: { gap: Space.sm },
 
   withMeter: { gap: Space.sm },
-  meter: { gap: Space.xs },
-  meterRow: { flexDirection: 'row', gap: Space.xs },
-  segment: { flex: 1, height: 4, borderRadius: Radius.pill },
-  meterHint: { minHeight: 20 },
 
   spacer: { flex: 1 },
   actions: { gap: Space.md },

@@ -11,6 +11,7 @@ import { Confetti } from '@/components/ui/confetti';
 import { hydratePreference } from '@/constants/scheme-store';
 import { useAccent, useNavTheme, useScheme, useTheme } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/features/auth/auth-context';
+import { useReminders } from '@/features/notifications/use-reminders';
 import { useWidgetSync } from '@/features/widgets/use-widget-sync';
 
 /**
@@ -36,9 +37,12 @@ const SPLASH_CAP_MS = 4000;
 function RootNavigator() {
   const t = useTheme();
   const olive = useAccent('olive').solid;
-  const { stage, token, loading, celebrating, stopCelebrating } = useAuth();
+  const { stage, token, user, loading, celebrating, stopCelebrating } = useAuth();
   // El widget solo tiene sentido con la cuenta lista: antes no hay tareas que enseñar.
   useWidgetSync(token, stage === 'ready');
+  // La hora que prometió el onboarding, agendada de verdad. Mismo gate y mismo momento que el widget:
+  // antes de 'ready' no hay perfil con hora ni tareas que avisar.
+  useReminders(token, user, stage === 'ready');
   // Los titulares son la fuente cargada: sin ella la primera pantalla parpadea con otra tipografia.
   const [fontsLoaded, fontError] = useFonts({ Outfit_800ExtraBold });
 
@@ -96,6 +100,9 @@ function RootNavigator() {
         <Stack.Protected guard={stage === 'ready'}>
           <Stack.Screen name="(app)" />
         </Stack.Protected>
+        {/* Banco de pruebas de la Isla Dinámica. Fuera de los guards y solo en desarrollo: se abre con
+            `xcrun simctl openurl booted "tdapp:///la-preview"` sin navegar ni estar logueado. */}
+        {__DEV__ && <Stack.Screen name="la-preview" />}
       </Stack>
       {/* Encima del navegador: el confeti sobrevive al cambio de grupo de rutas. */}
       {celebrating && <Confetti onDone={stopCelebrating} />}

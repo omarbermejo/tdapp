@@ -60,8 +60,6 @@ export type ProfileInput = {
   accentColor: AccentName;
 };
 
-export type DevicePlatform = 'ios' | 'android' | 'web';
-
 /** Lo que el API considera una tarea. Solo los campos que hoy consume la app. */
 export type Task = {
   id: number;
@@ -178,6 +176,34 @@ export const api = {
     request<void>('/auth/resend', { method: 'POST', headers: bearer(token) }),
 
   /**
+   * Pide el codigo para cambiar la contraseña.
+   *
+   * Contesta 202 sin cuerpo **exista la cuenta o no**, y eso no es un descuido del API: un 404 aqui
+   * dejaria averiguar que correos tienen cuenta preguntando uno a uno. Por eso la pantalla no puede
+   * decir "ese correo no existe" ni "esa cuenta es de Google" — no lo sabe, y no debe saberlo.
+   */
+  forgot: (email: string) =>
+    request<void>('/auth/forgot', { method: 'POST', body: JSON.stringify({ email }) }),
+
+  /**
+   * Cambia la contraseña con el codigo del correo y devuelve sesion: el codigo llego a ese buzon,
+   * asi que de paso queda verificado. El correo viaja en el body porque todavia no hay sesion.
+   */
+  reset: (email: string, code: string, password: string) =>
+    request<Session>('/auth/reset', {
+      method: 'POST',
+      body: JSON.stringify({ email, code, password }),
+    }),
+
+  /** `password` va vacio en cuentas de Google o Apple: no tienen ninguna que teclear. */
+  deleteAccount: (token: string, password?: string) =>
+    request<void>('/me', {
+      method: 'DELETE',
+      headers: bearer(token),
+      body: JSON.stringify({ password }),
+    }),
+
+  /**
    * Guarda el perfil; el API sella `onboardedAt` la primera vez.
    *
    * `Partial` porque es un PATCH de verdad: mergea sobre lo que ya hay, asi que el mismo endpoint sirve
@@ -191,10 +217,4 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
-  registerDevice: (token: string, pushToken: string, platform: DevicePlatform) =>
-    request<void>('/me/devices', {
-      method: 'POST',
-      headers: bearer(token),
-      body: JSON.stringify({ token: pushToken, platform }),
-    }),
 };

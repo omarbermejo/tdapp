@@ -1,4 +1,5 @@
 import { api, bearer, request, type Task } from '@/features/auth/api';
+import { refreshTaskAlerts } from '@/features/notifications/reminders';
 import { syncTodayWidget } from '@/features/widgets/sync-today';
 
 /**
@@ -63,6 +64,19 @@ export type TaskQuery = { date?: string; status?: Task['status']; focusArea?: st
 const andSync = async <T>(token: string, work: Promise<T>): Promise<T> => {
   const result = await work;
   void syncTodayWidget(token);
+  /**
+   * Y los avisos, aqui y no en cada pantalla, por el mismo argumento del comentario de arriba —
+   * pero este caso lo hace obligatorio: marcar hecha a las 5:45 una tarea de las 6:00 pasa con la
+   * app AL FRENTE, sin cambio de `AppState`, asi que `useReminders` no se enteraria y el aviso
+   * sonaria a las 5:50 por algo que ya esta cerrado.
+   *
+   * En el start/stop del cronometro sobra, y se acepta: es un GET en un boton que se toca un puñado
+   * de veces al dia, contra cuatro sitios de los que acordarse.
+   *
+   * ponytail: reagenda todas desde cero en cada mutacion. Techo: `update` y `remove` ya saben el id
+   * y podrian cancelar solo el suyo, y `create` agendar solo el nuevo.
+   */
+  void refreshTaskAlerts(token);
   return result;
 };
 

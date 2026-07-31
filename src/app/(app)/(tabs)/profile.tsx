@@ -5,6 +5,7 @@ import { Card, Micro } from '@/components/ui/card';
 import { SchemeToggle } from '@/components/ui/scheme-toggle';
 import { Radius, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
+import { DeleteAccount } from '@/features/profile/delete-account';
 import { ProfileFields } from '@/features/profile/profile-fields';
 import { StreakCard } from '@/features/streak/streak-card';
 import { useStreak } from '@/features/streak/use-streak';
@@ -102,8 +103,12 @@ export default function ProfileScreen() {
         <ProfileFields user={user} />
 
         {/*
-          La cuenta no se toca, y es a proposito: `ProfileInput` no incluye nombre, correo ni
-          contraseña, y pintar un control que no puede guardar es peor que una etiqueta honesta.
+          El nombre, el correo y la contraseña siguen sin tocarse desde aqui: `ProfileInput` no los
+          incluye, y pintar un control que no puede guardar es peor que una etiqueta honesta. La
+          contraseña se cambia desde la pantalla de entrar, con el codigo del correo.
+
+          Lo que si vive aqui es borrarse. Esta tarjeta era la unica puramente informativa de la
+          pantalla, y borrar la cuenta es la unica accion que existe sobre la cuenta.
         */}
         <Card>
           <Micro>Tu cuenta</Micro>
@@ -111,6 +116,7 @@ export default function ProfileScreen() {
           <Text style={[Type.hint, { color: t.textMuted }]}>
             {ENTRY[user.authProvider ?? 'password']}
           </Text>
+          <DeleteAccount user={user} />
         </Card>
 
         <BigButton label="Cerrar sesión" variant="ghost" accent="copper" onPress={signOut} />
