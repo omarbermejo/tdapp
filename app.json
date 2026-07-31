@@ -13,7 +13,8 @@
     "ios": {
       "bundleIdentifier": "com.tdapp.tdapp",
       "usesAppleSignIn": true,
-      "icon": "./assets/brand/icon.png"
+      "icon": "./assets/brand/icon.png",
+      "appleTeamId": "BXQ4VVHV9L"
     },
     "android": {
       "package": "com.tdapp.tdapp",

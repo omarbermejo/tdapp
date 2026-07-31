@@ -4,8 +4,24 @@ import type { AccentName } from '@/constants/theme';
 
 /** El simulador alcanza localhost; un celular real no. Reusamos el host del dev server de Expo. */
 const devHost = Constants.expoConfig?.hostUri?.split(':')[0];
+
+/** El API desplegado. Es el destino por defecto de cualquier build instalado en un telefono. */
+const PRODUCTION_API = 'https://tdapp-api-production.up.railway.app';
+
+/**
+ * La URL base del API.
+ *
+ * El fallback esta detras de `__DEV__` a proposito. Antes caia a `devHost:3000` siempre, y en un build
+ * de release eso es una trampa: `hostUri` no existe sin dev server, asi que quedaba
+ * `http://localhost:3000` — el propio telefono— y la app arrancaba, pintaba el login y moria con un
+ * error de red genérico. Un fallo sin ruido en el build y sin pista en la pantalla.
+ *
+ * Con la guarda, un release que se quedara sin `EXPO_PUBLIC_API_URL` incrustada sigue funcionando
+ * contra produccion en vez de apuntarse al pie.
+ */
 export const API_URL =
-  process.env.EXPO_PUBLIC_API_URL || `http://${devHost ?? 'localhost'}:3000`;
+  process.env.EXPO_PUBLIC_API_URL ||
+  (__DEV__ ? `http://${devHost ?? 'localhost'}:3000` : PRODUCTION_API);
 
 export type User = {
   id: number;
