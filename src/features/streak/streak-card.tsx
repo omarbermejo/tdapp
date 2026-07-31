@@ -12,15 +12,14 @@ import Animated, {
 
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro } from '@/components/ui/card';
-import { Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import { Motion, Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import { weekdayInitial } from '@/features/tasks/day';
 
 import { bestLine, clemencyLine, headlineOf, levelsOf, weekLabel, type DayLevel } from './streak';
 import type { useStreak } from './use-streak';
 
 /** El punto entra escalonado, como la tira de la semana del home. Cortito: son siete. */
-const STEP_MS = 30;
-const ENTER = { duration: 220, easing: Easing.out(Easing.cubic) } as const;
+const ENTER = { duration: Motion.enter, easing: Easing.out(Easing.cubic) } as const;
 const DOT = 14;
 
 /**
@@ -54,11 +53,11 @@ function Dot({
   useEffect(() => {
     if (!animate) return;
     // .set() y no .value =: el compilador de React trata el shared value como inmutable.
-    enter.set(withDelay(index * STEP_MS, withTiming(1, ENTER)));
+    enter.set(withDelay(index * Motion.step, withTiming(1, ENTER)));
   }, [animate, index, enter]);
 
   useEffect(() => {
-    fill.set(animate ? withTiming(level === 'closed' ? 1 : 0, { duration: 240 }) : level === 'closed' ? 1 : 0);
+    fill.set(animate ? withTiming(level === 'closed' ? 1 : 0, ENTER) : level === 'closed' ? 1 : 0);
   }, [level, animate, fill]);
 
   /** El aro pendiente va en `textMuted` y no en `line`: `line` da 1.2:1 sobre el papel y desaparece. */

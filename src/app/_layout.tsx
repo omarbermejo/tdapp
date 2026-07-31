@@ -1,3 +1,5 @@
+import { Outfit_500Medium } from '@expo-google-fonts/outfit/500Medium';
+import { Outfit_600SemiBold } from '@expo-google-fonts/outfit/600SemiBold';
 import { Outfit_800ExtraBold } from '@expo-google-fonts/outfit/800ExtraBold';
 import { useFonts } from 'expo-font';
 import { Stack, ThemeProvider } from 'expo-router';
@@ -43,8 +45,18 @@ function RootNavigator() {
   // La hora que prometió el onboarding, agendada de verdad. Mismo gate y mismo momento que el widget:
   // antes de 'ready' no hay perfil con hora ni tareas que avisar.
   useReminders(token, user, stage === 'ready');
-  // Los titulares son la fuente cargada: sin ella la primera pantalla parpadea con otra tipografia.
-  const [fontsLoaded, fontError] = useFonts({ Outfit_800ExtraBold });
+  /**
+   * Los tres pesos de Outfit. Sin ellos la primera pantalla parpadea con otra tipografia.
+   *
+   * Son tres y no uno porque ahora la fuente de marca tambien viste los CONTROLES (ver `Type` en
+   * `constants/theme`): 800 para los titulares, 600 para micro-rotulos y botones, 500 para el valor
+   * de una pastilla. Un peso que no se carga se cae a sans-serif en Android, no al de al lado.
+   */
+  const [fontsLoaded, fontError] = useFonts({
+    Outfit_800ExtraBold,
+    Outfit_600SemiBold,
+    Outfit_500Medium,
+  });
 
   /**
    * `fontError` cuenta como listo: si la fuente no bajó, la app se pinta con la del sistema y eso es

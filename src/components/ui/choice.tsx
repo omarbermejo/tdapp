@@ -131,7 +131,19 @@ function Card({
           onPressOut={press.onPressOut}
           style={styles.touch}>
           {!!option.icon && (
-            <Image source={option.icon} style={styles.icon} contentFit="contain" accessible={false} />
+            <Image
+              source={option.icon}
+              style={styles.icon}
+              /**
+               * Sin esto los iconos DESAPARECEN en modo oscuro. Los SVG de Lucide vienen con
+               * `stroke="#283618"` cableado dentro del archivo — el verde tinta de modo claro —, así
+               * que sobre la tarjeta oscura (#141414) daban 1.3:1. En claro el tinte es ese mismo
+               * hex vía `t.text`, o sea que el chip no cambia ni un pixel: esto solo arregla oscuro.
+               */
+              tintColor={t.text}
+              contentFit="contain"
+              accessible={false}
+            />
           )}
           {!!option.swatch && <View style={[styles.swatch, { backgroundColor: swatch.solid }]} />}
           <Text style={[Type.label, { color: t.text }]}>{option.label}</Text>

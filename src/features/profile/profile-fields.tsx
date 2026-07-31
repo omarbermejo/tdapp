@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro } from '@/components/ui/card';
-import { Choice } from '@/components/ui/choice';
+import { Choice, type Option } from '@/components/ui/choice';
 import { DateField } from '@/components/ui/date-field';
 import { FormError } from '@/components/ui/form-error';
 import { Pill } from '@/components/ui/pill';
-import { Space, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import { Motion, Space, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import { ApiError, type User } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import {
@@ -41,8 +41,29 @@ const CONFIRM_MS = 700;
 
 const MAX_FOCUS = 3;
 
+/**
+ * Cómo entra y cómo se va un panel.
+ *
+ * Están aquí arriba porque son CINCO paneles: con la pareja repetida en cada uno, el día que la
+ * salida cambie quedarán tres iguales y dos distintos, que es exactamente el tipo de incoherencia
+ * que no se ve en el diff y sí en la pantalla.
+ *
+ * `FadeOutDown` y no `FadeOutUp`: `FadeInDown` nace 25pt abajo y sube, así que lo simétrico es que
+ * se retire por donde vino. Con la salida hacia arriba el panel se iba CONTRA la pastilla que lo
+ * abrió, o sea leyéndose como que subía a esconderse detrás de ella.
+ *
+ * Y antes no había `exiting` en absoluto: los paneles entraban con un fundido y desaparecían de
+ * golpe. Media animación se nota más que ninguna.
+ */
+const IN = FadeInDown.duration(Motion.enter);
+const OUT = FadeOutDown.duration(Motion.exit);
+
 const labelOf = (options: readonly { value: string; label: string }[], value: string) =>
   options.find((option) => option.value === value)?.label ?? value;
+
+/** El icono del catálogo, para que la pastilla enseñe la misma marca que el chip elegido. */
+const iconOf = (options: readonly Option[], value: string) =>
+  options.find((option) => option.value === value)?.icon;
 
 /** '22 ago 1995'. Corto a propósito: en la pastilla, "22 de agosto de 1995" se elide. */
 const birthLabel = (iso: string | null) =>
@@ -128,12 +149,20 @@ export function ProfileFields({ user }: { user: User }) {
       <Text style={[Type.hint, { color: t.textMuted }]}>Toca lo que ya no aplique.</Text>
 
       <View style={styles.pills}>
+        {/*
+          Cada pastilla lleva el icono de SU valor, no uno fijo de la categoría: el sol bajando de
+          "Tarde", el megáfono de "Firme". Son los mismos SVG de Lucide que el chip del panel, así que
+          la marca que elegiste es la que queda a la vista. Sin assets nuevos.
+        */}
         <Pill
           label="Aviso"
           value={`${labelOf(REMINDER_STYLE, user.reminderStyle)} · ${labelOf(REMINDER_HOUR, String(user.reminderHour))}`}
           active={panel === 'aviso'}
           accent={accent}
           bg="sunken"
+          // El del estilo y no el de la hora: las horas son presets sin icono, y el estilo es lo
+          // que de verdad cambia cómo se siente el aviso.
+          icon={iconOf(REMINDER_STYLE, user.reminderStyle)}
           onPress={() => open('aviso')}
         />
         <Pill
@@ -142,6 +171,7 @@ export function ProfileFields({ user }: { user: User }) {
           active={panel === 'energia'}
           accent={accent}
           bg="sunken"
+          icon={iconOf(PEAK_ENERGY, user.peakEnergy)}
           onPress={() => open('energia')}
         />
         <Pill
@@ -151,6 +181,9 @@ export function ProfileFields({ user }: { user: User }) {
           accent={accent}
           bg="sunken"
           wide
+          // El del PRIMERO, y solo uno: tres iconos en fila delante de "Estudio · Salud · Dinero"
+          // duplican la enumeración que el texto ya hace y empujan el valor a la segunda línea.
+          icon={iconOf(FOCUS_AREAS, user.focusAreas[0] ?? '')}
           onPress={() => open('focos')}
         />
         <Pill
@@ -160,10 +193,12 @@ export function ProfileFields({ user }: { user: User }) {
           accent={accent}
           bg="sunken"
           // El único `solid` decorativo de la pantalla, y el que hace que la pastilla no necesite
-          // decir "Tu color": la muestra ya lo dice.
+          // decir "Tu color": la muestra ya lo dice. Por eso esta no lleva icono — la muestra ES el icono.
           dot={tint.solid}
           onPress={() => open('color')}
         />
+        {/* La única sin marca: el catálogo de fechas no existe, y dibujarle un icono genérico de
+            calendario sería el único de la tarjeta que no dice nada sobre su valor. */}
         <Pill
           label="Naciste"
           value={birthLabel(user.birthDate)}
@@ -179,7 +214,7 @@ export function ProfileFields({ user }: { user: User }) {
         botón "Guardar" solo añadiría un paso. La confirmación es la repintada de la app.
       */}
       {panel === 'aviso' && (
-        <Animated.View entering={FadeInDown.duration(220)} style={styles.panel}>
+        <Animated.View entering={IN} exiting={OUT} style={styles.panel}>
           <Choice
             label="Cómo te aviso"
             options={REMINDER_STYLE}
@@ -199,7 +234,7 @@ export function ProfileFields({ user }: { user: User }) {
       )}
 
       {panel === 'energia' && (
-        <Animated.View entering={FadeInDown.duration(220)} style={styles.panel}>
+        <Animated.View entering={IN} exiting={OUT} style={styles.panel}>
           <Choice
             label="Cuándo rindes mejor"
             hint="Marcamos esa franja en tu calendario."
@@ -212,7 +247,7 @@ export function ProfileFields({ user }: { user: User }) {
       )}
 
       {panel === 'color' && (
-        <Animated.View entering={FadeInDown.duration(220)} style={styles.panel}>
+        <Animated.View entering={IN} exiting={OUT} style={styles.panel}>
           <Choice
             options={ACCENT_COLOR}
             value={accent}
@@ -223,7 +258,7 @@ export function ProfileFields({ user }: { user: User }) {
       )}
 
       {panel === 'focos' && (
-        <Animated.View entering={FadeInDown.duration(220)} style={styles.panel}>
+        <Animated.View entering={IN} exiting={OUT} style={styles.panel}>
           <Choice
             label="Focos"
             hint={`Hasta ${MAX_FOCUS}. Menos focos, más resultados.`}
@@ -258,7 +293,7 @@ export function ProfileFields({ user }: { user: User }) {
       )}
 
       {panel === 'naciste' && (
-        <Animated.View entering={FadeInDown.duration(220)} style={styles.panel}>
+        <Animated.View entering={IN} exiting={OUT} style={styles.panel}>
           <DateField label="Día, mes y año" value={birth} onChange={setBirth} accent={accent} />
           <BigButton
             label="Guardar"

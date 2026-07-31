@@ -14,17 +14,19 @@ export function usePressScale({
   haptic = Haptics.ImpactFeedbackStyle.Light,
 }: { to?: number; haptic?: Haptics.ImpactFeedbackStyle } = {}) {
   const scale = useSharedValue(1);
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  // .get()/.set() y no .value: el compilador de React trata el shared value como inmutable, y era
+  // el lint que otros dos archivos ya arrastraban en sus comentarios.
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
 
   return {
     style,
     onPressIn: () => {
-      scale.value = withSpring(to, SNAPPY);
+      scale.set(withSpring(to, SNAPPY));
       // En web no hay motor haptico; el catch evita ensuciar la consola.
       Haptics.impactAsync(haptic).catch(() => {});
     },
     onPressOut: () => {
-      scale.value = withSpring(1, SNAPPY);
+      scale.set(withSpring(1, SNAPPY));
     },
   };
 }

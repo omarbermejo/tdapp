@@ -1,13 +1,42 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import Animated, { LinearTransition } from 'react-native-reanimated';
 
-import { Radius, Space, Type, useAccent, useShadow, useTheme, type AccentName } from '@/constants/theme';
+import {
+  Motion,
+  Radius,
+  Space,
+  Type,
+  useAccent,
+  useShadow,
+  useTheme,
+  type AccentName,
+} from '@/constants/theme';
+
+/**
+ * La tarjeta CRECE cuando algo se abre dentro, en vez de saltar de alto.
+ *
+ * Vive aquí y no en las pantallas porque el salto no era de una: cada panel del perfil, la fecha del
+ * onboarding y la fila que se despliega hacían lo mismo — el contenido entraba con un fundido de
+ * 220ms mientras la caja que lo contiene cambiaba de tamaño en UN frame. El fundido era lo elegante
+ * y el salto lo que se veía. Con la transición aquí, todo lo que ya usa `Card` queda cosido sin
+ * tocar ni una pantalla.
+ *
+ * Lineal y no muelle: un rebote en la ALTURA empuja hacia abajo todo lo que viene después de la
+ * tarjeta, y eso se lee como que la pantalla se sacudió. Reanimated respeta "reducir movimiento"
+ * solo en las de layout, así que no hay guard que escribir.
+ */
+const RESIZE = LinearTransition.duration(Motion.enter);
 
 /** Papel sobre papel: la tarjeta se levanta con luz y una sombra mínima, nunca con borde grueso. */
 export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   const t = useTheme();
   const shadow = useShadow();
-  return <View style={[styles.card, { backgroundColor: t.surface }, shadow, style]}>{children}</View>;
+  return (
+    <Animated.View layout={RESIZE} style={[styles.card, { backgroundColor: t.surface }, shadow, style]}>
+      {children}
+    </Animated.View>
+  );
 }
 
 /**

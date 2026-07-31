@@ -12,16 +12,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import {
-  Radius,
-  Space,
-  Touch,
-  Type,
-  useAccent,
-  useTheme,
-  type Accent,
-  type AccentName,
-} from '@/constants/theme';
+import { Motion, Radius, Space, Touch, Type, useAccent, useTheme, type Accent, type AccentName } from '@/constants/theme';
 import { localDate } from '@/features/tasks/api';
 import { dayLabel } from '@/features/tasks/day';
 import { usePressScale } from '@/hooks/use-press-scale';
@@ -64,7 +55,7 @@ const FADE = 180;
 const LAND = { damping: 15, stiffness: 320 };
 
 /** El relleno viaja sin rebote: al ir y venir entre dias, un muelle aqui se siente nervioso. */
-const TRAVEL = { duration: 200, easing: Easing.out(Easing.cubic) } as const;
+const TRAVEL = { duration: Motion.enter, easing: Easing.out(Easing.cubic) } as const;
 
 /**
  * Siete columnas a `flex: 1`, asi que cada una mide exactamente un septimo de la fila. Con eso

@@ -18,7 +18,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
-import { Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import { Motion, Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { FOCUS_AREAS } from '@/features/auth/options';
@@ -61,7 +61,7 @@ const SPRING = { mass: 1, damping: 24, stiffness: 320 } as const;
 const POP = { mass: 0.6, damping: 12, stiffness: 380 } as const;
 
 /** El cruce del relleno. Corto a proposito: acompaña al haptico, no lo hace esperar. */
-const CROSS = { duration: 180 } as const;
+const CROSS = { duration: Motion.exit } as const;
 
 const tick = () => {
   Haptics.selectionAsync().catch(() => {});
@@ -203,7 +203,7 @@ export function TaskRow({
 
   useEffect(() => {
     // La espera del servidor ya no es un corte a opacidad 0.5: se apaga y se prende.
-    dim.value = withTiming(busy ? 0.55 : 1, { duration: 150 });
+    dim.value = withTiming(busy ? 0.55 : 1, { duration: Motion.exit });
   }, [busy, dim]);
 
   const rowStyle = useAnimatedStyle(() => ({ opacity: dim.value }));

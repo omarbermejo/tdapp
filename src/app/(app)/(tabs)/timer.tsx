@@ -2,9 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   FadeIn,
+  FadeInDown,
   FadeOut,
   LinearTransition,
+  useAnimatedStyle,
   useReducedMotion,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 
 import { BigButton } from '@/components/ui/big-button';
@@ -12,7 +18,16 @@ import { Card, Micro } from '@/components/ui/card';
 import { Choice, type Option } from '@/components/ui/choice';
 import { Confetti } from '@/components/ui/confetti';
 import { Bud } from '@/components/ui/stem';
-import { Space, Type, accentInks, accentOnDark, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import {
+  Motion,
+  Space,
+  Type,
+  accentInks,
+  accentOnDark,
+  useAccent,
+  useTheme,
+  type AccentName,
+} from '@/constants/theme';
 import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { tasksApi } from '@/features/tasks/api';
@@ -75,6 +90,19 @@ const PHASES: Record<Phase, { micro: string; line: string; alarm: string }> = {
 const NONE = '';
 
 /**
+ * El latido de la lectura cuando cae un minuto. Muelle local y no un token, por la misma razón que
+ * los demás muelles de la app: lo que hace falta aquí es un rebote MÍNIMO —el número no se celebra,
+ * se acusa— y por eso es más rígido y menos pesado que el `POP` de marcar una tarea.
+ */
+const BEAT = { damping: 14, stiffness: 340, mass: 0.5 } as const;
+
+/**
+ * El escalón de la cascada de entrada. Es el `Motion.step` de la casa por dos: aquí son cuatro
+ * bloques grandes y no siete puntos, y con 30ms la cascada no se lee como cascada.
+ */
+const CASCADE = Motion.step * 2;
+
+/**
  * El título de una tarea cabe en 120 caracteres y el chip no. Se recorta solo para la etiqueta: la
  * línea de debajo de la carátula sí lo dice entero, que es donde importa leerlo.
  */
@@ -125,6 +153,12 @@ export default function TimerScreen() {
   const [party, setParty] = useState(0);
   /** La isla ya se reconcilió con lo recuperado. Sin esto se repetiría en cada render. */
   const reconciled = useRef(false);
+  /**
+   * El latido de la lectura. Vive aquí arriba con los demás hooks: el `useEffect` que lo dispara
+   * depende del minuto, y un hook dentro de una rama reventaría al cambiar de estado la pantalla.
+   */
+  const beat = useSharedValue(1);
+  const beatStyle = useAnimatedStyle(() => ({ transform: [{ scale: beat.value }] }));
 
   const tasks = day.tasks ?? [];
   /** Solo las pendientes se ofrecen: enfocar una que ya cerraste no significa nada. */
@@ -230,6 +264,26 @@ export default function TimerScreen() {
       coolCheer();
     };
   }, []);
+
+  /**
+   * El minuto que se está viendo. Es la ÚNICA cosa de la lectura que cambia despacio: los segundos
+   * bajan cuatro veces por segundo y no se pueden acusar de nada, pero un minuto que CAE es un
+   * evento — el mismo argumento por el que la carátula son marcas que se apagan y no un arco que se
+   * acorta un pelo por segundo.
+   */
+  const minute = Math.ceil(pom.leftMs / 60_000);
+
+  /**
+   * El latido cuando cae un minuto: el único momento en que el número hace algo por su cuenta.
+   *
+   * Solo corriendo. Girando la carátula el minuto cambia con el dedo, y ahí el latido competiría con
+   * el gesto; en pausa no cae ninguno. Y `.set()` en vez de `.value =` porque el React Compiler trata
+   * el shared value como inmutable — es la misma nota que hay en `streak-card`.
+   */
+  useEffect(() => {
+    if (still || !pom.running) return;
+    beat.set(withSequence(withTiming(1.03, { duration: Motion.exit / 2 }), withSpring(1, BEAT)));
+  }, [minute, still, pom.running, beat]);
 
   const fallback: AccentName = user?.accentColor ?? 'olive';
   /**
@@ -385,7 +439,11 @@ export default function TimerScreen() {
       {/* La lectura va ENCIMA y no dentro del dial: el aro está memoizado por `lit`, y meterle los
           dígitos como hijos lo repintaría cuatro veces por segundo con sus 60 vistas. */}
       <View style={styles.readout} pointerEvents="none">
-        <Text style={[Type.count, { color: t.text }]}>{clock(pom.leftMs)}</Text>
+        {/* El latido: 1.03 y nada más. La lectura ya es de 64pt en un dial de 264, así que un pulso
+            grande la haría chocar contra las marcas — lo que hace falta es que se NOTE, no que salte. */}
+        <Animated.Text style={[Type.count, beatStyle, { color: t.text }]}>
+          {clock(pom.leftMs)}
+        </Animated.Text>
         <Micro>{phase.micro}</Micro>
       </View>
     </View>
@@ -422,27 +480,43 @@ export default function TimerScreen() {
               face
             )}
 
+            {/*
+              La línea, el ciclo y los botones entran en CASCADA, y la carátula no: ella ya está
+              cuando la pantalla abre, porque es el objeto de la pantalla. Los tres de abajo llegan
+              detrás con 60ms entre cada uno, que es lo que convierte "todo apareció" en "esto se
+              armó". Es el mismo idioma que la tira de la semana y los puntos de la racha, solo que
+              aquí son cuatro bloques grandes y no siete piezas.
+
+              `animate &&` en vez de dejar que reanimated lo decida: con "reducir movimiento" puesto
+              no se monta ni la animación.
+            */}
             {/* La línea dice CON QUÉ cuando hay tarea, y qué hacer con el bloque cuando no. El
                 título entero vive aquí; en el chip iba recortado. */}
-            <Text style={[Type.body, styles.line, { color: t.textMuted }]} numberOfLines={2}>
+            <Animated.Text
+              entering={animate ? FadeInDown.duration(Motion.enter).delay(CASCADE) : undefined}
+              style={[Type.body, styles.line, { color: t.textMuted }]}
+              numberOfLines={2}>
               {editable
                 ? 'Gira la carátula para elegir cuánto.'
                 : pom.phase === 'focus' && task
                   ? task.title
                   : phase.line}
-            </Text>
+            </Animated.Text>
 
             {/* El ciclo con los mismos brotes que el resto de la app: uno por enfoque cerrado. */}
-            <View
+            <Animated.View
+              entering={animate ? FadeInDown.duration(Motion.enter).delay(CASCADE * 2) : undefined}
               accessible
               accessibilityLabel={`${closed} de ${ROUNDS} enfoques cerrados`}
               style={styles.cycle}>
               {Array.from({ length: ROUNDS }, (_, i) => (
                 <Bud key={i} on={i < closed} accent={fallback} />
               ))}
-            </View>
+            </Animated.View>
 
-            <View style={styles.actions}>
+            <Animated.View
+              entering={animate ? FadeInDown.duration(Motion.enter).delay(CASCADE * 3) : undefined}
+              style={styles.actions}>
               <BigButton
                 label={pom.running ? 'Pausar' : pom.fresh ? 'Empezar' : 'Reanudar'}
                 accent={fallback}
@@ -456,7 +530,7 @@ export default function TimerScreen() {
                 accent={fallback}
                 onPress={pom.fresh ? jump : restart}
               />
-            </View>
+            </Animated.View>
           </Animated.View>
 
           {/*

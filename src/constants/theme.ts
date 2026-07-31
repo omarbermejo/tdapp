@@ -83,12 +83,42 @@ export const Palette = {
    * Neutros del modo claro. Las rampas de marca solo van hacia el crema, y sobre blanco
    * un crema no separa nada: para levantar una tarjeta hay que bajar en gris, no subir
    * en amarillo.
+   *
+   * El papel de la app es el blanco puro de aqui, y no se toca. Lo que cambio es lo que se
+   * levanta encima: eso ahora sale de `sand`.
    */
   paper: {
     0: '#ffffff',
     50: '#fafaf7',
     100: '#f1f1ea',
     200: '#e6e6dc',
+  },
+  /**
+   * Neutros CÁLIDOS: la tarjeta y lo que se hunde dentro de ella.
+   *
+   * El papel de la app es blanco (`paper[0]`) y ahi se queda — eso es decision de Omar. Lo que
+   * gana el crema de la marca (`cornsilk`, que existia en la paleta sin usarse en ningun sitio)
+   * es la TARJETA: sobre blanco, un crema separa por temperatura en vez de por un gris, que era
+   * lo que hacia que las tarjetas casi no se vieran.
+   *
+   * Los dos pasos de abajo no salen de la rampa `cornsilk` porque esa se va al amarillo saturado
+   * en cuanto baja (`cornsilk[400]` ya es #fbeb84): son el mismo crema oscurecido, y sirven para
+   * el relleno apagado y el hairline sin ensuciarse.
+   */
+  sand: {
+    /** La tarjeta: el `cornsilk` de la marca, tal cual. */
+    0: '#fefae0',
+    /**
+     * Lo hundido DENTRO de la tarjeta crema: chips sin seleccionar, pistas de progreso, avatares.
+     *
+     * El primer intento fue #f7f1d5 y era demasiado cerca del crema — los chips del perfil se leían
+     * como fantasmas, solo por su borde. Este paso separa 0.131 de luminancia contra la tarjeta, o
+     * sea un pelo MÁS que el par blanco/#f1f1ea de antes (0.123), así que el escalón que ya
+     * funcionaba se mantiene. Y `textMuted` encima da 4.8:1, que pasa AA.
+     */
+    100: '#f4ecc9',
+    /** Hairline. Un paso más abajo que lo hundido, para que un borde sobre relleno todavía se vea. */
+    200: '#ece4bf',
   },
   /**
    * Neutros del modo oscuro. Son grises puros a proposito: derivar el fondo de la rampa
@@ -109,8 +139,9 @@ export const Palette = {
 /**
  * Tokens semánticos por esquema.
  *
- * En claro las tarjetas son un tono MÁS OSCURAS que el canvas; en oscuro, más claras.
- * En los dos casos la separación es de luz, nunca de borde grueso.
+ * El papel es blanco en claro y negro en oscuro. La tarjeta se separa sola y nunca con un
+ * borde grueso: en claro por TEMPERATURA (el crema de la marca sobre el blanco), en oscuro
+ * por luz (un gris sobre el negro).
  *
  * `ink` es el relleno del CTA y `onInk` su texto: se invierten entre esquemas, porque
  * un botón oscuro sobre fondo oscuro deja de ser el ancla de la pantalla.
@@ -134,12 +165,14 @@ export type Tokens = {
 
 const TOKENS: Record<Scheme, Tokens> = {
   light: {
+    /** Blanco puro. El papel de la app no se discute. */
     canvas: Palette.paper[0],
-    surface: Palette.paper[50],
+    /** La tarjeta: el crema de la marca, que separa por temperatura y no por un gris. */
+    surface: Palette.sand[0],
     /** Relleno apagado: pistas de progreso, chips sin seleccionar, avatares. */
-    sunken: Palette.paper[100],
+    sunken: Palette.sand[100],
     /** Hairline de 1pt. Nunca bordes gruesos: el peso lo carga la tipografía. */
-    line: Palette.paper[200],
+    line: Palette.sand[200],
 
     text: Palette.blackForest[500],
     textMuted: Palette.oliveLeaf[500],
@@ -328,14 +361,42 @@ export const Space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, huge: 48 }
 export const Touch = { input: 56, button: 58, chip: 48, icon: 44 } as const;
 
 /**
- * Titulares en Outfit ExtraBold: geométrica y de trazo grueso, la contraparte del display
- * del diseño de referencia. El texto de interfaz se queda en la fuente del sistema —
- * dos fuentes, una para gritar y otra para leer.
+ * El ritmo de la app: UNA pareja de duraciones para todo lo que aparece y desaparece.
  *
- * Solo cargamos el peso 800, así que estos estilos NO llevan fontWeight: en Android
- * pedir un peso que la familia no tiene la tira a sans-serif.
+ * Existe porque cada pieza traía su propio número (220 aquí, 240 allá) y eso es justo lo que hace
+ * que una pantalla se sienta cosida en vez de diseñada. Los muelles NO están aquí a propósito: cada
+ * uno tiene su argumento en el control que lo usa (seco para un toque, con rebote para una elección),
+ * y unificarlos borraría esa diferencia.
+ *
+ * La salida es más corta que la entrada, y no es capricho: lo que llega pide atención, lo que se va
+ * ya no la merece. Una salida tan larga como la entrada se lee como lentitud.
+ */
+export const Motion = {
+  enter: 220,
+  exit: 160,
+  /** Escalón entre hermanos que entran en cascada (los siete días de la semana). */
+  step: 30,
+} as const;
+
+/**
+ * Tres roles, dos familias.
+ *
+ * `Display` (Outfit ExtraBold) grita: números y titulares. `Brand`/`BrandMedium` (Outfit 600/500)
+ * son la voz de los CONTROLES — micro-rótulos, valores de pastilla, etiquetas de botón. Eso salía
+ * en la fuente del sistema, y por eso el perfil se leía como una pantalla de Ajustes de iOS con
+ * colores bonitos: la personalidad estaba solo en los tres números grandes de la pantalla.
+ *
+ * La PROSA se queda en la fuente del sistema (`body`, `hint`). No es pereza: San Francisco está
+ * dibujada para leerse en cuerpo pequeño, con óptica por tamaño, y cambiarla pagaría legibilidad
+ * por personalidad en el único texto que de verdad hay que leer. La regla queda: la app habla en
+ * Outfit y explica en la del sistema.
+ *
+ * Cada estilo nombra su familia y NINGUNO lleva fontWeight: pedir un peso que la familia cargada
+ * no tiene la tira a sans-serif en Android. Los tres pesos se cargan en `app/_layout.tsx`.
  */
 export const Display = 'Outfit_800ExtraBold';
+export const Brand = 'Outfit_600SemiBold';
+export const BrandMedium = 'Outfit_500Medium';
 
 export const Type = {
   display: { fontFamily: Display, fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
@@ -358,10 +419,17 @@ export const Type = {
   title: { fontFamily: Display, fontSize: 26, lineHeight: 32, letterSpacing: -0.4 },
   section: { fontFamily: Display, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
   metric: { fontFamily: Display, fontSize: 30, lineHeight: 34, letterSpacing: -0.4 },
-  button: { fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  button: { fontFamily: Brand, fontSize: 17, lineHeight: 22 },
   body: { fontSize: 16, lineHeight: 24, fontWeight: '500' },
-  label: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  /** El valor de un control: lo que dice una pastilla o un chip. */
+  label: { fontFamily: BrandMedium, fontSize: 15, lineHeight: 20 },
   hint: { fontSize: 14, lineHeight: 20, fontWeight: '500' },
-  /** Micro-label en mayúsculas: es lo que ordena cada bloque sin agregar cajas. */
-  micro: { fontSize: 12, lineHeight: 16, fontWeight: '600', letterSpacing: 0.9, textTransform: 'uppercase' },
+  /**
+   * Micro-label en mayúsculas: es lo que ordena cada bloque sin agregar cajas.
+   *
+   * El tracking sube de 0.9 a 1.1 con el cambio de familia: Outfit es geométrica y sus mayúsculas
+   * son más redondas y anchas que las de San Francisco, así que a 12pt se apiñaban con el valor
+   * viejo. Es el ajuste que hace que "TU RACHA" se lea como un rótulo y no como una palabra.
+   */
+  micro: { fontFamily: Brand, fontSize: 12, lineHeight: 16, letterSpacing: 1.1, textTransform: 'uppercase' },
 } as const;

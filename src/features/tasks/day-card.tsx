@@ -14,7 +14,7 @@ import Animated, {
 
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro } from '@/components/ui/card';
-import { Radius, Space, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import { Motion, Radius, Space, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 
@@ -23,17 +23,24 @@ import { accentForFocus } from './focus-accent';
 import type { useTasks } from './use-tasks';
 
 /** Entrada de cada segmento: sube y aparece, sin viaje. */
-const ENTER = { duration: 260, easing: Easing.out(Easing.cubic) } as const;
+const ENTER = { duration: Motion.enter, easing: Easing.out(Easing.cubic) } as const;
 
 /** El escalonado se corta a los 6 segmentos: con un dia largo la barra tardaba en armarse. */
-const STEP_MS = 40;
+
+/** El escalonado se corta a los 6 segmentos: con un dia largo la barra tardaba en armarse. */
 const STEP_CAP = 6;
 
 /** ζ≈1: llega y se queda. El usuario pidió suavizar, así que nada de rebote. */
 const SETTLE = { damping: 22, stiffness: 200, mass: 0.6 } as const;
 
-/** Proporcion del viewBox del sticker: escala por ancho sin deformarse. */
-const BUBBLE_RATIO = 101 / 91;
+/**
+ * Proporcion del viewBox del sticker: escala por ancho sin deformarse.
+ *
+ * Es el reloj de arena y no la burbuja de antes, que ya vive en el calendario: dos pantallas con el
+ * mismo dibujo diciendo "aqui no hay nada" se leen como una sola plantilla repetida. Y dice lo que
+ * dice la linea de abajo — "el dia cabe entero" es tiempo disponible, no un fracaso.
+ */
+const STICKER_RATIO = 87 / 99;
 
 /**
  * "Reducir movimiento" del sistema.
@@ -125,11 +132,11 @@ function Segment({
 
   useEffect(() => {
     if (motion === null) return;
-    enter.value = motion ? withDelay(Math.min(index, STEP_CAP) * STEP_MS, withTiming(1, ENTER)) : 1;
+    enter.value = motion ? withDelay(Math.min(index, STEP_CAP) * Motion.step, withTiming(1, ENTER)) : 1;
   }, [motion, index, enter]);
 
   useEffect(() => {
-    fill.value = withTiming(done ? 1 : 0, { duration: 240 });
+    fill.value = withTiming(done ? 1 : 0, ENTER);
   }, [done, fill]);
 
   const style = useAnimatedStyle(() => ({
@@ -222,7 +229,7 @@ export function DayCard({
     body = (
       <>
         <Image
-          source={require('@/assets/stickers/bubble.svg')}
+          source={require('@/assets/stickers/hourglass.svg')}
           style={styles.sticker}
           contentFit="contain"
           accessible={false}
@@ -272,7 +279,7 @@ const styles = StyleSheet.create({
   barTight: { gap: 2 },
   segment: { flex: 1, height: 12, borderRadius: Radius.pill },
   // Chico y centrado: acompaña al mensaje, no se vuelve la ilustracion de la pantalla.
-  sticker: { width: 88, aspectRatio: BUBBLE_RATIO, alignSelf: 'center', marginTop: Space.xs },
+  sticker: { width: 76, aspectRatio: STICKER_RATIO, alignSelf: 'center', marginTop: Space.xs },
   // El CTA cierra la tarjeta: un paso más de aire lo separa del dato y lo deja como acción.
   cta: { marginTop: Space.xs },
 });

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Alert, StyleSheet, Text } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 
 import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
 import { FormError } from '@/components/ui/form-error';
-import { Space, Type, useTheme } from '@/constants/theme';
+import { Motion, Space, Type, useTheme } from '@/constants/theme';
 import { ApiError, type User } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 
@@ -72,8 +72,12 @@ export function DeleteAccount({ user }: { user: User }) {
         }}
       />
 
+      {/* Mismo par que los paneles de `profile-fields`: entra desde abajo y se retira por donde vino. */}
       {open && (
-        <Animated.View entering={FadeInDown.duration(220)} style={styles.panel}>
+        <Animated.View
+          entering={FadeInDown.duration(Motion.enter)}
+          exiting={FadeOutDown.duration(Motion.exit)}
+          style={styles.panel}>
           <Text style={[Type.hint, { color: t.textMuted }]}>
             Se van tus tareas, tu racha y lo que sé de ti. No hay forma de recuperarlo.
           </Text>
