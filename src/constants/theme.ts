@@ -238,6 +238,25 @@ export function accentOnDark(name?: string | null): string {
 }
 
 /**
+ * Los DOS pasos legibles del acento, uno por esquema. Tampoco es un hook.
+ *
+ * Es el complemento de `accentOnDark`, y la diferencia importa: la pantalla de bloqueo y la Isla son
+ * siempre negras, pero un widget de la pantalla de INICIO se dibuja sobre el material del sistema, que
+ * sí sigue el claro/oscuro de verdad. Ahí el `colorScheme` que recibe la extensión no miente, así que
+ * viajan los dos pasos y quien pinta elige.
+ *
+ * (En las familias `accessory*` — las de la pantalla de bloqueo — no se usa ninguno: el sistema pinta
+ * todo monocromo y un color propio se ignora o se ve sucio.)
+ */
+export function accentInks(name?: string | null): { light: string; dark: string } {
+  const key = name as AccentName;
+  return {
+    light: (ACCENTS.light[key] ?? ACCENTS.light.olive).ink,
+    dark: (ACCENTS.dark[key] ?? ACCENTS.dark.olive).ink,
+  };
+}
+
+/**
  * La sombra de tarjeta solo existe en claro: en oscuro una sombra negra sobre fondo
  * oscuro no se ve, y lo que separa es el escalón de luz de `surface`.
  */

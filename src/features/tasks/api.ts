@@ -1,4 +1,5 @@
 import { api, bearer, request, type Task } from '@/features/auth/api';
+import { syncTodayWidget } from '@/features/widgets/sync-today';
 
 /**
  * El dia del usuario, no el del servidor.
@@ -48,6 +49,24 @@ export type NewTask = {
 export type TaskQuery = { date?: string; status?: Task['status']; focusArea?: string };
 
 /**
+ * Refresca el widget despues de una mutacion, y devuelve lo que devolvia la mutacion.
+ *
+ * Vive AQUI y no en cada pantalla a proposito. El widget solo se actualizaba al volver la app al
+ * frente (`useWidgetSync`), asi que completar una tarea y salir a la pantalla de inicio dejaba el
+ * widget diciendo lo viejo — justo en el momento en que el widget es lo unico que se ve. Y son cuatro
+ * sitios los que mutan (crear, marcar, borrar, cronometro): puesto en el cliente no se puede olvidar
+ * ninguno, y el que agregue el quinto lo hereda gratis.
+ *
+ * No espera al refresco (`void`): la pantalla no debe quedarse colgada de un widget, y si falla ya se
+ * queja `syncTodayWidget` por su cuenta.
+ */
+const andSync = async <T>(token: string, work: Promise<T>): Promise<T> => {
+  const result = await work;
+  void syncTodayWidget(token);
+  return result;
+};
+
+/**
  * Los tipos `Task` y `Today` y el `today()` crudo viven en features/auth/api.ts, que es donde
  * esta el cliente http. Aqui va lo que le falta al feature de tareas.
  */
@@ -62,11 +81,14 @@ export const tasksApi = {
    * ninguno: lo que se anota para hoy tiene que llevar la hora local de hoy.
    */
   create: (token: string, input: NewTask) =>
-    request<{ task: Task }>('/tasks', {
-      method: 'POST',
-      headers: bearer(token),
-      body: JSON.stringify(input),
-    }),
+    andSync(
+      token,
+      request<{ task: Task }>('/tasks', {
+        method: 'POST',
+        headers: bearer(token),
+        body: JSON.stringify(input),
+      })
+    ),
 
   list: (token: string, query: TaskQuery = {}) => {
     const search = new URLSearchParams(
@@ -79,20 +101,26 @@ export const tasksApi = {
 
   /** PATCH de verdad: lo que no viene se conserva. Marcar hecha es { status: 'done' }. */
   update: (token: string, id: number, patch: NewTask) =>
-    request<{ task: Task }>(`/tasks/${id}`, {
-      method: 'PATCH',
-      headers: bearer(token),
-      body: JSON.stringify(patch),
-    }),
+    andSync(
+      token,
+      request<{ task: Task }>(`/tasks/${id}`, {
+        method: 'PATCH',
+        headers: bearer(token),
+        body: JSON.stringify(patch),
+      })
+    ),
 
   remove: (token: string, id: number) =>
-    request<void>(`/tasks/${id}`, { method: 'DELETE', headers: bearer(token) }),
+    andSync(token, request<void>(`/tasks/${id}`, { method: 'DELETE', headers: bearer(token) })),
 
   /** El API impone un solo timer corriendo por usuario: si ya hay otro, responde 409. */
   timer: (token: string, id: number, action: 'start' | 'stop') =>
-    request<{ task: Task }>(`/tasks/${id}/timer`, {
-      method: 'POST',
-      headers: bearer(token),
-      body: JSON.stringify({ action }),
-    }),
+    andSync(
+      token,
+      request<{ task: Task }>(`/tasks/${id}/timer`, {
+        method: 'POST',
+        headers: bearer(token),
+        body: JSON.stringify({ action }),
+      })
+    ),
 };

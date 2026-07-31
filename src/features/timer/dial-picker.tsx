@@ -70,8 +70,17 @@ export function DialPicker({
    */
   const commit = useCallback(
     (value: number) => {
-      // Ligero y seco: es el click del dial, no la confirmación de un botón.
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      /**
+       * `selectionAsync` y NO `impactAsync`: es el `UISelectionFeedbackGenerator` de iOS, la API que
+       * Apple hizo para "el valor de un selector cambió" — o sea exactamente un diente de dial. Un
+       * `impact` es un golpe contra algo y está pensado para llegar de uno en uno; girando rápido
+       * salen sesenta seguidos y el sistema los amontona hasta que se sienten como un zumbido en vez
+       * de clics. El de selección está afinado para repetirse.
+       *
+       * Va ANTES del `onChange` a propósito: el aviso repinta las 60 marcas de la carátula, y el
+       * háptico lanzado después entraría en la cola detrás de ese render.
+       */
+      Haptics.selectionAsync().catch(() => {});
       onChange(value);
     },
     [onChange]
@@ -84,7 +93,14 @@ export function DialPicker({
   const rotate = Gesture.Pan()
     .minDistance(0)
     .onBegin((event) => {
-      base.set(last.get());
+      /**
+       * El giro se ancla en la prop y no en `last`, que es el último minuto que ESTE gesto avisó.
+       * Cuando los minutos cambian desde fuera (reiniciar el bloque los devuelve al default), `last`
+       * se quedaba con el valor viejo y el siguiente giro arrancaba desde ahí: el número saltaba en
+       * el primer movimiento del dedo.
+       */
+      base.set(minutes);
+      last.set(minutes);
       turn.set(0);
       previous.set(angleAt(event.x, event.y));
     })

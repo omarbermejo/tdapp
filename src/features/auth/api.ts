@@ -63,6 +63,20 @@ export type Task = {
   running: boolean;
 };
 
+/**
+ * La racha y la semana, para el widget. Va aparte de `Today` porque son dos preguntas distintas y
+ * ningun widget necesita las dos.
+ */
+export type Streak = {
+  date: string;
+  /** Dias seguidos cerrando al menos una cosa. Hoy sin cerrar nada no la rompe. */
+  days: number;
+  /** La mejor marca del historial (un año hacia atras). Es el numero que da algo que superar. */
+  best: number;
+  /** Lunes a domingo, con cuantas se cerraron cada dia. Un dia sin nada es 0, no un hueco. */
+  week: { date: string; done: number }[];
+};
+
 /** El dia completo en una sola llamada: es lo que alimentan el widget y la Live Activity. */
 export type Today = {
   date: string;
@@ -131,6 +145,10 @@ export const api = {
   /** `date` en YYYY-MM-DD local; sin el, el API usa su propio dia. */
   today: (token: string, date?: string) =>
     request<Today>(`/me/today${date ? `?date=${date}` : ''}`, { headers: bearer(token) }),
+
+  /** La fecha va SIEMPRE desde aqui: quien sabe en que dia vive el usuario es su telefono. */
+  streak: (token: string, date?: string) =>
+    request<Streak>(`/me/streak${date ? `?date=${date}` : ''}`, { headers: bearer(token) }),
 
   /** Devuelve token nuevo: el de antes decia que el correo no estaba verificado. */
   verify: (token: string, code: string) =>

@@ -1,11 +1,9 @@
 import { Capsule, HStack, Image, ProgressView, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import {
-  clipped,
   font,
   foregroundColor,
   frame,
   kerning,
-  layoutPriority,
   lineLimit,
   monospacedDigit,
   opacity,
@@ -80,12 +78,7 @@ export type FocusActivityProps = {
  * de vistas en primer plano, no una tarjeta. El unico color es el acento, y solo en la cuenta, el
  * icono y el punteo, igual que en la app, donde el color dice de que familia es el bloque.
  */
-/**
- * Se exporta SOLO para la pantalla de preview de desarrollo (`app/la-preview.tsx`), que pinta estas
- * mismas secciones dentro de la app con `Host`. Sin eso, la unica forma de ver un cambio de layout
- * es arrancar un bloque y bloquear el telefono — y afinar proporciones asi es imposible.
- */
-export const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvironment) => {
+const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvironment) => {
   'widget';
 
   /**
@@ -113,7 +106,6 @@ export const FocusActivity = (props: FocusActivityProps, _environment: LiveActiv
     micro: 11,
     /** La tarea. A 15 contra 28 la jerarquia se lee sin que el numero aplaste la fila. */
     line: 15,
-    bar: 6,
     tick: { width: 3, height: 9 },
     /** El aire entre filas del banner y de la Isla expandida. */
     gap: 6,
@@ -156,14 +148,6 @@ export const FocusActivity = (props: FocusActivityProps, _environment: LiveActiv
          */
         monospacedDigit(),
         foregroundColor(ink),
-        /**
-         * El reloj se queda con su tamaño ideal y lo que cede es el texto de al lado.
-         *
-         * Sin esto, un titulo largo empujaba la cuenta atras FUERA del banner: la vi salirse por el
-         * canto derecho con 'Terminar el rediseño de la pantalla de bloqueo'. En un HStack de SwiftUI
-         * el que cede es el de menor prioridad, y el unico dato que no se puede perder es este.
-         */
-        layoutPriority(1),
       ]}
     />
   );
@@ -234,12 +218,19 @@ export const FocusActivity = (props: FocusActivityProps, _environment: LiveActiv
   /**
    * La barra: el mismo dato que la cuenta pero sin numeros, que es la version que sirve de reojo.
    *
-   * `frame` + `clipped` no son un adorno. `ProgressView(timerInterval:)` pinta ADEMAS su propia
-   * cuenta atras debajo de la barra, asi que con la nuestra arriba el MISMO numero salia dos veces
-   * en el mismo banner — era lo que hacia que la tarjeta se viera sin terminar. SwiftUI solo deja
-   * quitarla con el init de cuatro closures (`currentValueLabel: { EmptyView() }`) y @expo/ui
-   * expone el de tres, asi que se recorta a la altura de la barra, alineado arriba, y la etiqueta
-   * se queda fuera del marco.
+   * NADA de `frame` aqui, y es la leccion mas cara de este archivo. `ProgressView(timerInterval:)`
+   * pinta ADEMAS su propia cuenta atras debajo de la barra, asi que el mismo numero salia dos veces;
+   * lo intente recortando con `frame({ height, alignment: 'top' }) + clipped()` y el resultado fue
+   * que se descuadro el BANNER ENTERO: un `frame` de alto fijo convierte el ProgressView de "lleno
+   * el ancho disponible" a "ocupo mi ancho ideal", y en cuanto la fila mas ancha del VStack deja de
+   * pedir el ancho del contenedor, los `Spacer` de las otras filas no tienen nada que repartir. En
+   * la pantalla de bloqueo real se veia el rotulo cortado por la izquierda, el reloj sin alinearse a
+   * la derecha y la barra pintandose por fuera de la tarjeta.
+   *
+   * La etiqueta se apaga por COLOR, que no toca el layout: `tint` pinta la barra y `foregroundColor`
+   * el texto, asi que un foreground transparente la borra y deja la barra con su color. Si algun dia
+   * @expo/ui expone el init de cuatro closures (`currentValueLabel: { EmptyView() }`), ese es el
+   * arreglo de verdad y esto se va.
    *
    * En pausa la barra deja de ser un `timerInterval`: `ProgressView` NO acepta `pauseTime` (solo
    * `Text` lo hace), asi que la viva seguia vaciandose mientras el numero de al lado estaba
@@ -248,15 +239,17 @@ export const FocusActivity = (props: FocusActivityProps, _environment: LiveActiv
    */
   const total = Math.max(1, props.endsAt - props.startedAt);
   const left = Math.min(total, Math.max(0, props.endsAt - props.pausedAt));
-  // Alto y recorte identicos en las dos: al pausar, la tarjeta no debe cambiar de altura.
-  const barBox = [frame({ height: S.bar, alignment: 'top' as const }), clipped()];
+  /**
+   * `tint` pinta la BARRA y `foregroundColor` el TEXTO — son dos canales distintos, y de ahi sale el
+   * truco: con el foreground transparente desaparece la cuenta atras automatica (y su `.secondary`,
+   * que en SwiftUI se deriva del foreground) sin tocar el color de la barra ni su geometria.
+   */
+  const barPaint = [tint(ink), foregroundColor('rgba(0,0,0,0)')];
 
   const bar = paused ? (
-    <ProgressView value={left / total} modifiers={[tint(ink), opacity(0.45), ...barBox]} />
+    <ProgressView value={left / total} modifiers={[...barPaint, opacity(0.45)]} />
   ) : (
-    // `tint` y no `foregroundColor`: SwiftUI colorea la barra de un ProgressView con el tinte,
-    // y el foreground se lo pasa por alto — se veia con el azul del sistema.
-    <ProgressView timerInterval={range} countsDown modifiers={[tint(ink), ...barBox]} />
+    <ProgressView timerInterval={range} countsDown modifiers={barPaint} />
   );
 
   return {
@@ -275,26 +268,35 @@ export const FocusActivity = (props: FocusActivityProps, _environment: LiveActiv
        * bloqueo deja el contenido a ras del canto y el punteo del ciclo salia cortado por la derecha.
        */
       <VStack spacing={S.gap} modifiers={[padding({ horizontal: 4, vertical: 2 })]}>
-        <HStack spacing={12}>
+        {/*
+          Tres filas HERMANAS y ningun stack anidado.
+
+          Lo intente agrupando el rotulo y la tarea en un VStack dentro del HStack del reloj, para
+          que el numero se midiera contra el bloque de texto entero. Se veia mejor en el banco de
+          pruebas y en la pantalla de bloqueo REAL desaparecieron las dos lineas de texto: quedo el
+          numero pegado a la izquierda y la barra, nada mas. El banco le propone a SwiftUI un ancho
+          fijo y comodo; iOS propone el suyo, y ahi el anidamiento colapsaba. No se arregla a ciegas
+          — se vuelve a la forma plana, que es la unica verificada contra el sistema.
+
+          Lo que SI se queda de aquel intento es sacar el glifo: al lado de la palabra 'ENFOQUE' era
+          redundante, y empujaba el rotulo a la derecha dejando tres sangrias distintas. Sin el, el
+          rotulo, la tarea y la barra arrancan en la misma x. El glifo se gana su sitio en la Isla,
+          donde no cabe una palabra.
+        */}
+        <HStack spacing={7}>
+          {micro}
+          {cycle}
+          <Spacer />
+        </HStack>
+
+        <HStack spacing={10}>
           {/*
-            El rotulo y la tarea son UN bloque, y el reloj se mide contra el bloque entero.
-
-            La version anterior eran tres filas independientes (rotulo / tarea+reloj / barra) y el
-            numero quedaba flotando a media altura, emparejado con una sola linea en vez de con lo
-            que dice. Agrupar el texto tambien deja la tarea con la fila COMPLETA para ella: antes
-            competia por el ancho con el reloj y se truncaba a la mitad.
-
-            Y aqui NO va el glifo: al lado de la palabra 'ENFOQUE' es redundante, y lo que hacia era
-            empujar el rotulo a la derecha, dejando el rotulo, la tarea y la barra con tres sangrias
-            distintas. El glifo se gana su sitio en la Isla, donde no cabe una palabra.
+            Una linea, y es lo que sostiene la fila: con `lineLimit(1)` un Text se TRUNCA en vez de
+            exigir su ancho ideal, asi que el reloj de al lado nunca se queda sin sitio. Era lo que
+            faltaba de verdad — el `layoutPriority` que le puse al reloj para lo mismo era el que se
+            comia la fila completa en el ancho real de iOS.
           */}
-          <VStack alignment="leading" spacing={3}>
-            <HStack spacing={7}>
-              {micro}
-              {cycle}
-            </HStack>
-            <Text modifiers={[font({ size: S.line, weight: 'semibold' }), lineLimit(1)]}>{line}</Text>
-          </VStack>
+          <Text modifiers={[font({ size: S.line, weight: 'semibold' }), lineLimit(1)]}>{line}</Text>
           <Spacer />
           {countdown(S.bannerCount)}
         </HStack>

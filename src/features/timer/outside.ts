@@ -1,6 +1,7 @@
 import type { LiveActivity, LiveActivityFactory } from 'expo-widgets';
 import { Platform } from 'react-native';
 
+import { clearFocusWidget, showFocusWidget } from '@/features/widgets/sync-focus';
 import type { FocusActivityProps } from '@/widgets/focus-activity';
 
 /**
@@ -38,6 +39,12 @@ export type Block = {
    * `useAccent()` — eso sigue el esquema de la app y deja el paso oscuro sobre negro.
    */
   tint: string;
+  /**
+   * El mismo acento pero como se lee sobre material CLARO. Solo lo usa el widget de la pantalla de
+   * inicio: ahi el material sigue al esquema de verdad, al contrario que la Isla y el bloqueo, que son
+   * siempre negros (por eso `tint` es el paso oscuro y no hay que dudar).
+   */
+  tintOnLight: string;
   done: number;
   rounds: number;
   /** 'termina 7:16', ya formateado con el reloj del telefono. Solo lo usa Android. */
@@ -71,16 +78,46 @@ let activity: LiveActivity<FocusActivityProps> | null = null;
 /** iOS 16.2+ y con Live Activities habilitadas. Fuera de iOS expo-widgets ya devuelve stubs no-op. */
 const IOS = Platform.OS === 'ios';
 
-/** Arranca (o actualiza, si ya habia una) el bloque visible fuera de la app. */
+/**
+ * Arranca (o actualiza, si ya habia una) el bloque visible fuera de la app.
+ *
+ * El widget se empuja SIEMPRE y en paralelo, tambien en Android: alla la Live Activity no existe pero el
+ * widget de la pantalla de inicio si (cuando expo-widgets lo soporte), y `updateSnapshot` es no-op
+ * mientras tanto. Los dos cuentan lo mismo por superficies distintas, asi que se alimentan juntos —
+ * separarlos era la via rapida a que uno dijera una cosa y el otro otra.
+ */
 export async function showBlock(block: Block) {
-  if (IOS) return showActivity(block);
-  return showOngoing(block);
+  const widget = showFocusWidget({
+    phase: block.phase,
+    resting: block.resting,
+    task: block.task,
+    startedAt: block.startedAt,
+    endsAt: block.endsAt,
+    pausedAt: block.pausedAt,
+    done: block.done,
+    rounds: block.rounds,
+    tint: block.tintOnLight,
+    tintDark: block.tint,
+  });
+
+  await Promise.all([widget, IOS ? showActivity(block) : showOngoing(block)]);
 }
 
-/** Lo quita. Se llama al pausar, al cerrar el bloque, al salir de la pantalla y al reiniciar. */
-export async function hideBlock() {
-  if (IOS) return hideActivity();
-  return hideOngoing();
+/**
+ * Lo quita. Se llama al cerrar el bloque, al salir de la pantalla y al reiniciar.
+ *
+ * El widget NO se borra: se queda invitando a empezar otro. Es una baldosa fija en la pantalla de
+ * inicio y dejarla en blanco seria peor que darle un uso — al contrario que la Live Activity, que solo
+ * tiene sentido mientras algo corre.
+ *
+ * `inks` es opcional para que quien solo quiera limpiar no tenga que resolver colores; sin ellos el
+ * widget cae en el acento por default.
+ */
+export async function hideBlock(inks?: { tint: string; tintDark: string }) {
+  await Promise.all([
+    clearFocusWidget(inks ?? { tint: '', tintDark: '' }),
+    IOS ? hideActivity() : hideOngoing(),
+  ]);
 }
 
 /**

@@ -13,7 +13,7 @@ import { Card, Micro } from '@/components/ui/card';
 import { Choice, type Option } from '@/components/ui/choice';
 import { Confetti } from '@/components/ui/confetti';
 import { Bud } from '@/components/ui/stem';
-import { Space, Type, accentOnDark, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import { Space, Type, accentInks, accentOnDark, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { tasksApi } from '@/features/tasks/api';
@@ -25,6 +25,7 @@ import { cheer, coolCheer, warmCheer } from '@/features/timer/cheer';
 import { DIAL, Dial, litTicks } from '@/features/timer/dial';
 import { DialPicker } from '@/features/timer/dial-picker';
 import { useFocusMode } from '@/features/timer/focus-mode';
+import { clearFocusWidget } from '@/features/widgets/sync-focus';
 import { adoptBlock, hideBlock, showBlock } from '@/features/timer/outside';
 import { ROUNDS, clock, usePomodoro, type Phase } from '@/features/timer/pomodoro';
 
@@ -255,6 +256,11 @@ export default function TimerScreen() {
      * en la app no es el que se lee allá: en modo claro, olive daba 2.2:1 y la cuenta desaparecía.
      */
     tint: accentOnDark(accent),
+    /**
+     * Y el paso de fondo CLARO, que solo usa el widget de la pantalla de inicio: ahí el material sí
+     * sigue al esquema del sistema de verdad, así que ese sí se puede resolver por `colorScheme`.
+     */
+    tintOnLight: accentInks(accent).light,
     done: Math.min(pom.done, ROUNDS),
     rounds: ROUNDS,
     endsAtLabel: endsAtLabel(endsAt),
@@ -275,7 +281,18 @@ export default function TimerScreen() {
   useEffect(() => {
     if (!pom.ready || reconciled.current) return;
     reconciled.current = true;
-    adoptBlock(pom.endsAt === null ? null : blockFor(pom.endsAt, 0));
+
+    if (pom.endsAt === null) {
+      adoptBlock(null);
+      // El widget no se borra, se queda invitando: es una baldosa fija en la pantalla de inicio y
+      // dejarla en blanco sería peor que darle un uso. La Live Activity sí desaparece.
+      clearFocusWidget({ tint: accentInks(accent).light, tintDark: accentOnDark(accent) });
+      return;
+    }
+
+    // Con bloque vivo, `showBlock` (dentro de adoptBlock) empuja la isla Y el widget de una vez, así que
+    // el widget también sobrevive a que la app se cierre.
+    adoptBlock(blockFor(pom.endsAt, 0));
   });
 
   const begin = () => {

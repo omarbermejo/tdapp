@@ -46,7 +46,6 @@
         {
           "bundleIdentifier": "com.tdapp.tdapp.widgets",
           "groupIdentifier": "group.com.tdapp.tdapp",
-          "enableAndroid": true,
           "widgets": [
             {
               "name": "TodayWidget",
@@ -54,9 +53,50 @@
               "description": "Lo que sigue hoy y cuánto te queda.",
               "supportedFamilies": [
                 "systemSmall",
-                "systemMedium"
+                "systemMedium",
+                "systemLarge",
+                "accessoryRectangular",
+                "accessoryInline"
               ],
-              "contentMarginsDisabled": false
+              "contentMarginsDisabled": false,
+              "android": null
+            },
+            {
+              "name": "FocusWidget",
+              "displayName": "Enfoque",
+              "description": "El bloque de enfoque en curso, con la cuenta atrás.",
+              "supportedFamilies": [
+                "systemSmall",
+                "accessoryCircular",
+                "accessoryRectangular",
+                "accessoryInline"
+              ],
+              "contentMarginsDisabled": false,
+              "android": null
+            },
+            {
+              "name": "StreakWidget",
+              "displayName": "Racha",
+              "description": "Cuántos días seguidos cerraste algo.",
+              "supportedFamilies": [
+                "systemSmall",
+                "systemMedium",
+                "accessoryRectangular",
+                "accessoryInline"
+              ],
+              "contentMarginsDisabled": false,
+              "android": null
+            },
+            {
+              "name": "CaptureWidget",
+              "displayName": "Anotar",
+              "description": "Anota algo en un toque, sin abrir la app.",
+              "supportedFamilies": [
+                "systemSmall",
+                "accessoryInline"
+              ],
+              "contentMarginsDisabled": false,
+              "android": null
             }
           ]
         }

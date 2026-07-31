@@ -259,9 +259,21 @@ export function DayCard({
     <Card>
       <Micro>{heading}</Micro>
       {body}
-      {/* La etiqueta no cambia a "Agendar" en los dias futuros: la captura no recibe el dia
-          seleccionado, asi que prometer que agenda para el viernes seria mentira. */}
-      <BigButton label="Anotar algo" onPress={onCapture} style={styles.cta} />
+      {/*
+        El boton VIAJA a la pantalla de nueva tarea: `sharedTransitionTag` lo empareja con el
+        "Crear" de alla (`new-task.tsx`), asi que al abrirla la pastilla oscura se desliza de aqui
+        hasta su sitio en vez de que una pantalla tape a la otra.
+
+        Se emparejan estos dos y no el boton con el campo del titulo porque son la MISMA cosa: la
+        accion. Y de paso los dos son una pastilla oscura del mismo radio y del mismo color, asi que
+        el morph se lee como un objeto que se mueve y no como dos cosas distintas cruzandose.
+
+        La etiqueta no cambia a "Agendar" en los dias futuros: la captura no recibe el dia
+        seleccionado, asi que prometer que agenda para el viernes seria mentira.
+      */}
+      <Animated.View sharedTransitionTag={CAPTURE_TAG}>
+        <BigButton label="Anotar algo" onPress={onCapture} style={styles.cta} />
+      </Animated.View>
     </Card>
   );
 }

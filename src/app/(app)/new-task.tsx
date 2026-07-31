@@ -1,4 +1,4 @@
-import { router, useIsFocused } from 'expo-router';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   Keyboard,
@@ -29,8 +29,6 @@ import { FOCUS_AREAS } from '@/features/auth/options';
 import { isoAt, localDate, tasksApi } from '@/features/tasks/api';
 
 import { usePressScale } from '@/hooks/use-press-scale';
-
-import { TAB_DOCK } from './_layout';
 
 /**
  * El unico camino para anotar. El titulo ES la pantalla.
@@ -138,24 +136,16 @@ const hourLabel = (value: string) => HOURS.find((h) => h.value === value)?.label
  */
 const CONFIRM_MS = 700;
 
+/**
+ * El unico camino para anotar.
+ *
+ * Es un push sobre las pestañas (ver `(app)/_layout.tsx`), y de ahi sale gratis lo que antes habia
+ * que forzar: al cerrarla el navegador la DESMONTA, asi que la siguiente vez el formulario nace
+ * limpio, con el reloj recien leido y el autoFocus del titulo de vuelta. La version anterior era una
+ * pestaña —que nunca se desmonta— y habia que vaciarla a mano devolviendo `null` mientras no
+ * estuviera enfocada.
+ */
 export default function NewTaskScreen() {
-  const focused = useIsFocused();
-
-  /**
-   * La ruta vive dentro de Tabs, y salir de una pestaña NO la desmonta: sin esto, volver a abrir
-   * "Nueva tarea" mostraba entera la anterior — el titulo escrito, el dia y la hora ya elegidos,
-   * el panel abierto donde lo dejaste.
-   *
-   * Desmontar el formulario en vez de limpiar campo por campo tambien vuelve a leer el reloj (de
-   * ahi salen los chips Hoy/Mañana y el hueco inicial) y devuelve el autoFocus del titulo: dos
-   * cosas que un puñado de setState no arregla.
-   */
-  if (!focused) return null;
-
-  return <NewTaskForm />;
-}
-
-function NewTaskForm() {
   const { user, token } = useAuth();
   const t = useTheme();
   const accent = user?.accentColor;
@@ -508,8 +498,9 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.xl,
     paddingTop: Space.lg,
-    // La pastilla flotante del grupo (app) pasa por encima aunque esta ruta no sea pestaña.
-    paddingBottom: TAB_DOCK,
+    // Aire normal al final del scroll. Ya no hace falta el hueco de la cápsula flotante: esta ruta
+    // es un push por ENCIMA de las pestañas, así que la cápsula no llega hasta aquí.
+    paddingBottom: Space.xxl,
     gap: Space.xl,
   },
   head: { gap: Space.xs },
