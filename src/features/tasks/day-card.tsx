@@ -12,6 +12,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { CAPTURE_TAG } from './capture-tag';
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro } from '@/components/ui/card';
 import { Radius, Space, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
