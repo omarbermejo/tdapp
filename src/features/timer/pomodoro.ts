@@ -73,6 +73,43 @@ const nextPhase = (phase: Phase, done: number): { phase: Phase; done: number } =
   return closed >= ROUNDS ? { phase: 'long', done: closed } : { phase: 'short', done: closed };
 };
 
+/**
+ * Reconstruye el estado a partir de lo guardado. Pura y con el reloj como parametro para poder
+ * probarla: es la aritmetica que arregla el bloque que se perdia al cerrar la app, y equivocarse aqui
+ * significa resucitar un bloque muerto o tirar uno que seguia vivo.
+ *
+ * Los tres casos:
+ * - **en pausa o armado** (`endsAt === null`): tal cual se guardo, con lo que quedaba.
+ * - **corriendo y con tiempo vivo**: `leftMs` se recalcula contra AHORA. Aqui se ve por que se guarda
+ *   el instante del final y no los milisegundos restantes — lo segundo envejeceria en el almacen.
+ * - **corriendo y ya vencido**: se cumplio con la app cerrada. Se cierra, se arma el siguiente y se
+ *   devuelve `expired` para que el consumidor apague lo que haga falta sin volver a celebrar.
+ */
+export function rehydrate(
+  saved: Saved,
+  now: number
+): { state: State; expired: { closed: Phase; done: number } | null } {
+  const base: State = {
+    phase: saved.phase,
+    focusMs: saved.focusMs,
+    totalMs: saved.totalMs,
+    endsAt: saved.endsAt,
+    leftMs: saved.leftMs,
+    done: saved.done,
+  };
+
+  if (saved.endsAt === null) return { state: base, expired: null };
+
+  const left = saved.endsAt - now;
+  if (left > 0) return { state: { ...base, leftMs: left }, expired: null };
+
+  const next = nextPhase(saved.phase, saved.done);
+  return {
+    state: arm(base, next.phase, next.done),
+    expired: { closed: saved.phase, done: next.done },
+  };
+}
+
 export type Pomodoro = ReturnType<typeof usePomodoro>;
 
 /**
@@ -102,14 +139,15 @@ export type Pomodoro = ReturnType<typeof usePomodoro>;
  * El hook NO vibra ni suena por su cuenta: la celebracion es una decision de producto y vive en el
  * consumidor (`features/timer/cheer.ts`). Un haptico aqui dentro se pisaria con el patron de alla.
  *
- * `taskId` entra solo para persistirlo junto al bloque; el hook no lo usa para nada mas. Se devuelve
- * en `restoredTaskId` para que la pantalla pueda reengancharlo tras un reinicio.
+ * La tarea enganchada se registra con `attach()` y solo sirve para persistirla junto al bloque; el hook
+ * no la usa para nada mas. Se devuelve en `restoredTaskId` para reengancharla tras un reinicio.
+ *
+ * `attach` es una llamada y no una prop a proposito: como prop haria un ciclo — la pantalla deriva la
+ * tarea de `restoredTaskId`, que sale de aqui.
  */
 export function usePomodoro({
-  taskId = null,
   onFinish,
 }: {
-  taskId?: number | null;
   onFinish?: (closed: Phase, done: number, silent: boolean) => void;
 } = {}) {
   const [state, setState] = useState<State>(() => start(DEFAULT_MINUTES));
@@ -131,11 +169,8 @@ export function usePomodoro({
    */
   const live = useRef(state);
 
-  /** El taskId se lee de un ref para que `commit` no cambie de identidad al cambiar de tarea. */
-  const task = useRef(taskId);
-  useEffect(() => {
-    task.current = taskId;
-  }, [taskId]);
+  /** La tarea enganchada. En un ref para que `commit` no cambie de identidad al cambiar de tarea. */
+  const task = useRef<number | null>(null);
 
   const commit = useCallback((next: State) => {
     live.current = next;
@@ -196,28 +231,7 @@ export function usePomodoro({
         return;
       }
 
-      const base: State = {
-        phase: saved.phase,
-        focusMs: saved.focusMs,
-        totalMs: saved.totalMs,
-        endsAt: saved.endsAt,
-        leftMs: saved.leftMs,
-        done: saved.done,
-      };
-
-      let restored = base;
-      let expired: { closed: Phase; done: number } | null = null;
-
-      if (saved.endsAt !== null) {
-        const left = saved.endsAt - Date.now();
-        if (left > 0) {
-          restored = { ...base, leftMs: left };
-        } else {
-          const next = nextPhase(saved.phase, saved.done);
-          restored = arm(base, next.phase, next.done);
-          expired = { closed: saved.phase, done: next.done };
-        }
-      }
+      const { state: restored, expired } = rehydrate(saved, Date.now());
 
       live.current = restored;
       setState(restored);
@@ -315,6 +329,22 @@ export function usePomodoro({
   }, [commit]);
 
   /**
+   * Registra la tarea enganchada para que se guarde con el bloque.
+   *
+   * Solo persiste; el cronometro no sabe nada de tareas. Si ya hay un bloque vivo se reescribe el
+   * registro con `commit` del MISMO estado: React no repinta (el objeto no cambio) y el almacen queda
+   * al dia, que es justo lo que hace falta para reengancharla si la app muere.
+   */
+  const attach = useCallback(
+    (id: number | null) => {
+      task.current = id;
+      const s = live.current;
+      if (s.endsAt !== null || s.leftMs !== s.totalMs) commit(s);
+    },
+    [commit]
+  );
+
+  /**
    * El largo de enfoque. Vive DENTRO del hook y no como prop para no tener que sincronizarlo con un
    * efecto: el estado del cronometro tiene un solo dueño.
    *
@@ -338,6 +368,11 @@ export function usePomodoro({
     /** La tarea del bloque recuperado. `undefined` hasta que se sabe. */
     restoredTaskId,
     phase: state.phase,
+    /**
+     * El instante del final, o `null` en pausa. Se expone porque la Live Activity necesita el TRAMO
+     * (no los milisegundos que quedan) para que SwiftUI pinte la cuenta atras el solito.
+     */
+    endsAt: state.endsAt,
     leftMs: state.leftMs,
     totalMs: state.totalMs,
     done: state.done,
@@ -346,6 +381,7 @@ export function usePomodoro({
     /** Un bloque intacto: ni corriendo ni mordido. Es lo que distingue "Empezar" de "Reanudar". */
     fresh: state.endsAt === null && state.leftMs === state.totalMs,
     begin,
+    attach,
     pause,
     reset,
     skip,

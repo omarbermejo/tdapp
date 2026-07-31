@@ -222,6 +222,22 @@ export function useAccent(name?: string | null): Accent {
 }
 
 /**
+ * El acento como se lee sobre fondo OSCURO. No es un hook a propósito.
+ *
+ * Existe para lo que se pinta FUERA de la app. La pantalla de bloqueo y la Isla Dinámica son
+ * SIEMPRE negras, en modo claro y en oscuro — y el `colorScheme` que recibe la extensión reporta
+ * el del SISTEMA, así que en modo claro dice 'light' mientras te dibuja sobre negro. Resolver ahí
+ * con `useAccent()` (o creerle al `colorScheme`) deja el paso oscuro sobre fondo oscuro: medido en
+ * el simulador, el olive de modo claro daba 2.2:1 y la cuenta atrás desaparecía.
+ *
+ * Es `ink` de oscuro y no `solid`: `solid` es relleno decorativo y los acentos medios no llegan a
+ * 4.5:1 ni en negro (fue lo que hizo que 'Enfoque' se viera apagado y 'Descanso' no).
+ */
+export function accentOnDark(name?: string | null): string {
+  return (ACCENTS.dark[name as AccentName] ?? ACCENTS.dark.olive).ink;
+}
+
+/**
  * La sombra de tarjeta solo existe en claro: en oscuro una sombra negra sobre fondo
  * oscuro no se ve, y lo que separa es el escalón de luz de `surface`.
  */

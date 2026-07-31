@@ -32,7 +32,11 @@ export type Block = {
   endsAt: number;
   /** Epoch ms del instante en que se pauso. 0 = corriendo. */
   pausedAt: number;
-  /** Hex del acento, resuelto en la app. */
+  /**
+   * Hex del acento resuelto para fondo OSCURO (`accentOnDark`), porque es donde se pinta: la
+   * pantalla de bloqueo y la Isla son negras en los dos esquemas. No se puede resolver con
+   * `useAccent()` — eso sigue el esquema de la app y deja el paso oscuro sobre negro.
+   */
   tint: string;
   done: number;
   rounds: number;
@@ -43,6 +47,16 @@ export type Block = {
 /** Identificador fijo: presentar otra con el mismo id REEMPLAZA la anterior en vez de apilarla. */
 const ONGOING_ID = 'tdapp-focus-ongoing';
 const CHANNEL = 'timer';
+
+/**
+ * A donde lleva tocar la actividad. Sin esto la app abre donde la dejaste, que casi nunca es el
+ * cronometro — y es la UNICA accion que una Live Activity puede ofrecer: la pantalla de bloqueo y
+ * la Isla no admiten botones a proposito (la experiencia buena vive dentro de la app).
+ *
+ * Tres barras: el esquema es 'tdapp' (ver app.json) y expo-router lee la ruta del PATH, asi que
+ * `tdapp://timer` dejaria 'timer' como host y la ruta vacia.
+ */
+const DEEP_LINK = 'tdapp:///timer';
 
 /**
  * La actividad viva. Se guarda para poder actualizarla y cerrarla.
@@ -67,6 +81,49 @@ export async function showBlock(block: Block) {
 export async function hideBlock() {
   if (IOS) return hideActivity();
   return hideOngoing();
+}
+
+/**
+ * Reconcilia lo que el sistema esta pintando con lo que la app cree que hay. La pantalla la llama al
+ * montar, en cuanto sabe si habia un bloque guardado.
+ *
+ * Es el arreglo del bug de "la isla deja de aparecer". Cuando la app muere con un bloque corriendo, la
+ * Live Activity sobrevive (es del sistema) pero la referencia en memoria no, asi que la sesion nueva no
+ * tenia forma de cerrarla ni de reusarla: cada vuelta abandonaba una y arrancaba otra. Se acumulaban
+ * hasta pasar el limite de iOS, y de ahi en adelante `Activity.request()` fallaba y no aparecia nada.
+ *
+ * `getInstances()` devuelve instancias FUNCIONALES (pueden `update` y `end`, ver LiveActivityFactory.swift),
+ * asi que la de la sesion anterior se adopta en vez de tirarse.
+ */
+export async function adoptBlock(block: Block | null) {
+  if (!IOS) {
+    if (!block) await hideOngoing();
+    else await showOngoing(block);
+    return;
+  }
+
+  try {
+    const { default: FocusActivity } = await import('@/widgets/focus-activity');
+    const live = FocusActivity.getInstances();
+
+    // Sin bloque que representar, no queda ninguna: es la limpieza que faltaba.
+    if (!block) {
+      await Promise.all(live.map((stray) => stray.end('immediate')));
+      activity = null;
+      return;
+    }
+
+    // Se adopta UNA y se cierran las de mas: si quedaron varias de sesiones pasadas, apilarian
+    // duplicados en la pantalla de bloqueo diciendo lo mismo.
+    const [keep, ...extra] = live;
+    await Promise.all(extra.map((stray) => stray.end('immediate')));
+    activity = keep ?? null;
+    // Con `activity` puesta esto hace `update`; sin ninguna viva, arranca la primera.
+    await showActivity(block);
+  } catch (error) {
+    activity = null;
+    if (__DEV__) console.warn('[timer] no se pudo reconciliar la Live Activity', error);
+  }
 }
 
 // --- iOS ---------------------------------------------------------------------------------------
@@ -98,30 +155,38 @@ async function showActivity(block: Block) {
     // Actividades de una sesion anterior (la app murio con el bloque corriendo) quedarian vivas
     // hasta que iOS las expire. Se cierran antes de abrir la nueva.
     await endStrays(FocusActivity);
-    activity = FocusActivity.start(props);
-  } catch {
-    // iOS < 16.2, el usuario las desactivo en Ajustes, o el binario no trae la extension.
+    activity = FocusActivity.start(props, DEEP_LINK);
+  } catch (error) {
+    // iOS < 16.2, el usuario las desactivo en Ajustes, el binario no trae la extension, o —el caso
+    // que costo un bug— iOS rechaza la peticion por tener demasiadas actividades vivas. Tragarselo en
+    // silencio era justo lo que hacia imposible ver por que la isla dejaba de salir.
     activity = null;
+    if (__DEV__) console.warn('[timer] no se pudo pintar la Live Activity', error);
   }
 }
 
+/**
+ * Cierra TODAS las actividades vivas, no solo la que esta en memoria.
+ *
+ * La version anterior salia temprano cuando `activity` era null, que es exactamente el estado despues
+ * de que la app se reinicia — asi que la actividad de la sesion pasada nunca se cerraba y se iban
+ * acumulando. Barrer por `getInstances()` no depende de que el proceso siga siendo el mismo.
+ */
 async function hideActivity() {
-  const live = activity;
-  // Se limpia ANTES de esperar: dos pausas seguidas no deben intentar cerrar la misma dos veces.
   activity = null;
-  if (!live) return;
   try {
-    // 'immediate': el bloque se acabo o se pauso, y dejarlo cuatro horas en la pantalla de bloqueo
-    // convierte la Live Activity en basura que hay que barrer a mano.
-    await live.end('immediate');
+    const { default: FocusActivity } = await import('@/widgets/focus-activity');
+    await endStrays(FocusActivity);
   } catch {
-    // Una actividad que no se pudo cerrar la expira el sistema; no vale tumbar la pantalla por eso.
+    // Sin modulo nativo no hay nada que cerrar.
   }
 }
 
 /** Cierra las actividades huerfanas de sesiones pasadas. */
 async function endStrays(factory: LiveActivityFactory<FocusActivityProps>) {
   try {
+    // 'immediate': el bloque se acabo o se pauso, y dejarlo cuatro horas en la pantalla de bloqueo
+    // convierte la Live Activity en basura que hay que barrer a mano.
     await Promise.all(factory.getInstances().map((stray) => stray.end('immediate')));
   } catch {
     // getInstances lanza en iOS < 16.1; ahi no hay nada huerfano que cerrar.

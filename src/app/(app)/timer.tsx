@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   FadeIn,
@@ -13,7 +13,7 @@ import { Card, Micro } from '@/components/ui/card';
 import { Choice, type Option } from '@/components/ui/choice';
 import { Confetti } from '@/components/ui/confetti';
 import { Bud } from '@/components/ui/stem';
-import { Space, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import { Space, Type, accentOnDark, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { tasksApi } from '@/features/tasks/api';
@@ -25,7 +25,7 @@ import { cheer, coolCheer, warmCheer } from '@/features/timer/cheer';
 import { DIAL, Dial, litTicks } from '@/features/timer/dial';
 import { DialPicker } from '@/features/timer/dial-picker';
 import { useFocusMode } from '@/features/timer/focus-mode';
-import { hideBlock, showBlock } from '@/features/timer/outside';
+import { adoptBlock, hideBlock, showBlock } from '@/features/timer/outside';
 import { ROUNDS, clock, usePomodoro, type Phase } from '@/features/timer/pomodoro';
 
 import { TAB_DOCK } from './_layout';
@@ -83,9 +83,6 @@ const chipLabel = (title: string) => (title.length > 26 ? `${title.slice(0, 25)}
 const endsAtLabel = (at: number) =>
   `termina ${new Date(at).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' })}`;
 
-/** El tramo del bloque en curso, para poder repintarlo fuera de la app al pausar. */
-type Span = { startedAt: number; endsAt: number };
-
 export default function TimerScreen() {
   const { user, token } = useAuth();
   const t = useTheme();
@@ -101,8 +98,14 @@ export default function TimerScreen() {
    */
   const still = useReducedMotion();
 
-  /** Id de la tarea enganchada como texto (lo que maneja `Choice`). '' = sin tarea. */
-  const [taskId, setTaskId] = useState(NONE);
+  /**
+   * La tarea elegida a mano. `null` = "no he tocado nada", y entonces manda la del bloque recuperado.
+   *
+   * Se deriva en vez de copiarse con un efecto (es el mismo patrón que `picked` en el home): un efecto
+   * que hiciera `setTaskId(restored)` sería un setState dentro de un efecto, y encima pisaría la
+   * elección de la persona si la rehidratación llegara tarde.
+   */
+  const [picked, setPicked] = useState<string | null>(null);
   /**
    * Lo que el servidor contestó al cronómetro, cuando no fue lo esperado. El 409 es el caso real: el
    * API solo permite UN timer corriendo por usuario, así que si dejaste uno abierto en otro lado hay
@@ -111,20 +114,12 @@ export default function TimerScreen() {
   const [note, setNote] = useState('');
   /** Sube uno por cada enfoque cerrado. Cambia la `key` del confeti, que así vuelve a llover. */
   const [party, setParty] = useState(0);
-  /** El tramo vivo. `null` cuando no hay bloque corriendo ni pausado a medias. */
-  const [span, setSpan] = useState<Span | null>(null);
+  /** La isla ya se reconcilió con lo recuperado. Sin esto se repetiría en cada render. */
+  const reconciled = useRef(false);
 
   const tasks = day.tasks ?? [];
   /** Solo las pendientes se ofrecen: enfocar una que ya cerraste no significa nada. */
   const pending = tasks.filter((candidate) => candidate.status === 'pending');
-  /**
-   * La enganchada se busca entre TODAS las de hoy y no solo entre las pendientes: si se marca hecha
-   * desde el home a media carrera, hay que seguir pudiendo apagar su cronómetro en el servidor.
-   *
-   * Si el id ya no existe (se borró, cambió de día) esto queda en `null` y todo lo de abajo se
-   * comporta como "sin tarea" por sí solo. No hace falta un efecto que limpie el estado.
-   */
-  const task = tasks.find((candidate) => String(candidate.id) === taskId) ?? null;
 
   /**
    * El cronómetro del servidor, que es lo que hace que el bloque exista fuera de esta pantalla.
@@ -157,12 +152,11 @@ export default function TimerScreen() {
    * No va memoizado a mano y no importa: `usePomodoro` se protege con un contador de cierres, así
    * que aunque esta función cambie de identidad en cada render el aviso sale una vez por bloque.
    */
-  const onFinish = (closed: Phase, done: number) => {
+  const onFinish = (closed: Phase, done: number, silent: boolean) => {
     // `forget` y NO `disarm`: el aviso esta agendado para este mismo instante y cancelarlo aqui
     // seria una carrera contra el sistema que puede dejar el bloque sin sonar.
     forgetAlarm();
     hideBlock();
-    setSpan(null);
     // Sale del modo enfoque: el bloque acabó y hay que poder ir a otra parte.
     focus.setHidden(false);
 
@@ -172,7 +166,7 @@ export default function TimerScreen() {
      * saberlo. Lo que cambia es el peso: el cuarto enfoque cierra el ciclo entero y ahí suena la
      * versión larga.
      */
-    cheer(closed === 'focus' && done >= ROUNDS ? 'cycle' : 'block');
+    if (!silent) cheer(closed === 'focus' && done >= ROUNDS ? 'cycle' : 'block');
 
     // El confeti sí es solo del enfoque: acabar un descanso no es un logro que celebrar.
     if (closed !== 'focus') return;
@@ -183,6 +177,26 @@ export default function TimerScreen() {
   };
 
   const pom = usePomodoro({ onFinish });
+
+  /**
+   * `picked` manda; si nadie eligió nada, la tarea es la del bloque que se recuperó del almacén. Así el
+   * enganche sobrevive a que la app muera sin necesidad de un efecto que copie estado.
+   */
+  const taskId = picked ?? (pom.restoredTaskId != null ? String(pom.restoredTaskId) : NONE);
+  /**
+   * La enganchada se busca entre TODAS las de hoy y no solo entre las pendientes: si se marca hecha
+   * desde el home a media carrera, hay que seguir pudiendo apagar su cronómetro en el servidor.
+   *
+   * Si el id ya no existe (se borró, cambió de día) esto queda en `null` y todo lo de abajo se comporta
+   * como "sin tarea" por sí solo. No hace falta un efecto que limpie el estado.
+   */
+  const task = tasks.find((candidate) => String(candidate.id) === taskId) ?? null;
+
+  /** Elegir tarea: se registra en el cronómetro para que viaje con el bloque al almacén. */
+  const choose = (value: string) => {
+    setPicked(value);
+    pom.attach(value ? Number(value) : null);
+  };
 
   /**
    * La tarea no se puede cambiar a media carrera: los minutos ya corriendo se le sumarían a la
@@ -218,22 +232,51 @@ export default function TimerScreen() {
    *
    * El hook va aquí arriba con los demás: debajo del guard de `user` sería un hook condicional.
    */
-  const tint = useAccent(pom.phase === 'focus' ? accentForFocus(task?.focusArea, fallback) : 'clay');
+  const accent: AccentName = pom.phase === 'focus' ? accentForFocus(task?.focusArea, fallback) : 'clay';
+  const tint = useAccent(accent);
 
-  /** Lo que se manda a la Isla Dinámica y a la pantalla de bloqueo. */
-  const paint = (tramo: Span, pausedAt: number) =>
-    showBlock({
-      phase: PHASES[pom.phase].micro,
-      resting: pom.phase !== 'focus',
-      task: pom.phase === 'focus' ? (task?.title ?? '') : '',
-      startedAt: tramo.startedAt,
-      endsAt: tramo.endsAt,
-      pausedAt,
-      tint: tint.solid,
-      done: Math.min(pom.done, ROUNDS),
-      rounds: ROUNDS,
-      endsAtLabel: endsAtLabel(tramo.endsAt),
-    });
+  /**
+   * Lo que se manda a la Isla Dinámica y a la pantalla de bloqueo.
+   *
+   * El tramo se deriva del largo NOMINAL del bloque (`endsAt - totalMs`) y no del instante en que se
+   * tocó Empezar: así la barra de progreso muestra cuánto lleva el BLOQUE y no cuánto lleva desde que
+   * volviste a la app. El reloj sale igual, porque `Text(timerInterval:)` cuenta hasta el extremo alto.
+   */
+  const blockFor = (endsAt: number, pausedAt: number) => ({
+    phase: PHASES[pom.phase].micro,
+    resting: pom.phase !== 'focus',
+    task: pom.phase === 'focus' ? (task?.title ?? '') : '',
+    startedAt: endsAt - pom.totalMs,
+    endsAt,
+    pausedAt,
+    /**
+     * El MISMO acento pero resuelto para fondo oscuro, no `tint.solid`. La Live Activity siempre se
+     * pinta sobre negro (pantalla de bloqueo e Isla) en los dos esquemas, así que el paso que sirve
+     * en la app no es el que se lee allá: en modo claro, olive daba 2.2:1 y la cuenta desaparecía.
+     */
+    tint: accentOnDark(accent),
+    done: Math.min(pom.done, ROUNDS),
+    rounds: ROUNDS,
+    endsAtLabel: endsAtLabel(endsAt),
+  });
+
+  const paint = (endsAt: number, pausedAt: number) => showBlock(blockFor(endsAt, pausedAt));
+
+  /**
+   * Reconcilia la isla con el bloque recuperado, UNA sola vez por montaje.
+   *
+   * Es la otra mitad del arreglo del bug: sin esto, la Live Activity de la sesión anterior se quedaba
+   * viva y huérfana, y a la siguiente vuelta se abría otra encima. Se acumulaban hasta pasar el límite
+   * de iOS, y de ahí en adelante no aparecía ninguna. `adoptBlock` adopta la que ya está si hay bloque
+   * que representar, y si no, la cierra.
+   *
+   * El ref es lo que lo deja correr una sola vez: sin él, cada tick del segundo volvería a reconciliar.
+   */
+  useEffect(() => {
+    if (!pom.ready || reconciled.current) return;
+    reconciled.current = true;
+    adoptBlock(pom.endsAt === null ? null : blockFor(pom.endsAt, 0));
+  });
 
   const begin = () => {
     /**
@@ -241,32 +284,35 @@ export default function TimerScreen() {
      * todavía no se ha aplicado, así que `pom.endsAt` traería el del render anterior. Es la misma
      * aritmética que hace el hook por dentro, sobre el mismo reloj.
      */
-    const startedAt = Date.now();
-    const tramo = { startedAt, endsAt: startedAt + pom.leftMs };
+    const endsAt = Date.now() + pom.leftMs;
 
     pom.begin();
-    setSpan(tramo);
+    // La tarea se registra al empezar y no solo al elegirla: un bloque que arranca sin haber tocado los
+    // chips lleva la del bloque recuperado, y esa también tiene que quedar guardada.
+    pom.attach(task?.id ?? null);
     // Segundos y no ms: el trigger de intervalo de expo-notifications los pide en segundos.
     armAlarm(Math.round(pom.leftMs / 1000), 'tdapp', PHASES[pom.phase].alarm);
-    paint(tramo, 0);
+    paint(endsAt, 0);
     focus.setHidden(true);
     if (pom.phase === 'focus') serverTimer(task?.id ?? null, 'start');
   };
 
   const hold = () => {
+    // Se lee ANTES de pausar: `pom.pause()` pone `endsAt` en null, y este es el dato que la actividad
+    // necesita para saber dónde clavar el reloj.
+    const endsAt = pom.endsAt;
     pom.pause();
     disarmAlarm();
     focus.setHidden(false);
     // Pausado se REPINTA en vez de quitarse: `pauseTime` clava el reloj y así queda claro que hay un
     // bloque a medias esperándote, en vez de que desaparezca como si no hubiera pasado nada.
-    if (span) paint(span, Date.now());
+    if (endsAt !== null) paint(endsAt, Date.now());
     if (pom.phase === 'focus') serverTimer(task?.id ?? null, 'stop');
   };
 
   const leave = () => {
     disarmAlarm();
     hideBlock();
-    setSpan(null);
     focus.setHidden(false);
   };
 
@@ -420,7 +466,7 @@ export default function TimerScreen() {
                     hint="Los minutos se le suman a esa tarea."
                     options={options}
                     value={taskId}
-                    onChange={setTaskId}
+                    onChange={choose}
                     accent={fallback}
                   />
                 )}

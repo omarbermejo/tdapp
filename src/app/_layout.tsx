@@ -48,6 +48,9 @@ function RootNavigator() {
         <Stack.Protected guard={stage === 'ready'}>
           <Stack.Screen name="(app)" />
         </Stack.Protected>
+        {/* Banco de pruebas de la Live Activity. Fuera de los guards y solo en desarrollo: se abre
+            con `tdapp:///la-preview` sin navegar ni estar logueado. Ver app/la-preview.tsx. */}
+        {__DEV__ && <Stack.Screen name="la-preview" />}
       </Stack>
       {/* Encima del navegador: el confeti sobrevive al cambio de grupo de rutas. */}
       {celebrating && <Confetti onDone={stopCelebrating} />}
