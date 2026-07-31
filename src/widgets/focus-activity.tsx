@@ -6,6 +6,7 @@ import {
   kerning,
   lineLimit,
   monospacedDigit,
+  multilineTextAlignment,
   opacity,
   padding,
   textCase,
@@ -155,6 +156,17 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
          * en cada tick. Es la misma razon del `tabular-nums` de `Type.count` en la app.
          */
         monospacedDigit(),
+        /**
+         * El `alignment` del `frame` que acota el reloj en el banner NO mueve sus digitos: SwiftUI lo
+         * ignora en un `Text(timerInterval:)` y un DTS de Apple lo reconoce sin arreglo (foro 758531).
+         * Quien los pega al canto derecho de su caja es esto.
+         *
+         * Es idempotente, asi que sobrevive a que en este renderer los modifiers de un `<Text>` se
+         * apliquen DOS veces (`UIBaseView.swift:21` y otra vez `TextView.swift:42`). Esa duplicacion es
+         * la causa raiz de los cuatro crashes: convertia un `frame(maxWidth:)` en dos marcos flexibles
+         * anidados. Por eso la geometria del reloj vive en un `<HStack>` envolvente y no aqui.
+         */
+        multilineTextAlignment('trailing'),
         foregroundColor(ink),
       ]}
     />
@@ -293,9 +305,9 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
           donde no cabe una palabra.
         */}
         {/*
-          Sin `Spacer` en ninguna fila: el punteo del ciclo va pegado al rotulo, leyendose como una
-          unidad ("ENFOQUE, dos de cuatro"), en vez de exiliado en el canto derecho. Es lo que queda
-          cuando el reparto horizontal no se puede controlar — ver el comentario de abajo.
+          El punteo del ciclo va PEGADO al rotulo, sin Spacer que lo exilie al canto derecho: se lee
+          como una unidad ("ENFOQUE, dos de cuatro"). Y de paso esta fila no pide ancho de mas, que es
+          justo lo que la de abajo si hace.
         */}
         <HStack spacing={7}>
           {micro}
