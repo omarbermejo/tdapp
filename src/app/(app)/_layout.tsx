@@ -8,6 +8,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-na
 
 import { Radius, Space, Type, useAccent, useScheme, useShadow, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
+import { FocusModeProvider, useFocusMode } from '@/features/timer/focus-mode';
 import { usePressScale } from '@/hooks/use-press-scale';
 
 /**
@@ -68,6 +69,16 @@ const barWidth = (slots: number) => slots * SLOT + (slots + 1) * GAP;
 
 /** El resaltado llega con inercia y se pasa un pelo. Si solo apareciera no se leeria liquido. */
 const SLIDE = { damping: 18, stiffness: 220 };
+
+/**
+ * La salida y la entrada de la capsula en modo enfoque. Sin rebote: la barra se aparta, no se
+ * despide. Un muelle con overshoot la haria asomar de vuelta justo cuando el bloque acaba de
+ * arrancar, que es el momento en que se quiere que desaparezca y ya.
+ */
+const DOCK = { damping: 26, stiffness: 190 };
+
+/** Lo que baja la capsula al esconderse: su alto entero mas el aire, para que salga de cuadro. */
+const DOCK_AWAY = BAR_H + Space.xl;
 
 /**
  * Distancia a la que dos piezas de vidrio empiezan a fundirse. Corta a proposito: el resaltado
@@ -171,6 +182,7 @@ function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
   const shadow = useShadow();
   const { user } = useAuth();
   const accent = useAccent(user?.accentColor);
+  const { hidden } = useFocusMode();
 
   const current = state.routes[state.index]?.name;
   // Una pestaña sin archivo todavia simplemente no aparece. Filtrar ANTES de pintar mantiene
@@ -190,11 +202,38 @@ function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
     x.set(withSpring(index * SLOT_STEP, SLIDE));
   }, [index, x]);
 
+  /**
+   * Modo enfoque. Se anima `transform` y `opacity` y NUNCA se desmonta la capsula: un `GlassView`
+   * que nace con marco cero se queda sin efecto para siempre (el `isMounted` de GlassView.swift se
+   * resuelve una vez), asi que quitarla del arbol y devolverla la dejaria como un rectangulo plano.
+   *
+   * La barra solo se aparta EN la pantalla del cronometro. El seguro importa: quien revela la
+   * capsula para irse a otra pestaña se lleva un `hidden` que sigue en true, y sin esta condicion la
+   * barra desapareceria en el calendario — donde no hay nada que la devuelva, porque el toque que la
+   * alterna vive en el cronometro.
+   */
+  const away = useSharedValue(0);
+  const gone = hidden && current === 'timer';
+  const dock = useAnimatedStyle(() => ({
+    transform: [{ translateY: away.get() * DOCK_AWAY }],
+    // No baja de 0.0 a 1.0 en linea con el desplazamiento: se apaga antes de llegar abajo para que
+    // no se vea cruzar el borde de la pantalla.
+    opacity: 1 - away.get(),
+  }));
+
+  useEffect(() => {
+    away.set(withSpring(gone ? 1 : 0, DOCK));
+  }, [gone, away]);
+
   // El guard va DESPUES de los hooks: en una ruta sin pestaña la barra no se pinta.
   if (index < 0) return null;
 
   return (
-    <View style={[styles.dock, { paddingBottom: insets.bottom + Space.md }]} pointerEvents="box-none">
+    <Animated.View
+      style={[styles.dock, dock, { paddingBottom: insets.bottom + Space.md }]}
+      // Apartada no captura nada: sin esto, la capsula invisible seguiria comiendose los toques de
+      // la franja de abajo de la pantalla.
+      pointerEvents={gone ? 'none' : 'box-none'}>
       {/*
         Tres capas, y el orden importa: capsula (vidrio), resaltado (vidrio) y glifos (planos).
         Las dos piezas de vidrio son HERMANAS dentro del contenedor — es lo que las funde. Meter
@@ -259,18 +298,22 @@ function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
           })}
         </View>
       </GlassContainer>
-    </View>
+    </Animated.View>
   );
 }
 
 export default function AppLayout() {
   const t = useTheme();
 
+  // El proveedor envuelve los Tabs y NO al contrario: la barra es hija de Tabs, asi que tiene que
+  // quedar dentro del alcance del contexto para poder apartarse.
   return (
-    <Tabs
-      tabBar={(props) => <FloatingTabs {...props} />}
-      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: t.canvas } }}
-    />
+    <FocusModeProvider>
+      <Tabs
+        tabBar={(props) => <FloatingTabs {...props} />}
+        screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: t.canvas } }}
+      />
+    </FocusModeProvider>
   );
 }
 

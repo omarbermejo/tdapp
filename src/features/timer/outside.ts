@@ -1,4 +1,7 @@
+import type { LiveActivity, LiveActivityFactory } from 'expo-widgets';
 import { Platform } from 'react-native';
+
+import type { FocusActivityProps } from '@/widgets/focus-activity';
 
 /**
  * El bloque de enfoque visto desde FUERA de la app: es el punto del cronometro.
@@ -21,6 +24,8 @@ import { Platform } from 'react-native';
 export type Block = {
   /** 'Enfoque' · 'Descanso corto' · 'Descanso largo'. */
   phase: string;
+  /** Si el bloque es un descanso. Explícito para que el otro proceso no compare etiquetas. */
+  resting: boolean;
   /** Titulo de la tarea enganchada, '' si el bloque va libre. */
   task: string;
   startedAt: number;
@@ -42,11 +47,12 @@ const CHANNEL = 'timer';
 /**
  * La actividad viva. Se guarda para poder actualizarla y cerrarla.
  *
- * `any` y no el tipo real a proposito: importar el tipo `LiveActivity` de expo-widgets aqui arriba
- * arrastraria el modulo, y todo el punto de los imports dinamicos de abajo es que un binario sin la
- * parte nativa compilada no reviente al cargar este archivo.
+ * Los tipos se importan con `import type`, que TypeScript borra al compilar: el modulo NO se carga
+ * al leer este archivo. Eso es lo que hace que los `import()` de abajo sirvan de algo — en un binario
+ * sin la parte nativa compilada, cargar expo-widgets revienta, y un import de valor arriba se
+ * llevaria la pantalla del cronometro por delante.
  */
-let activity: unknown = null;
+let activity: LiveActivity<FocusActivityProps> | null = null;
 
 /** iOS 16.2+ y con Live Activities habilitadas. Fuera de iOS expo-widgets ya devuelve stubs no-op. */
 const IOS = Platform.OS === 'ios';
@@ -74,6 +80,7 @@ async function showActivity(block: Block) {
     const { default: FocusActivity } = await import('@/widgets/focus-activity');
     const props = {
       phase: block.phase,
+      resting: block.resting,
       task: block.task,
       startedAt: block.startedAt,
       endsAt: block.endsAt,
@@ -84,7 +91,7 @@ async function showActivity(block: Block) {
     };
 
     if (activity) {
-      await (activity as { update: (p: typeof props) => Promise<void> }).update(props);
+      await activity.update(props);
       return;
     }
 
@@ -106,14 +113,14 @@ async function hideActivity() {
   try {
     // 'immediate': el bloque se acabo o se pauso, y dejarlo cuatro horas en la pantalla de bloqueo
     // convierte la Live Activity en basura que hay que barrer a mano.
-    await (live as { end: (policy: string) => Promise<void> }).end('immediate');
+    await live.end('immediate');
   } catch {
     // Una actividad que no se pudo cerrar la expira el sistema; no vale tumbar la pantalla por eso.
   }
 }
 
 /** Cierra las actividades huerfanas de sesiones pasadas. */
-async function endStrays(factory: { getInstances: () => { end: (p: string) => Promise<void> }[] }) {
+async function endStrays(factory: LiveActivityFactory<FocusActivityProps>) {
   try {
     await Promise.all(factory.getInstances().map((stray) => stray.end('immediate')));
   } catch {

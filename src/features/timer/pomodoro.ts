@@ -12,14 +12,10 @@ export type Phase = 'focus' | 'short' | 'long';
 /** Enfoques antes del descanso largo. Cuatro es el pomodoro clasico y cabe en una fila de brotes. */
 export const ROUNDS = 4;
 
-/**
- * Los largos de enfoque son los MISMOS 5/25/50 de `sizeMinutes` del API (quick/medium/deep).
- * Reusar el vocabulario que la persona ya eligio al anotar la tarea evita que el cronometro
- * hable de "pomodoros de 25" cuando la tarea decia "profunda, 50 min".
- */
-export const FOCUS_MINUTES = [5, 25, 50] as const;
-
 const BREAK_MINUTES: Record<Exclude<Phase, 'focus'>, number> = { short: 5, long: 15 };
+
+/** Con que largo arranca la pantalla. El pomodoro clasico, y de ahi se gira la caratula. */
+const DEFAULT_MINUTES = 25;
 
 const ms = (minutes: number) => minutes * 60_000;
 
@@ -45,17 +41,6 @@ type State = {
   leftMs: number;
   /** Enfoques cerrados del ciclo, 0..ROUNDS. */
   done: number;
-  /**
-   * Bloques que llegaron a cero. Solo sube.
-   *
-   * Existe para que el aviso (haptico, `onFinish`) NO tenga que salir de un `setState` dentro de
-   * un efecto: el cierre del bloque es aritmetica y vive en el tick, y este contador es la señal
-   * que el efecto observa para avisar. Un booleano no serviria — dos bloques seguidos lo dejarian
-   * en true las dos veces y el segundo aviso no se distinguiria del primero.
-   */
-  closed: number;
-  /** La fase que cerro en el ultimo `closed`. Es lo que `onFinish` necesita saber. */
-  lastClosed: Phase | null;
 };
 
 const start = (focusMinutes: number): State => {
@@ -67,8 +52,6 @@ const start = (focusMinutes: number): State => {
     endsAt: null,
     leftMs: focusMs,
     done: 0,
-    closed: 0,
-    lastClosed: null,
   };
 };
 
@@ -100,42 +83,82 @@ export type Pomodoro = ReturnType<typeof usePomodoro>;
  * Con TDAH el problema no es que el reloj corra, es decidir empezar — y esa decision tiene que
  * ser un toque visible, no algo que ya paso sin ti.
  *
- * `onFinish` recibe la fase que ACABA de cerrar (no la que sigue): es lo que necesita quien
- * quiera avisar, apagar el cronometro del servidor o celebrar. NO necesita ser estable — el
- * disparo se guarda con un ref contra el contador de cierres, asi que aunque cambie de identidad
- * en cada render el aviso sale exactamente una vez por bloque.
+ * `onFinish` recibe la fase que ACABA de cerrar (no la que sigue). Se llama desde el callback del
+ * intervalo, NO desde el cuerpo de un efecto: eso es lo que deja al que lo escucha hacer `setState`
+ * con libertad. Un aviso disparado desde el cuerpo de un efecto convierte cada `setState` del
+ * consumidor en un render en cascada — el mismo problema que el tick de abajo evita, y que el lint
+ * no caza porque la llamada es indirecta.
  */
 export function usePomodoro({ onFinish }: { onFinish?: (closed: Phase) => void } = {}) {
-  const [state, setState] = useState<State>(() => start(25));
+  const [state, setState] = useState<State>(() => start(DEFAULT_MINUTES));
+
+  /**
+   * Espejo SINCRONO del estado. El tick corre desde un `setInterval`, o sea fuera de un render, y
+   * necesita el estado de ESTE instante: con un updater de `setState` no podria hacer efectos
+   * secundarios (un updater puede ejecutarse dos veces y el aviso saldria doble), y leyendo la
+   * variable del closure leeria el del render en que se creo el intervalo.
+   *
+   * Todas las escrituras pasan por `commit`, asi que el ref y el estado no se pueden separar.
+   */
+  const live = useRef(state);
+
+  const commit = useCallback((next: State) => {
+    live.current = next;
+    setState(next);
+  }, []);
+
+  /**
+   * `onFinish` cambia de identidad en cada render del consumidor (depende de sus tareas del dia).
+   * Se guarda en un ref para que NO entre en las dependencias del intervalo: si entrara, el
+   * cronometro se reiniciaria en cada render del padre.
+   */
+  const finish = useRef(onFinish);
+  useEffect(() => {
+    finish.current = onFinish;
+  }, [onFinish]);
 
   /**
    * El latido. Solo existe mientras hay `endsAt`, asi que un cronometro en pausa no despierta al
-   * telefono. 250ms y no 1000: con un tick por segundo el digito cambia hasta un segundo tarde y
-   * el reloj se lee retrasado.
+   * telefono. 250ms y no 1000: con un tick por segundo el digito cambia hasta un segundo tarde y el
+   * reloj se lee retrasado.
    *
-   * El cierre del bloque pasa AQUI DENTRO, en el updater, y no en un efecto aparte: llegar a cero
-   * es la misma transicion que descontar un segundo, solo que la que se pasa de la raya. Sacarla a
-   * un efecto seria un setState dentro de un efecto, que es un render en cascada y lo que el
-   * compilador de React rechaza con razon.
+   * El cierre del bloque y su aviso pasan AQUI, dentro del callback del intervalo. Es el patron
+   * legitimo de `useEffect`: suscribirse a un sistema externo (el reloj) y llamar `setState` desde
+   * su callback. El cuerpo del efecto no escribe estado ni una vez.
    *
-   * El listener de AppState recalcula al volver al frente porque el intervalo se congela con la
-   * app al fondo: sin el, la pantalla reaparece con el tiempo de cuando la dejaste.
+   * El listener de AppState recalcula al volver al frente porque el intervalo se congela con la app
+   * al fondo: sin el, la pantalla reaparece con el tiempo de cuando la dejaste — y si el bloque
+   * vencio mientras estaba suspendida, es aqui donde se cierra al volver.
    */
   useEffect(() => {
     if (state.endsAt === null) return;
 
-    const tick = () =>
-      setState((s) => {
-        if (s.endsAt === null) return s;
-        const left = Math.max(0, s.endsAt - Date.now());
-        // Devolver el MISMO objeto cuando no cambio evita un render por tick entre segundos.
-        if (left > 0) return left === s.leftMs ? s : { ...s, leftMs: left };
+    const tick = () => {
+      const s = live.current;
+      if (s.endsAt === null) return;
 
-        const next = nextPhase(s.phase, s.done);
-        return { ...arm(s, next.phase, next.done), closed: s.closed + 1, lastClosed: s.phase };
-      });
+      const left = Math.max(0, s.endsAt - Date.now());
+      if (left > 0) {
+        // Solo si cambio: sin esto habria un render por tick entre un segundo y el siguiente.
+        if (left !== s.leftMs) commit({ ...s, leftMs: left });
+        return;
+      }
 
-    tick();
+      const closed = s.phase;
+      const next = nextPhase(s.phase, s.done);
+      // El estado se cierra ANTES de avisar: asi el guard de arriba ya deja pasar un segundo tick
+      // por las mismas fechas sin volver a avisar.
+      commit(arm(s, next.phase, next.done));
+      // Success y no Impact: es el unico premio del bloque y tiene que sentirse distinto a un toque.
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      finish.current?.(closed);
+    };
+
+    /**
+     * Sin un `tick()` de arranque a proposito: seria un `setState` en el cuerpo del efecto, y ademas
+     * no hace falta — quien arranca el bloque ya dejo `leftMs` correcto. El primer latido llega a
+     * los 250ms y no se nota.
+     */
     const id = setInterval(tick, 250);
     const sub = AppState.addEventListener('change', (status) => {
       if (status === 'active') tick();
@@ -145,70 +168,56 @@ export function usePomodoro({ onFinish }: { onFinish?: (closed: Phase) => void }
       clearInterval(id);
       sub.remove();
     };
-  }, [state.endsAt]);
-
-  /**
-   * El aviso de que un bloque cerro. Solo efectos secundarios: el estado ya cambio en el tick.
-   *
-   * El ref es lo que hace que salga UNA vez por bloque sin importar cuantas veces corra el efecto
-   * — y corre de mas, porque `onFinish` viene de la pantalla y su identidad cambia con las tareas
-   * del dia. Comparar contra el contador es mas barato y mas seguro que exigir que el llamador
-   * memoice bien.
-   */
-  const announced = useRef(0);
-  useEffect(() => {
-    if (state.closed === announced.current) return;
-    announced.current = state.closed;
-    if (!state.lastClosed) return;
-
-    // Success y no Impact: es el unico premio del bloque y tiene que sentirse distinto a un toque.
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    onFinish?.(state.lastClosed);
-  }, [state.closed, state.lastClosed, onFinish]);
+  }, [state.endsAt, commit]);
 
   /** Arranca o reanuda: el instante final se calcula aqui, en el unico lugar que lee el reloj. */
   const begin = useCallback(() => {
-    setState((s) => (s.endsAt !== null ? s : { ...s, endsAt: Date.now() + s.leftMs }));
-  }, []);
+    const s = live.current;
+    if (s.endsAt !== null) return;
+    commit({ ...s, endsAt: Date.now() + s.leftMs });
+  }, [commit]);
 
   /** Pausa. Se recalcula lo que queda en vez de confiar en `leftMs`, que trae el ultimo tick. */
   const pause = useCallback(() => {
-    setState((s) =>
-      s.endsAt === null ? s : { ...s, endsAt: null, leftMs: Math.max(0, s.endsAt - Date.now()) }
-    );
-  }, []);
+    const s = live.current;
+    if (s.endsAt === null) return;
+    commit({ ...s, endsAt: null, leftMs: Math.max(0, s.endsAt - Date.now()) });
+  }, [commit]);
 
   /** Vuelve a empezar ESTE bloque. No toca el ciclo: reiniciar no es rendirse. */
   const reset = useCallback(() => {
-    setState((s) => arm(s, s.phase, s.done));
-  }, []);
+    const s = live.current;
+    commit(arm(s, s.phase, s.done));
+  }, [commit]);
 
   /**
    * Saltar al siguiente bloque sin esperarlo. Cuenta el enfoque como cerrado igual que si hubiera
-   * llegado a cero: mentir sobre eso desalinearia los brotes de lo que la persona hizo. No avisa
-   * (no toca `closed`) porque el aviso es para un bloque que se cumplio, no para uno que se salto.
+   * llegado a cero: mentir sobre eso desalinearia los brotes de lo que la persona hizo. No avisa,
+   * porque el aviso es para un bloque que se cumplio, no para uno que se salto.
    */
   const skip = useCallback(() => {
-    setState((s) => {
-      const next = nextPhase(s.phase, s.done);
-      return arm(s, next.phase, next.done);
-    });
-  }, []);
+    const s = live.current;
+    const next = nextPhase(s.phase, s.done);
+    commit(arm(s, next.phase, next.done));
+  }, [commit]);
 
   /**
-   * El largo de enfoque. Vive DENTRO del hook y no como prop para no tener que sincronizarlo con
-   * un efecto: el estado del cronometro tiene un solo dueño.
+   * El largo de enfoque. Vive DENTRO del hook y no como prop para no tener que sincronizarlo con un
+   * efecto: el estado del cronometro tiene un solo dueño.
    *
-   * Solo se aplica sobre un enfoque que no esta corriendo. Reescribir el bloque a media carrera
-   * deja el dial mintiendo sobre lo que falta.
+   * Solo se aplica sobre un enfoque que no esta corriendo. Reescribir el bloque a media carrera deja
+   * el dial mintiendo sobre lo que falta.
    */
-  const setFocusMinutes = useCallback((minutes: number) => {
-    setState((s) => {
-      if (s.endsAt !== null || s.phase !== 'focus') return s;
+  const setFocusMinutes = useCallback(
+    (minutes: number) => {
+      const s = live.current;
+      if (s.endsAt !== null || s.phase !== 'focus') return;
       const focusMs = ms(minutes);
-      return focusMs === s.focusMs ? s : { ...s, focusMs, totalMs: focusMs, leftMs: focusMs };
-    });
-  }, []);
+      if (focusMs === s.focusMs) return;
+      commit({ ...s, focusMs, totalMs: focusMs, leftMs: focusMs });
+    },
+    [commit]
+  );
 
   return {
     phase: state.phase,

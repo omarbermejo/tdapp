@@ -3,8 +3,14 @@ import { StyleSheet, View } from 'react-native';
 
 import { Radius } from '@/constants/theme';
 
-/** Una marca por minuto de un reloj: 60 se lee como una carátula sin tener que contarlas. */
-const TICKS = 60;
+/**
+ * Una marca por minuto de un reloj: 60 se lee como una carátula sin tener que contarlas.
+ *
+ * Se exporta porque `dial-picker` lo usa como el techo del rango y como los minutos que cabe una
+ * vuelta completa. Es la constante que hace que la carátula no mienta: una marca es un minuto al
+ * elegir Y al correr.
+ */
+export const TICKS = 60;
 const STEP = 360 / TICKS;
 
 /** Diametro. Se exporta porque la pantalla centra la lectura encima y necesita la misma caja. */

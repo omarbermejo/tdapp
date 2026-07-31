@@ -15,6 +15,11 @@ import { createLiveActivity, type LiveActivityEnvironment } from 'expo-widgets';
 export type FocusActivityProps = {
   /** 'Enfoque' · 'Descanso corto' · 'Descanso largo'. Ya formateado por la app. */
   phase: string;
+  /**
+   * Si el bloque es un descanso. Viaja como booleano en vez de deducirse comparando `phase` con
+   * 'Enfoque': el layout no debe depender de la ortografia de una etiqueta que se puede reescribir.
+   */
+  resting: boolean;
   /** Titulo de la tarea enganchada. '' cuando el bloque no tiene tarea. */
   task: string;
   /** Epoch ms en que arranco el bloque: el extremo bajo de la cuenta. */
@@ -56,7 +61,7 @@ const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvi
   const range = { lower: new Date(props.startedAt), upper: new Date(props.endsAt) };
   // undefined y no 0: `pauseTime` opcional significa "corriendo", y un Date(0) seria 1970.
   const pauseTime = props.pausedAt > 0 ? new Date(props.pausedAt) : undefined;
-  const resting = props.phase !== 'Enfoque';
+  const resting = props.resting;
 
   /** La cuenta atras. Es el unico dato que de verdad importa, asi que se repite en cada seccion. */
   const countdown = (size: number) => (
