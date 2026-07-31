@@ -7,7 +7,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { SectionHeader } from '@/components/ui/card';
-import { Space, Type, useTheme } from '@/constants/theme';
+import { Motion, Space, Type, useTheme } from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 
@@ -25,7 +25,7 @@ import type { useTasks } from './use-tasks';
 const ROW_LAYOUT = LinearTransition.springify().damping(22).stiffness(240);
 
 /** Borrar tampoco corta: la fila se apaga y las de abajo suben con ROW_LAYOUT. */
-const ROW_EXIT = FadeOut.duration(140);
+const ROW_EXIT = FadeOut.duration(Motion.exit);
 
 /**
  * La lista se arma de arriba a abajo en vez de aparecer de golpe.
@@ -40,7 +40,7 @@ const ROW_EXIT = FadeOut.duration(140);
  */
 const rowEntering = (index: number) =>
   FadeInDown.delay(Math.min(index, 8) * 45)
-    .duration(220)
+    .duration(Motion.enter)
     .reduceMotion(ReduceMotion.System);
 
 /**

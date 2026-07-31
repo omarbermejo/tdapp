@@ -1,3 +1,23 @@
+/**
+ * Uno por icono y NO del barril (`from 'lucide-react-native'`): medido contra el bundle, el barril
+ * mete 1756 modulos de icono para usar catorce, y Metro no hace tree-shaking de ese re-export.
+ * Mismo criterio que la barra de pestañas. Los nombres de mas de una palabra van en kebab-case.
+ */
+import Banknote from 'lucide-react-native/icons/banknote';
+import BellRing from 'lucide-react-native/icons/bell-ring';
+import BookOpen from 'lucide-react-native/icons/book-open';
+import BriefcaseBusiness from 'lucide-react-native/icons/briefcase-business';
+import Feather from 'lucide-react-native/icons/feather';
+import HeartPulse from 'lucide-react-native/icons/heart-pulse';
+import House from 'lucide-react-native/icons/house';
+import Megaphone from 'lucide-react-native/icons/megaphone';
+import Moon from 'lucide-react-native/icons/moon';
+import Shuffle from 'lucide-react-native/icons/shuffle';
+import Sparkles from 'lucide-react-native/icons/sparkles';
+import Sun from 'lucide-react-native/icons/sun';
+import Sunrise from 'lucide-react-native/icons/sunrise';
+import Users from 'lucide-react-native/icons/users';
+
 import type { Option } from '@/components/ui/choice';
 
 /**
@@ -6,38 +26,37 @@ import type { Option } from '@/components/ui/choice';
  * No hay diagnostico ni tratamiento: son dato clinico que la app no usa y eran las dos
  * preguntas que mas gente dejaba a medias.
  *
- * Los iconos son de Lucide (ISC, el aviso de licencia viaja dentro de cada .svg) con el
- * trazo cambiado a la tinta de la marca. No son los stickers de Alteos a proposito: a 26pt
- * dentro de un chip una ilustracion con trama de puntos se vuelve papilla, y el diseño de
- * referencia usa justo iconos de linea en sus controles. Las ilustraciones de Alteos siguen
- * siendo los heroes de pantalla (welcome y el ultimo paso del onboarding), asi que el sistema
- * queda en dos niveles: ilustracion para heroes, linea para controles.
+ * Los iconos son de Lucide (ISC), los MISMOS glifos que antes vivian como .svg en `assets/` — se
+ * cambio el mecanismo, no el dibujo. Como componente, el color sale de los tokens y sigue al
+ * esquema solo: antes el trazo venia quemado en el archivo y habia que taparlo con un tinte.
+ *
+ * No son los stickers de Alteos a proposito: a 26pt dentro de un chip una ilustracion con trama de
+ * puntos se vuelve papilla, y el diseño de referencia usa justo iconos de linea en sus controles.
+ * Las ilustraciones de Alteos siguen siendo los heroes de pantalla (welcome y el ultimo paso del
+ * onboarding), asi que el sistema queda en dos niveles: ilustracion para heroes, linea para
+ * controles.
  */
 export const FOCUS_AREAS: readonly Option[] = [
-  { value: 'study', label: 'Estudio', icon: require('@/assets/icons/chips/study.svg') },
-  { value: 'work', label: 'Trabajo', icon: require('@/assets/icons/chips/work.svg') },
-  { value: 'home', label: 'Casa', icon: require('@/assets/icons/chips/home.svg') },
-  { value: 'health', label: 'Salud', icon: require('@/assets/icons/chips/health.svg') },
-  { value: 'money', label: 'Dinero', icon: require('@/assets/icons/chips/money.svg') },
-  {
-    value: 'relationships',
-    label: 'Relaciones',
-    icon: require('@/assets/icons/chips/relationships.svg'),
-  },
-  { value: 'creativity', label: 'Creatividad', icon: require('@/assets/icons/chips/creativity.svg') },
+  { value: 'study', label: 'Estudio', icon: BookOpen },
+  { value: 'work', label: 'Trabajo', icon: BriefcaseBusiness },
+  { value: 'home', label: 'Casa', icon: House },
+  { value: 'health', label: 'Salud', icon: HeartPulse },
+  { value: 'money', label: 'Dinero', icon: Banknote },
+  { value: 'relationships', label: 'Relaciones', icon: Users },
+  { value: 'creativity', label: 'Creatividad', icon: Sparkles },
 ];
 
 export const PEAK_ENERGY: readonly Option[] = [
-  { value: 'morning', label: 'Mañana', icon: require('@/assets/icons/chips/morning.svg') },
-  { value: 'afternoon', label: 'Tarde', icon: require('@/assets/icons/chips/afternoon.svg') },
-  { value: 'night', label: 'Noche', icon: require('@/assets/icons/chips/night.svg') },
-  { value: 'varies', label: 'Cambia mucho', icon: require('@/assets/icons/chips/varies.svg') },
+  { value: 'morning', label: 'Mañana', icon: Sunrise },
+  { value: 'afternoon', label: 'Tarde', icon: Sun },
+  { value: 'night', label: 'Noche', icon: Moon },
+  { value: 'varies', label: 'Cambia mucho', icon: Shuffle },
 ];
 
 export const REMINDER_STYLE: readonly Option[] = [
-  { value: 'gentle', label: 'Suave', icon: require('@/assets/icons/chips/gentle.svg') },
-  { value: 'firm', label: 'Firme', icon: require('@/assets/icons/chips/firm.svg') },
-  { value: 'persistent', label: 'Insistente', icon: require('@/assets/icons/chips/persistent.svg') },
+  { value: 'gentle', label: 'Suave', icon: Feather },
+  { value: 'firm', label: 'Firme', icon: Megaphone },
+  { value: 'persistent', label: 'Insistente', icon: BellRing },
 ];
 
 /**

@@ -540,8 +540,8 @@ export default function TimerScreen() {
           */}
           {!locked && !focus.hidden && (
             <Animated.View
-              entering={animate ? FadeIn.duration(200) : undefined}
-              exiting={animate ? FadeOut.duration(140) : undefined}
+              entering={animate ? FadeIn.duration(Motion.enter) : undefined}
+              exiting={animate ? FadeOut.duration(Motion.exit) : undefined}
               layout={animate ? LinearTransition : undefined}>
               <Card>
                 {day.tasks === null && day.loading ? (

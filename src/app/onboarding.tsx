@@ -8,7 +8,7 @@ import { Choice, type Option } from '@/components/ui/choice';
 import { DateField } from '@/components/ui/date-field';
 import { FormError } from '@/components/ui/form-error';
 import { StepDots } from '@/components/ui/step-dots';
-import { Radius, Space, Type, useAccent, useShadow, useTheme } from '@/constants/theme';
+import { Motion, Radius, Space, Type, useAccent, useShadow, useTheme } from '@/constants/theme';
 import { ApiError, type ProfileInput, type User } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import {
@@ -273,7 +273,7 @@ function Bubble({ text, hint }: { text: string; hint?: string }) {
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(220)}
+      entering={FadeInDown.duration(Motion.enter)}
       style={[styles.bubble, { backgroundColor: t.surface }, shadow]}>
       <Text style={[Type.body, { color: t.text }]}>{text}</Text>
       {!!hint && <Text style={[Type.hint, { color: t.textMuted }]}>{hint}</Text>}
@@ -284,7 +284,7 @@ function Bubble({ text, hint }: { text: string; hint?: string }) {
 /** Lo que respondiste: tinte del acento, a la derecha. */
 function Said({ text, tint, color }: { text: string; tint: string; color: string }) {
   return (
-    <Animated.View entering={FadeInDown.duration(220)} style={[styles.said, { backgroundColor: tint }]}>
+    <Animated.View entering={FadeInDown.duration(Motion.enter)} style={[styles.said, { backgroundColor: tint }]}>
       <Text style={[Type.label, { color }]}>{text}</Text>
     </Animated.View>
   );

@@ -20,7 +20,7 @@ import { Choice, type Option } from '@/components/ui/choice';
 import { DateField } from '@/components/ui/date-field';
 import { FormError } from '@/components/ui/form-error';
 import { TimeField } from '@/components/ui/time-field';
-import { Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
+import { Motion, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
 import { ApiError, type Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { FOCUS_AREAS } from '@/features/auth/options';
@@ -356,7 +356,7 @@ export default function NewTaskScreen() {
           </View>
 
           {panel === 'when' && (
-            <Animated.View entering={FadeInDown.duration(220)} style={styles.panel}>
+            <Animated.View entering={FadeInDown.duration(Motion.enter)} style={styles.panel}>
               <Choice
                 label="El día"
                 options={[...when.days, { value: OTHER, label: 'Otro día' }]}
@@ -404,7 +404,7 @@ export default function NewTaskScreen() {
           )}
 
           {panel === 'size' && (
-            <Animated.View entering={FadeInDown.duration(220)} style={styles.panel}>
+            <Animated.View entering={FadeInDown.duration(Motion.enter)} style={styles.panel}>
               {/* El tamaño es lo que decide cuanto dura el cronometro, no una etiqueta. */}
               <Choice
                 label="Tamaño"
@@ -438,7 +438,7 @@ export default function NewTaskScreen() {
           )}
 
           {panel === 'focus' && (
-            <Animated.View entering={FadeInDown.duration(220)} style={styles.panel}>
+            <Animated.View entering={FadeInDown.duration(Motion.enter)} style={styles.panel}>
               <Choice label="Foco" options={FOCUS_OPTIONS} value={focus} onChange={setFocus} accent={accent} />
             </Animated.View>
           )}

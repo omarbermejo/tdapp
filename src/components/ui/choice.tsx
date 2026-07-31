@@ -1,6 +1,6 @@
-import { Image } from 'expo-image';
+import type { LucideIcon } from 'lucide-react-native';
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   interpolateColor,
   useAnimatedStyle,
@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import {
+  Motion,
   Radius,
   Space,
   Touch,
@@ -23,8 +24,16 @@ import { usePressScale } from '@/hooks/use-press-scale';
 export type Option = {
   value: string;
   label: string;
-  /** Sticker recoloreado a la paleta (assets/stickers/chips). */
-  icon?: ImageSourcePropType;
+  /**
+   * El icono, como COMPONENTE de Lucide — igual que la barra de pestañas.
+   *
+   * Antes era un `ImageSourcePropType`: un .svg de `lucide-static` con `stroke="#283618"` cableado
+   * dentro, pintado con `expo-image` y recoloreado con su `tintColor`. Funcionaba, pero el color era
+   * un truco encima de un trazo quemado, cada icono era un archivo en `assets/`, y ese hex era la
+   * única excepción viva a "ningún hex fuera de theme.ts". Como componente, `color` y `strokeWidth`
+   * son props y el grosor puede igualar el de las pestañas.
+   */
+  icon?: LucideIcon;
   /** Para elegir un color: la muestra ES la opcion, no hace falta icono. Es el NOMBRE
    *  del acento, porque el hex depende del esquema y las opciones son datos estaticos. */
   swatch?: AccentName;
@@ -85,9 +94,6 @@ export function Choice({ label, options, value, onChange, accent = 'olive', max,
   );
 }
 
-/** Un muelle con algo de rebote: al quedar elegida la tarjeta da un empujoncito, no un salto. */
-const BOUNCY = { damping: 12, stiffness: 220 };
-
 /** Componente aparte porque cada tarjeta necesita sus propios shared values. */
 function Card({
   option,
@@ -108,7 +114,7 @@ function Card({
   const chosen = useSharedValue(on ? 1 : 0);
 
   useEffect(() => {
-    chosen.value = withSpring(on ? 1 : 0, BOUNCY);
+    chosen.value = withSpring(on ? 1 : 0, Motion.confirm);
   }, [chosen, on]);
 
   // El borde se queda en 2pt siempre y solo cambia de color: animar el grosor movia el
@@ -130,21 +136,12 @@ function Card({
           onPressIn={press.onPressIn}
           onPressOut={press.onPressOut}
           style={styles.touch}>
-          {!!option.icon && (
-            <Image
-              source={option.icon}
-              style={styles.icon}
-              /**
-               * Sin esto los iconos DESAPARECEN en modo oscuro. Los SVG de Lucide vienen con
-               * `stroke="#283618"` cableado dentro del archivo — el verde tinta de modo claro —, así
-               * que sobre la tarjeta oscura (#141414) daban 1.3:1. En claro el tinte es ese mismo
-               * hex vía `t.text`, o sea que el chip no cambia ni un pixel: esto solo arregla oscuro.
-               */
-              tintColor={t.text}
-              contentFit="contain"
-              accessible={false}
-            />
-          )}
+          {/*
+            `color` sale de los tokens, así que sigue al esquema solo — que es lo que antes había que
+            forzar con un tinte encima de un trazo quemado (en oscuro daban 1.3:1 y desaparecían).
+            `strokeWidth` iguala el de la barra de pestañas: una sola rejilla, un solo peso de línea.
+          */}
+          {!!option.icon && <option.icon size={MARK} color={t.text} strokeWidth={STROKE} />}
           {!!option.swatch && <View style={[styles.swatch, { backgroundColor: swatch.solid }]} />}
           <Text style={[Type.label, { color: t.text }]}>{option.label}</Text>
         </Pressable>
@@ -154,6 +151,9 @@ function Card({
 }
 
 const MARK = 22;
+
+/** El mismo grosor que la barra de pestañas en reposo: los iconos de la app pesan igual. */
+const STROKE = 1.75;
 
 const styles = StyleSheet.create({
   wrap: { gap: Space.sm },
@@ -177,6 +177,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md,
   },
-  icon: { width: MARK, height: MARK },
   swatch: { width: MARK, height: MARK, borderRadius: Radius.pill },
 });

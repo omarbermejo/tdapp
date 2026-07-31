@@ -376,6 +376,33 @@ export const Motion = {
   exit: 160,
   /** Escalón entre hermanos que entran en cascada (los siete días de la semana). */
   step: 30,
+  /**
+   * El tirón de una confirmación: la primera mitad de un `withSequence` que estira y suelta.
+   *
+   * Existe porque marcar una tarea usaba 90ms y cerrar el día 110ms para el MISMO gesto — la misma
+   * palomita, dos velocidades. No es enter ni exit: no aparece nada, algo que ya estaba acusa el
+   * golpe, y por eso es más corto que los dos.
+   */
+  pop: 100,
+  /**
+   * Un latido que no termina: el punto de "ahora" en la agenda. Es la única animación de la app que
+   * no la dispara un gesto, así que va aparte — medirla con la escala de las que responden a un
+   * toque la volvería un parpadeo.
+   */
+  pulse: 1400,
+  /**
+   * El rebote de "registré tu toque": el chip que se elige, el botón que confirma, la palomita que
+   * se marca.
+   *
+   * Es la ÚNICA excepción a la regla de arriba, y por eso está aquí y no en cada control: los tres
+   * hacían el mismo gesto con tres muelles distintos (220, 320 y 380 de rigidez, uno de ellos con
+   * masa 0.6). No se unificó "el movimiento de la app" —el hundido del press sigue seco y la barra
+   * del día sigue sin rebote, cada uno con su argumento— se unificó un gesto que estaba escrito tres
+   * veces por accidente.
+   *
+   * ζ≈0.34: rebota lo justo para leerse como respuesta y no como gelatina.
+   */
+  confirm: { damping: 12, stiffness: 320 },
 } as const;
 
 /**

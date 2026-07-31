@@ -8,7 +8,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Radius, Space, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import { Motion, Radius, Space, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
 
 import { accentForFocus } from './focus-accent';
@@ -217,7 +217,7 @@ function Slot({
     <Animated.View
       // Escalonada y lenta: Tiimo lo dice explicito — el movimiento guia la atencion, no la
       // exige. 70ms entre filas alcanza para leer el orden sin que se sienta lento.
-      entering={FadeInDown.delay(index * 70).duration(420)}
+      entering={FadeInDown.delay(index * Motion.step).duration(Motion.enter)}
       style={styles.row}>
       <Text style={[Type.label, styles.hour, { color: task.dueAt ? t.text : t.textMuted }]}>
         {hourLabel(task.dueAt)}
@@ -264,7 +264,7 @@ function Gap({
   useEffect(() => {
     if (now === null) return;
     // Lento: es un signo de vida, no una alarma. 1.4s por lado no llama la atencion.
-    pulse.value = withRepeat(withTiming(1.6, { duration: 1400 }), -1, true);
+    pulse.value = withRepeat(withTiming(1.6, { duration: Motion.pulse }), -1, true);
   }, [now, pulse]);
 
   const dot = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));

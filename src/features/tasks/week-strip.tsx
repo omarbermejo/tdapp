@@ -85,10 +85,19 @@ export function WeekStrip({
 }) {
   const t = useTheme();
   const tint = useAccent(accent);
-  /*
-    reanimated ya envuelve AccessibilityInfo.isReduceMotionEnabled() y escucha sus cambios:
-    leerlo con un hook evita el frame en blanco de resolver una promesa en un efecto.
-  */
+  /**
+   * El hook de reanimated, que es el mismo que usan `day-card`, `confetti` y `use-press-scale`.
+   *
+   * Lo que gana contra `AccessibilityInfo.isReduceMotionEnabled()` es que resuelve SINCRONO —lee una
+   * constante que el nativo inyecta al arrancar— asi que no hay un primer frame en el que todavia no
+   * se sabe si se puede animar, y no hace falta un estado que arranque en null.
+   *
+   * Lo que NO hace, y conviene saberlo antes de confiarse: no es reactivo. Su propio JSDoc dice que
+   * cambiar la bandera del sistema no re-renderiza nada, porque devuelve el valor que habia AL
+   * ARRANCAR la app. Encender "reducir movimiento" con la app abierta no se nota hasta reabrirla.
+   * Es aceptable —nadie cambia ese ajuste a media sesion— pero si algun dia hace falta en vivo, el
+   * camino es `AccessibilityInfo.addEventListener('reduceMotionChanged')`, no este hook.
+   */
   const reduced = useReducedMotion();
 
   // La semana que se pinta es la del dia elegido, no la de hoy: si el elegido cayera en otra

@@ -58,7 +58,7 @@ const DRAG_OFFSET = 12;
 const SPRING = { mass: 1, damping: 24, stiffness: 320 } as const;
 
 /** El rebote de la casilla al marcar: sube seco y el resorte lo devuelve. */
-const POP = { mass: 0.6, damping: 12, stiffness: 380 } as const;
+
 
 /** El cruce del relleno. Corto a proposito: acompaña al haptico, no lo hace esperar. */
 const CROSS = { duration: Motion.exit } as const;
@@ -112,7 +112,7 @@ function SwipeFace({
     () => progress.value >= COMMIT,
     (crossed, previous) => {
       if (crossed === previous) return;
-      armed.value = withSpring(crossed ? 1 : 0, POP);
+      armed.value = withSpring(crossed ? 1 : 0, Motion.confirm);
       // Solo el cruce hacia afuera: al regresar no hay nada que confirmar.
       if (crossed) runOnJS(tick)();
     }
@@ -198,7 +198,7 @@ export function TaskRow({
     if (wasDone.current === done) return;
     wasDone.current = done;
     mark.value = withTiming(done ? 1 : 0, CROSS);
-    pop.value = withSequence(withTiming(1.16, { duration: 90 }), withSpring(1, POP));
+    pop.value = withSequence(withTiming(1.16, { duration: Motion.pop }), withSpring(1, Motion.confirm));
   }, [done, mark, pop]);
 
   useEffect(() => {

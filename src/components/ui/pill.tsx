@@ -1,5 +1,5 @@
-import { Image } from 'expo-image';
-import { Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import type { LucideIcon } from 'lucide-react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
@@ -25,7 +25,9 @@ export function Pill({
   bg = 'surface',
   wide,
   dot,
-  icon,
+  // Se renombra a mayuscula porque se usa como componente: en JSX un nombre en minuscula es un
+  // elemento nativo, no un componente. La prop sigue llamandose `icon` para quien la pasa.
+  icon: Icon,
 }: {
   label: string;
   value: string;
@@ -49,9 +51,9 @@ export function Pill({
    * No es decoración: cierra el lazo entre el panel y la pastilla. Eliges "Tarde" viendo un sol
    * bajando, el panel se cierra y la pastilla enseña ese mismo sol — así el valor guardado se
    * reconoce de un vistazo, sin leer, que es justo lo que una pantalla de cinco decisiones
-   * seguidas necesita. Y es gratis: son los SVG de Lucide que el onboarding ya trae.
+   * seguidas necesita. Y es gratis: son los mismos componentes de Lucide que ya trae el onboarding.
    */
-  icon?: ImageSourcePropType;
+  icon?: LucideIcon;
 }) {
   const t = useTheme();
   const tint = useAccent(accent);
@@ -75,17 +77,8 @@ export function Pill({
         ]}>
         <Text style={[Type.micro, { color: t.textMuted }]}>{label}</Text>
         <View style={styles.value}>
-          {!!icon && (
-            <Image
-              source={icon}
-              style={styles.icon}
-              // Los SVG de Lucide traen el trazo cableado al verde de modo claro, así que sin
-              // esto en oscuro serían tinta sobre tinta. Ver el mismo tinte en `choice.tsx`.
-              tintColor={t.text}
-              contentFit="contain"
-              accessible={false}
-            />
-          )}
+          {/* Componente de Lucide: el color sale del token y sigue al esquema solo. Ver `choice.tsx`. */}
+          {!!Icon && <Icon size={GLYPH} color={t.text} strokeWidth={STROKE} />}
           {!!dot && <View style={[styles.dot, { backgroundColor: dot }]} />}
           {/*
             Dos líneas y no una: con texto grande, un valor que enumera ("Estudio · Salud · Dinero")
@@ -104,6 +97,8 @@ export function Pill({
 const DOT = 14;
 /** Un pelo menos que el 22 de `choice`: aquí el icono acompaña al valor, no encabeza el chip. */
 const GLYPH = 20;
+/** El mismo grosor que la barra de pestañas y los chips: un solo peso de linea en la app. */
+const STROKE = 1.75;
 
 const styles = StyleSheet.create({
   /**
@@ -126,5 +121,4 @@ const styles = StyleSheet.create({
   // flexShrink para que el texto ceda ante la muestra de color en vez de empujarla fuera.
   label: { flexShrink: 1 },
   dot: { width: DOT, height: DOT, borderRadius: Radius.pill },
-  icon: { width: GLYPH, height: GLYPH },
 });

@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import {
+  Motion,
   Radius,
   Space,
   Touch,
@@ -43,7 +44,7 @@ type Props = {
 };
 
 /** El pop de la confirmacion: se pasa un pelo y vuelve. Blando a proposito — es un "listo". */
-const POP = { damping: 12, stiffness: 320 };
+
 
 /**
  * Un solo boton solido por pantalla (`primary`); el resto son papel con hairline
@@ -88,7 +89,7 @@ export function BigButton({
   useEffect(() => {
     if (!success) return;
     // Crece y vuelve: un pop que solo crece deja el boton grande y se lee como un bug.
-    pop.set(withSequence(withSpring(1.06, POP), withSpring(1, POP)));
+    pop.set(withSequence(withSpring(1.06, Motion.confirm), withSpring(1, Motion.confirm)));
     // El haptico de exito es otro patron que el del toque: tres golpes cortos, no uno.
     // En web no hay motor, y el catch evita ensuciar la consola (igual que en usePressScale).
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});

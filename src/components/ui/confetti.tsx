@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
-import { AccessibilityInfo, StyleSheet, useWindowDimensions } from 'react-native';
+import { useEffect } from 'react';
+import { StyleSheet, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
   runOnJS,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withDelay,
   withTiming,
@@ -78,23 +79,22 @@ function Piece({ index, height, onLast }: { index: number; height: number; onLas
   );
 }
 
-/** Llueve una vez y avisa al terminar. Se respeta "reducir movimiento": ahi no se pinta nada. */
+/**
+ * Llueve una vez y avisa al terminar. Se respeta "reducir movimiento": ahi no se pinta nada.
+ *
+ * El hook de reanimated y no `AccessibilityInfo`: resuelve SINCRONO, asi que se sabe en el primer
+ * render si hay que pintar. Antes esto arrancaba en `null` y necesitaba un efecto para averiguarlo.
+ */
 export function Confetti({ onDone }: { onDone?: () => void }) {
   const { height } = useWindowDimensions();
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((reduce) => setAllowed(!reduce))
-      .catch(() => setAllowed(true));
-  }, []);
+  const reduced = useReducedMotion();
 
   useEffect(() => {
     // Si no hay animacion, el aviso de fin igual tiene que llegar o el que espera se cuelga.
-    if (allowed === false && onDone) onDone();
-  }, [allowed, onDone]);
+    if (reduced && onDone) onDone();
+  }, [reduced, onDone]);
 
-  if (!allowed) return null;
+  if (reduced) return null;
 
   return (
     <Animated.View pointerEvents="none" style={styles.layer}>

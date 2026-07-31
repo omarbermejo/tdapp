@@ -1,10 +1,11 @@
 import { Image } from 'expo-image';
-import { useEffect, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
+import { useEffect, type ReactNode } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   interpolateColor,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withDelay,
   withSequence,
@@ -26,8 +27,6 @@ import type { useTasks } from './use-tasks';
 const ENTER = { duration: Motion.enter, easing: Easing.out(Easing.cubic) } as const;
 
 /** El escalonado se corta a los 6 segmentos: con un dia largo la barra tardaba en armarse. */
-
-/** El escalonado se corta a los 6 segmentos: con un dia largo la barra tardaba en armarse. */
 const STEP_CAP = 6;
 
 /** ζ≈1: llega y se queda. El usuario pidió suavizar, así que nada de rebote. */
@@ -41,24 +40,6 @@ const SETTLE = { damping: 22, stiffness: 200, mass: 0.6 } as const;
  * dice la linea de abajo — "el dia cabe entero" es tiempo disponible, no un fracaso.
  */
 const STICKER_RATIO = 87 / 99;
-
-/**
- * "Reducir movimiento" del sistema.
- *
- * Arranca en `null` a proposito: con la bandera encendida, asumir que si hay motor deja
- * correr la animacion un frame antes de saberlo. Mientras es null nadie anima.
- */
-function useMotionAllowed(): boolean | null {
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((reduce) => setAllowed(!reduce))
-      .catch(() => setAllowed(true));
-  }, []);
-
-  return allowed;
-}
 
 const missing = (n: number) => (n === 1 ? 'Falta una' : `Faltan ${n}`);
 
@@ -112,28 +93,21 @@ const EMPTY = {
  * un marrón y borra la señal de "este dia es de vida"; y en oscuro `ink` es el paso MÁS claro
  * de la rampa, que se lee lavado. `solid` mantiene el croma en los dos esquemas.
  */
-function Segment({
-  task,
-  fallback,
-  index,
-  motion,
-}: {
-  task: Task;
-  fallback: AccentName;
-  index: number;
-  motion: boolean | null;
-}) {
+function Segment({ task, fallback, index }: { task: Task; fallback: AccentName; index: number }) {
   const t = useTheme();
   const tint = useAccent(accentForFocus(task.focusArea, fallback));
   const done = task.status === 'done';
+  // El hook se pregunta aqui en vez de recibirse como prop: al ser sincrono no hay un estado
+  // intermedio que el padre tenga que repartir, y la barra deja de necesitar que le digan si puede
+  // moverse. Antes viajaba un `boolean | null` solo por el frame de incertidumbre que ya no existe.
+  const reduced = useReducedMotion();
 
   const enter = useSharedValue(0);
   const fill = useSharedValue(done ? 1 : 0);
 
   useEffect(() => {
-    if (motion === null) return;
-    enter.value = motion ? withDelay(Math.min(index, STEP_CAP) * Motion.step, withTiming(1, ENTER)) : 1;
-  }, [motion, index, enter]);
+    enter.value = reduced ? 1 : withDelay(Math.min(index, STEP_CAP) * Motion.step, withTiming(1, ENTER));
+  }, [reduced, index, enter]);
 
   useEffect(() => {
     fill.value = withTiming(done ? 1 : 0, ENTER);
@@ -174,7 +148,16 @@ export function DayCard({
   onCapture: () => void;
 }) {
   const t = useTheme();
-  const motion = useMotionAllowed();
+  /**
+   * "Reducir movimiento" del sistema, con el hook de reanimated.
+   *
+   * Aqui vivia un `useMotionAllowed()` propio que preguntaba a `AccessibilityInfo` en un efecto y
+   * arrancaba en `null` para no animar un frame antes de saber la respuesta. Ese `null` ya no hace
+   * falta: este hook lee una constante que el nativo inyecta al arrancar, asi que contesta en el
+   * primer render. Y es el mismo que usan `week-strip`, `confetti` y `use-press-scale`, que era el
+   * verdadero problema: la misma pregunta con dos mecanismos distintos.
+   */
+  const reduced = useReducedMotion();
   const { user } = useAuth();
   const { tasks, loading, error, reload } = day;
 
@@ -197,14 +180,14 @@ export function DayCard({
   // estado (cargando → dia) y una rama con hooks propios reventaria en ese cambio.
   const pop = useSharedValue(1);
   useEffect(() => {
-    if (motion !== true) return;
+    if (reduced) return;
     // El golpecito del número es el premio inmediato de marcar una tarea; sin él, marcar
     // desde la lista de abajo no se siente en ninguna parte.
     pop.value = withSequence(
-      withTiming(1.08, { duration: 110, easing: Easing.out(Easing.quad) }),
+      withTiming(1.08, { duration: Motion.pop, easing: Easing.out(Easing.quad) }),
       withSpring(1, SETTLE)
     );
-  }, [done, motion, pop]);
+  }, [done, reduced, pop]);
   const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
 
   let body: ReactNode;
@@ -255,7 +238,7 @@ export function DayCard({
           accessibilityValue={{ min: 0, max: total, now: done }}
           style={[styles.bar, total > 10 && styles.barTight]}>
           {segments.map((task, i) => (
-            <Segment key={task.id} task={task} fallback={accent} index={i} motion={motion} />
+            <Segment key={task.id} task={task} fallback={accent} index={i} />
           ))}
         </View>
       </>
