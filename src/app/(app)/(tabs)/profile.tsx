@@ -1,11 +1,12 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro, SectionHeader, Tag } from '@/components/ui/card';
 import { Radius, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
 import { FOCUS_AREAS, REMINDER_HOUR, REMINDER_STYLE } from '@/features/auth/options';
+
+import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 import { TAB_DOCK } from './_layout';
 
@@ -29,13 +30,17 @@ export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const t = useTheme();
   const accent = useAccent(user?.accentColor);
+  // El aire va en el contenido, no en un SafeAreaView: ver `use-screen-padding`.
+  const pad = useScreenPadding(TAB_DOCK);
 
   // El guard va DESPUES de los hooks: al cerrar sesion el user se vuelve null.
   if (!user) return null;
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: t.canvas }]} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <View style={[styles.screen, { backgroundColor: t.canvas }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
+        showsVerticalScrollIndicator={false}>
         <View style={styles.head}>
           <View style={[styles.avatar, { backgroundColor: accent.soft }]}>
             <Text style={[Type.section, { color: t.text }]}>
@@ -103,7 +108,7 @@ export default function ProfileScreen() {
 
         <BigButton label="Cerrar sesión" variant="ghost" accent="copper" onPress={signOut} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -111,8 +116,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: {
     paddingHorizontal: Space.xl,
-    paddingTop: Space.lg,
-    paddingBottom: TAB_DOCK,
+    // El vertical lo pone `useScreenPadding`: sale de los insets del telefono.
     gap: Space.xl,
   },
   head: { gap: Space.md },

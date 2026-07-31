@@ -12,7 +12,6 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
@@ -29,6 +28,7 @@ import { FOCUS_AREAS } from '@/features/auth/options';
 import { isoAt, localDate, tasksApi } from '@/features/tasks/api';
 
 import { usePressScale } from '@/hooks/use-press-scale';
+import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 /**
  * El unico camino para anotar. El titulo ES la pantalla.
@@ -150,6 +150,18 @@ export default function NewTaskScreen() {
   const t = useTheme();
   const accent = user?.accentColor;
   const tint = useAccent(accent);
+  /**
+   * El aire va en el contenido, no en un SafeAreaView: así el scroll pasa por debajo de la barra de
+   * estado en vez de cortarse contra ella. Ver `use-screen-padding`.
+   *
+   * De arriba se usa `Space.lg` PELADO y no `pad.top`: esta pantalla se presenta como hoja, así que
+   * ya nace por debajo de la barra de estado. Sumarle otra vez `insets.top` dejaba 85pt de vacío
+   * sobre el botón de cerrar — medido en el simulador.
+   *
+   * Abajo sí se suma el borde del teléfono, y aire normal en vez de `TAB_DOCK`: la cápsula flotante
+   * de las pestañas se queda detrás de la hoja.
+   */
+  const pad = useScreenPadding(Space.xxl);
 
   const [title, setTitle] = useState('');
   const [size, setSize] = useState<Task['size']>('medium');
@@ -277,17 +289,18 @@ export default function NewTaskScreen() {
   if (!user) return null;
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: t.canvas }]} edges={['top', 'bottom']}>
+    <View style={[styles.screen, { backgroundColor: t.canvas }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.screen}>
         {/* keyboardShouldPersistTaps: con el teclado abierto, tocar un chip lo elige en el
             primer toque en vez de gastarlo en cerrar el teclado. */}
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingTop: Space.lg, paddingBottom: pad.bottom }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <BackButton />
+          {/* Cruz y no flecha: esto es una hoja, se cierra hacia abajo. */}
+          <BackButton close />
 
           <View style={styles.head}>
             <Micro>Nueva tarea</Micro>
@@ -443,7 +456,7 @@ export default function NewTaskScreen() {
           />
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -497,10 +510,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: {
     paddingHorizontal: Space.xl,
-    paddingTop: Space.lg,
-    // Aire normal al final del scroll. Ya no hace falta el hueco de la cápsula flotante: esta ruta
-    // es un push por ENCIMA de las pestañas, así que la cápsula no llega hasta aquí.
-    paddingBottom: Space.xxl,
+    // El vertical lo pone `useScreenPadding`: sale de los insets del telefono.
     gap: Space.xl,
   },
   head: { gap: Space.xs },

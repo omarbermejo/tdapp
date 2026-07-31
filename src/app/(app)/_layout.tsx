@@ -11,8 +11,8 @@ import { useTheme } from '@/constants/theme';
  * 1. `router.push('/new-task')` no era un push, era un salto de pestaña. Y una pestaña no se
  *    desmonta al salir, así que el formulario conservaba la tarea anterior entera; había que
  *    vaciarlo a mano desmontándolo con `useIsFocused`. Aquí el pop lo desmonta el navegador.
- * 2. Sin transición de pila no hay dónde colgar un elemento compartido: `sharedTransitionTag` solo
- *    se dispara en un push de native-stack (ver `day-card.tsx` y `new-task.tsx`).
+ * 2. Sin transición de pila no había cómo presentarla más que reemplazando la pantalla entera. Como
+ *    hoja el home se queda detrás, y eso es lo que hace que anotar se lea como un paréntesis.
  *
  * El grupo `(tabs)` no aparece en la URL, así que las rutas no cambian: `/` sigue siendo el home y
  * `/new-task` sigue siendo la misma ruta de siempre.
@@ -24,11 +24,20 @@ export default function AppLayout() {
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.canvas } }}>
       <Stack.Screen name="(tabs)" />
       {/*
-        Push normal y NO `presentation: 'modal'`: en iOS la hoja modal usa otro animador y las
-        transiciones compartidas no viajan por ahí. El push de tarjeta además ya trae el gesto de
-        volver desde el canto izquierdo, que es la salida que una hoja daría con el swipe hacia abajo.
+        Hoja y no push de tarjeta.
+
+        El primer intento fue un push con un elemento compartido (`sharedTransitionTag`) llevando la
+        pastilla de "Anotar algo" hasta "Crear". La API existe y quedó bien montada, pero en la mano
+        NO se aprecia: dura lo que dura un push de iOS y el objeto que viaja es un botón que acaba
+        casi donde estaba, asi que el ojo no tiene nada que seguir.
+
+        La hoja da la continuidad que aquello prometía, y la da de otra forma: el home NO desaparece.
+        Se queda detrás, encogido, y la pantalla de anotar sube encima. Eso se lee como "esto está
+        ABIERTO sobre mi día" y no como "me fui a otro sitio" — que es exactamente lo que anotar es,
+        un paréntesis de tres segundos. Y el gesto de cerrar arrastrando hacia abajo cae en el pulgar,
+        no en el canto izquierdo de la pantalla.
       */}
-      <Stack.Screen name="new-task" />
+      <Stack.Screen name="new-task" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

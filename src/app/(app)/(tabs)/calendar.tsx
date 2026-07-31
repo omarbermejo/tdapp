@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/ui/big-button';
 import { Micro } from '@/components/ui/card';
@@ -14,6 +13,8 @@ import { localDate } from '@/features/tasks/api';
 import { DayTimeline } from '@/features/tasks/day-timeline';
 import { useTasks } from '@/features/tasks/use-tasks';
 import { usePressScale } from '@/hooks/use-press-scale';
+
+import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 import { TAB_DOCK } from './_layout';
 
@@ -95,6 +96,9 @@ export default function CalendarScreen() {
 
   const { tasks, error, loading, reload } = useTasks(selected);
 
+  // El aire va en el contenido, no en un SafeAreaView: ver `use-screen-padding`.
+  const pad = useScreenPadding(TAB_DOCK);
+
   const days = today ? Array.from({ length: DAYS }, (_, i) => shift(today, i)) : [];
   const sorted = tasks ? [...tasks].sort(byTime) : [];
   const tomorrow = today ? localDate(shift(today, 1)) : '';
@@ -107,8 +111,9 @@ export default function CalendarScreen() {
   if (!user) return null;
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: t.canvas }]} edges={['top', 'bottom']}>
-      <View style={styles.head}>
+    <View style={[styles.screen, { backgroundColor: t.canvas }]}>
+      {/* El encabezado es FIJO (vive fuera del scroll), asi que el hueco del notch le toca a el. */}
+      <View style={[styles.head, { paddingTop: pad.top }]}>
         <Micro>{relative || 'Que viene'}</Micro>
         <Text style={[Type.display, { color: t.text }]} numberOfLines={2}>
           {selected ? upper(long(parse(selected))) : ''}
@@ -135,7 +140,9 @@ export default function CalendarScreen() {
         })}
       </ScrollView>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: pad.bottom }]}
+        showsVerticalScrollIndicator={false}>
         {loading && (
           <View style={styles.message}>
             <Micro>{relative || 'Agenda'}</Micro>
@@ -204,7 +211,7 @@ export default function CalendarScreen() {
           <Text style={[Type.hint, styles.notice, { color: t.danger }]}>{error}</Text>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -261,7 +268,8 @@ const MARK = 5;
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  head: { paddingHorizontal: Space.xl, paddingTop: Space.lg, gap: Space.xs },
+  // El paddingTop lo pone `useScreenPadding`: es el unico elemento pegado al borde de arriba.
+  head: { paddingHorizontal: Space.xl, gap: Space.xs },
   strip: {
     flexDirection: 'row',
     gap: Space.sm,
@@ -281,8 +289,7 @@ const styles = StyleSheet.create({
   mark: { width: MARK, height: MARK, borderRadius: Radius.pill },
   content: {
     paddingHorizontal: Space.xl,
-    // El aire sale de la geometria de la pastilla flotante, que vive en `_layout`.
-    paddingBottom: TAB_DOCK,
+    // El aire de abajo lo pone `useScreenPadding` con la geometria de la pastilla flotante.
     gap: Space.lg,
   },
   // El mismo aire interior que traia Card, para que el contenido no cambie de sitio.

@@ -6,7 +6,6 @@ import Animated, {
   LinearTransition,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro } from '@/components/ui/card';
@@ -28,6 +27,7 @@ import { useFocusMode } from '@/features/timer/focus-mode';
 import { clearFocusWidget } from '@/features/widgets/sync-focus';
 import { adoptBlock, hideBlock, showBlock } from '@/features/timer/outside';
 import { ROUNDS, clock, usePomodoro, type Phase } from '@/features/timer/pomodoro';
+import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 import { TAB_DOCK } from './_layout';
 
@@ -98,6 +98,14 @@ export default function TimerScreen() {
    * default, ver `today-list.tsx`), así que esto es solo para no montarlas de más.
    */
   const still = useReducedMotion();
+  /**
+   * El aire va en el contenido, no en un SafeAreaView: así el scroll pasa por debajo de la barra de
+   * estado en vez de cortarse contra ella. Ver `use-screen-padding`.
+   *
+   * En modo enfoque el hueco de abajo es solo el borde del teléfono: la cápsula se aparta, así que
+   * reservarle sitio dejaría el bloque descentrado hacia arriba justo cuando se quiere centrado.
+   */
+  const pad = useScreenPadding(focus.hidden ? Space.xl : TAB_DOCK);
 
   /**
    * La tarea elegida a mano. `null` = "no he tocado nada", y entonces manda la del bloque recuperado.
@@ -384,7 +392,7 @@ export default function TimerScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: t.canvas }]} edges={['top', 'bottom']}>
+    <View style={[styles.screen, { backgroundColor: t.canvas }]}>
       {/*
         Tocar el fondo alterna la cápsula de pestañas SIN parar el bloque. Es la salida del modo
         enfoque: sin esto, un bloque de cincuenta minutos deja la app sin navegación hasta que acabe.
@@ -402,8 +410,7 @@ export default function TimerScreen() {
             styles.content,
             // En modo enfoque el contenido sobrante se va y lo que queda se centra en la pantalla.
             focus.hidden && styles.focused,
-            // El hueco de la cápsula solo hace falta cuando la cápsula está.
-            !focus.hidden && styles.docked,
+            { paddingTop: pad.top, paddingBottom: pad.bottom },
           ]}
           showsVerticalScrollIndicator={false}>
           <Animated.View layout={animate ? LinearTransition : undefined} style={styles.stack}>
@@ -502,7 +509,7 @@ export default function TimerScreen() {
       {/* Encima de todo y fuera del scroll: el confeti tiene que caer sobre la pantalla entera. La
           `key` es lo que lo vuelve a montar en cada enfoque cerrado. */}
       {party > 0 && <Confetti key={party} onDone={() => setParty(0)} />}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -510,14 +517,12 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: {
     paddingHorizontal: Space.xl,
-    paddingTop: Space.lg,
+    // El vertical lo pone `useScreenPadding`: sale de los insets del telefono y del modo enfoque.
     gap: Space.xl,
   },
-  // El aire sale de la geometría de la cápsula flotante, que vive en `_layout`.
-  docked: { paddingBottom: TAB_DOCK },
   // flexGrow para que el contenedor llene el scroll aunque el contenido sea corto: sin eso no hay
   // espacio sobrante que repartir y `center` no centraría nada.
-  focused: { flexGrow: 1, justifyContent: 'center', paddingBottom: Space.xl },
+  focused: { flexGrow: 1, justifyContent: 'center' },
   // La carátula, su línea, el ciclo y los botones se mueven JUNTOS al centrarse. Sin este grupo,
   // cada uno animaría por su cuenta y el bloque se leería como cuatro cosas cayendo.
   stack: { gap: Space.xl, alignItems: 'stretch' },

@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Space, Type, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
@@ -9,6 +8,7 @@ import { DayCard } from '@/features/tasks/day-card';
 import { useLocalToday } from '@/features/tasks/day';
 import { TodayList } from '@/features/tasks/today-list';
 import { useTasks } from '@/features/tasks/use-tasks';
+import { useScreenPadding } from '@/hooks/use-screen-padding';
 import { WeekStrip } from '@/features/tasks/week-strip';
 
 import { TAB_DOCK } from './_layout';
@@ -41,14 +41,19 @@ export default function HomeScreen() {
   const selected = picked || today;
   // El dia vive aqui porque lo comparten la tira, la card y la lista.
   const day = useTasks(selected);
+  // El aire va en el CONTENIDO y no en un SafeAreaView: así el scroll pasa por debajo de la barra de
+  // estado en vez de cortarse contra ella. Ver `use-screen-padding`.
+  const pad = useScreenPadding(TAB_DOCK);
 
   // El guard va DESPUES de los hooks: al cerrar sesion el user se vuelve null, y salir antes
   // dejaba a React con menos hooks que en el render anterior.
   if (!user) return null;
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: t.canvas }]} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <View style={[styles.screen, { backgroundColor: t.canvas }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
+        showsVerticalScrollIndicator={false}>
         <Text style={[Type.display, { color: t.text }]} numberOfLines={1}>
           Hola, {firstName(user.name)}
         </Text>
@@ -70,7 +75,7 @@ export default function HomeScreen() {
 
         <TodayList day={day} today={today} selected={selected} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -78,9 +83,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: {
     paddingHorizontal: Space.xl,
-    paddingTop: Space.lg,
-    // El aire sale de la geometria de la barra flotante, que vive en `_layout`.
-    paddingBottom: TAB_DOCK,
+    // El vertical lo pone `useScreenPadding`: depende de los insets del telefono, que no son estaticos.
     gap: Space.xl,
   },
 });
