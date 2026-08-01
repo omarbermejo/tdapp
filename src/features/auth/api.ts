@@ -82,12 +82,43 @@ export type Task = {
   /** Minutos exactos que puso la persona; null = "que decida el tamaño". */
   minutes: number | null;
   focusArea: string | null;
+  /**
+   * El espacio de trabajo al que pertenece, o null si esta suelta.
+   *
+   * Opcional por el mismo motivo que los campos de `stageOf` mas abajo: mientras haya un API
+   * desplegado sin la columna, un build de la app que lo asumiera leeria undefined donde su tipo
+   * promete un numero.
+   */
+  workspaceId?: number | null;
+  /** Orden manual dentro del dia. null = nunca se reordeno. Lo escribe solo PATCH /tasks/order. */
+  position?: number | null;
   /** ISO con zona, tal como lo mando el cliente. */
   dueAt: string | null;
   dueDate: string | null;
   suggestedMinutes: number;
   elapsedSeconds: number;
   running: boolean;
+};
+
+/**
+ * Un espacio de trabajo: agrupa tareas por proyecto, no por tipo.
+ *
+ * Convive con `focusArea` y no lo reemplaza. El foco dice de que TIPO es la tarea (siete valores
+ * fijos, de ahi salen su color y su icono en la fila) y el espacio dice a que PROYECTO pertenece
+ * (los crea la persona, son cuantos quiera).
+ *
+ * `total` y `done` los cuenta el API con un LEFT JOIN, asi que la pantalla pinta el anillo de
+ * progreso sin traerse ni una tarea.
+ */
+export type Workspace = {
+  id: number;
+  name: string;
+  /** Un slug de `assets/icons3d/`. El catalogo lo manda el API en /workspaces/catalogs. */
+  icon: string;
+  accent: AccentName;
+  position: number;
+  total: number;
+  done: number;
 };
 
 /**
@@ -117,7 +148,16 @@ export type Streak = {
 export type Stats = {
   from: string;
   to: string;
-  byDay: { date: string; done: number; minutes: number }[];
+  /**
+   * `done` son las CERRADAS de ese dia y `planned` las AGENDADAS, cerradas o no.
+   *
+   * Son dos preguntas distintas y por eso viajan las dos: `done` mide logro (es lo que pinta la
+   * rejilla del perfil) y `planned` mide carga (es lo que pinta el mapa del trimestre en Hoy). Un dia
+   * por venir con seis cosas agendadas tiene `done: 0` y `planned: 6`.
+   *
+   * `planned` es opcional porque un API desplegado sin la columna no lo manda.
+   */
+  byDay: { date: string; done: number; minutes: number; planned?: number }[];
   byArea: { focusArea: string | null; done: number; minutes: number }[];
   totals: { done: number; minutes: number };
 };
@@ -205,11 +245,20 @@ export const api = {
     request<Streak>(`/me/streak${date ? `?date=${date}` : ''}`, { headers: bearer(token) }),
 
   /**
-   * Sin `from`: el default del API son 28 dias contando hoy, que es exactamente la rejilla de 4x7
-   * del perfil. Mandarlo seria repetir aqui un numero que alla ya sale de la misma rejilla.
+   * `from` es OPCIONAL y quien lo omite se queda con el default del API: 28 dias contando hoy, que es
+   * exactamente la rejilla de 4x7 del perfil — para esa, mandarlo seria repetir aqui un numero que
+   * alla ya sale de la misma rejilla.
+   *
+   * Lo manda quien necesita otra ventana, como el mapa del trimestre en Hoy, que pide 17 semanas.
+   * Con `URLSearchParams` y no plantillas: es el mismo patron de `tasksApi.list` y resuelve solo el
+   * caso de `from` sin `date`.
    */
-  stats: (token: string, date?: string) =>
-    request<Stats>(`/me/stats${date ? `?date=${date}` : ''}`, { headers: bearer(token) }),
+  stats: (token: string, date?: string, from?: string) => {
+    const search = new URLSearchParams(
+      Object.entries({ date, from }).filter(([, v]) => !!v) as [string, string][]
+    ).toString();
+    return request<Stats>(`/me/stats${search ? `?${search}` : ''}`, { headers: bearer(token) });
+  },
 
   taskCounts: (token: string) =>
     request<TaskCounts>('/me/tasks/summary', { headers: bearer(token) }),

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   interpolateColor,
@@ -10,39 +10,50 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Motion, Radius, Space, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import { Motion, Radius, Space, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 
-import { GRID_COLUMNS, heatGrid, heatLabel, type Cell } from './grid';
+import { PROGRESS_HEAT, heatGrid, heatLabel, monthSpans, type Cell, type HeatSpec } from './grid';
 import type { useStats } from './use-stats';
 
-/** La celda entra escalonada como el punto de la racha, pero mas rapido: son veintiocho, no siete. */
+/** La celda entra escalonada como el punto de la racha, pero mas rapido: son decenas, no siete. */
 const ENTER = { duration: Motion.enter, easing: Easing.out(Easing.cubic) } as const;
 const STEP = Motion.step / 3;
+
+/** El aro de hoy. 1.5pt se ve a 13pt de celda sin comerse el relleno. */
+const RING = 1.5;
 
 /**
  * Una celda del mapa.
  *
  * Sin borde y sin tamaño fijo, al reves que el `Dot` de la racha: alli cuatro estados tenian que
  * distinguirse por FORMA, aqui solo hay intensidad. Y el tamaño sale de `flex` porque la rejilla vive
- * en media pantalla — en un telefono chico cada celda cae a unos dieciocho puntos y tiene que
- * encogerse sola en vez de desbordar.
+ * en media pantalla — en un telefono chico cada celda cae a unos trece puntos y tiene que encogerse
+ * sola en vez de desbordar.
+ *
+ * **El relleno cruza de color y NUNCA usa `opacity`.** En React Native la opacidad compone la vista
+ * COMPLETA, borde incluido, asi que un aro de hoy dentro de una celda al 30% se veria al 30% — y esa
+ * es justo la señal que no puede desvanecerse. Por eso el futuro tambien se distingue por TONO
+ * (`sunken` mezclado hacia el papel) y no bajando la opacidad, y el aro va en una vista HERMANA.
  */
 function HeatCell({
-  level,
+  cell,
   index,
   tint,
   animate,
+  ring,
 }: {
-  level: number;
+  cell: Cell;
   index: number;
   tint: { solid: string; soft: string; ink: string };
   animate: boolean;
+  /** Marcar hoy con un aro. Solo el mapa alineado a la semana lo pide: en el otro, hoy es la ultima. */
+  ring: boolean;
 }) {
   const t = useTheme();
   const enter = useSharedValue(animate ? 0 : 1);
-  // El relleno se anima aparte de la entrada: cerrar una tarea en el home y volver aqui tiñe la
-  // ultima celda, y eso tiene que verse pasar.
-  const fill = useSharedValue(level);
+  // El relleno se anima aparte de la entrada: cerrar una tarea y volver aqui tiñe su celda, y eso
+  // tiene que verse pasar.
+  const fill = useSharedValue(cell.level);
 
   useEffect(() => {
     if (!animate) return;
@@ -51,82 +62,151 @@ function HeatCell({
   }, [animate, index, enter]);
 
   useEffect(() => {
-    fill.set(animate ? withTiming(level, ENTER) : level);
-  }, [level, animate, fill]);
+    fill.set(animate ? withTiming(cell.level, ENTER) : cell.level);
+  }, [cell.level, animate, fill]);
+
+  /*
+    `sunken` es literalmente el relleno apagado del sistema, asi que un dia en blanco no es un agujero
+    sino una casilla que existe y esta vacia. El futuro arranca de `surface`, un paso mas claro: se
+    lee como "todavia no" y no como "aqui no hiciste nada", que es la misma distincion que la racha
+    hace entre `ahead` y `missed`.
+  */
+  const empty = cell.future ? t.surface : t.sunken;
 
   const style = useAnimatedStyle(
     () => ({
       opacity: enter.get(),
-      // `sunken` es literalmente el relleno apagado del sistema, asi que un dia en blanco no es un
-      // agujero sino una casilla que existe y esta vacia.
-      backgroundColor: interpolateColor(fill.get(), [0, 1], [t.sunken, tint.solid]),
+      backgroundColor: interpolateColor(fill.get(), [0, 1], [empty, tint.solid]),
     }),
-    [t.sunken, tint.solid]
+    [empty, tint.solid]
   );
 
-  return <Animated.View style={[styles.cell, style]} />;
+  return (
+    <View style={styles.slot}>
+      <Animated.View style={[styles.cell, style]} />
+      {/* Hermana y absoluta: encima del relleno, con su propia opacidad intacta. */}
+      {ring && cell.isToday && (
+        <View pointerEvents="none" style={[styles.ring, { borderColor: tint.ink }]} />
+      )}
+    </View>
+  );
 }
 
 /**
- * Cuatro semanas de trabajo cerrado, en 4x7.
+ * Un mapa de calor de densidad diaria. Dos configuraciones, un componente.
  *
- * NO es un calendario del mes: un mes real casi nunca cabe en cuatro filas — solo un febrero no
- * bisiesto que empiece en lunes — y el dia 3 la rejilla estaria en blanco al noventa por ciento. Son
- * 28 dias corridos que terminan hoy, que ademas es exactamente la ventana que el API devuelve por
- * defecto. Hoy queda en la esquina inferior derecha, donde el ojo termina de leer.
+ * - `PROGRESS_HEAT` (el default, en Perfil): cuatro semanas de trabajo CERRADO en 4x7. NO es un
+ *   calendario del mes — un mes real casi nunca cabe en cuatro filas y el dia 3 estaria en blanco al
+ *   noventa por ciento. Son 28 dias corridos que terminan hoy, que ademas es la ventana que el API
+ *   devuelve por defecto. Sin iniciales de dia de la semana a proposito: la primera columna no es
+ *   lunes, asi que rotularlas seria mentir.
+ * - `QUARTER_HEAT` (en Hoy): el trimestre AGENDADO en 7x17, alineado a la semana. Aqui las filas SI
+ *   son dias de la semana, asi que van rotuladas, y hoy lleva aro porque ya no es la ultima celda.
  *
- * Sin iniciales de dia de la semana a proposito: la primera columna no es lunes, asi que rotularlas
- * seria mentir. Esto mide densidad, no calendario; para leer "los martes rindo mas" esta la fila de
- * siete de la racha.
+ * Es de solo lectura y no se toca. Una celda de trece puntos esta muy por debajo de `Touch.icon` (44)
+ * y hacerla tocable seria prometer un objetivo que el pulgar no acierta; quien cambia el dia es la
+ * tira de la semana, con celdas de 34. Eso resuelve de paso la accesibilidad: la rejilla es UN nodo
+ * con un resumen —el patron de `weekLabel` en la racha— y no ciento diecinueve.
  */
 export function HeatMap({
   stats: data,
   today,
   accent,
+  spec = PROGRESS_HEAT,
 }: {
   stats: ReturnType<typeof useStats>;
   today: string;
   accent: AccentName;
+  spec?: HeatSpec;
 }) {
+  const t = useTheme();
   const tint = useAccent(accent);
   const still = useReducedMotion();
   const { stats, loading } = data;
 
-  const cells = heatGrid(stats, today);
+  const rows = heatGrid(stats, today, spec);
   // Mientras carga se pintan las celdas apagadas y sin animar: la rejilla vacia YA es la forma
   // correcta del estado de carga, y un spinner en media pantalla seria mas ruido que dato. Lo que no
   // se hace es animarlas, para que la entrada escalonada ocurra cuando llegan los datos de verdad.
   const ready = !loading && !!stats;
+  const aligned = spec.weekAligned;
+  const months = aligned ? monthSpans(rows) : [];
 
   return (
-    <View accessible accessibilityLabel={heatLabel(cells)} style={styles.grid}>
-      {chunk(cells).map((week, row) => (
-        <View key={week[0].date} style={styles.row}>
-          {week.map((cell, column) => (
-            <HeatCell
-              key={cell.date}
-              level={ready ? cell.level : 0}
-              index={row * GRID_COLUMNS + column}
-              tint={tint}
-              animate={ready && !still}
-            />
+    <View accessible accessibilityLabel={heatLabel(rows, ready, spec)} style={styles.wrap}>
+      {aligned && (
+        <View style={styles.months}>
+          {/* Hueco del riel de iniciales, para que las etiquetas caigan sobre su columna. */}
+          <View style={styles.rail} />
+          {months.map((label, i) => (
+            <Text key={i} style={[Type.micro, styles.month, { color: t.textMuted }]} numberOfLines={1}>
+              {label}
+            </Text>
           ))}
         </View>
-      ))}
+      )}
+
+      <View style={styles.grid}>
+        {/*
+          La posicion es la llave y no la fecha: la rejilla siempre tiene la misma forma, las celdas
+          nunca se reordenan, y `useLocalToday()` devuelve '' hasta que ancla — con lo que todas las
+          fechas saldrian iguales y React se quejaria de llaves repetidas en el primer render.
+        */}
+        {rows.map((row, r) => (
+          <View key={r} style={styles.row}>
+            {aligned && (
+              // Solo lunes, miercoles y viernes: siete iniciales en 13pt de alto se pisan entre si, y
+              // tres bastan para orientar la vertical. Es el mismo recurso que usa GitHub.
+              <Text style={[Type.micro, styles.rail, { color: t.textMuted }]} numberOfLines={1}>
+                {r % 2 === 0 ? ['L', 'M', 'V', 'D'][r / 2] : ''}
+              </Text>
+            )}
+            {row.map((cell, c) => (
+              <HeatCell
+                key={c}
+                cell={ready ? cell : { ...cell, level: 0 }}
+                // Escalona por COLUMNA en el alineado: 17 columnas se barren de izquierda a derecha en
+                // ~170ms, mientras que escalonar las 119 celdas una por una tardaria mas de un segundo.
+                index={aligned ? c : r * row.length + c}
+                tint={tint}
+                animate={ready && !still}
+                ring={aligned}
+              />
+            ))}
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
 
-/** Las 28 celdas partidas en filas de siete. */
-const chunk = (cells: Cell[]): Cell[][] =>
-  Array.from({ length: cells.length / GRID_COLUMNS }, (_, i) =>
-    cells.slice(i * GRID_COLUMNS, (i + 1) * GRID_COLUMNS)
-  );
+/** Ancho del riel de iniciales. Cabe una letra de `micro` sin empujar la rejilla. */
+const RAIL = 14;
 
 const styles = StyleSheet.create({
-  grid: { gap: Space.xs },
-  row: { flexDirection: 'row', gap: Space.xs },
-  // flex + aspectRatio y no un tamaño en puntos: la rejilla ocupa la mitad de la cabecera y tiene
-  // que caber igual en un SE que en un Max.
-  cell: { flex: 1, aspectRatio: 1, borderRadius: Radius.sm },
+  wrap: { gap: Space.xs },
+  grid: { gap: CELL_GAP() },
+  row: { flexDirection: 'row', alignItems: 'center', gap: CELL_GAP() },
+  months: { flexDirection: 'row', gap: CELL_GAP() },
+  rail: { width: RAIL },
+  // flex:1 para que caiga sobre su columna, igual que las celdas.
+  month: { flex: 1 },
+  // flex + aspectRatio y no un tamaño en puntos: la rejilla ocupa el ancho que le den y tiene que
+  // caber igual en un SE que en un Max.
+  slot: { flex: 1, aspectRatio: 1 },
+  cell: { flex: 1, borderRadius: Radius.sm },
+  ring: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: Radius.sm,
+    borderWidth: RING,
+  },
 });
+
+/**
+ * 3pt y no `Space.xs` (4): con 17 columnas, un punto mas de aire por hueco se come 16pt del ancho y
+ * las celdas caen por debajo de los 13 en un telefono chico. En 4x7 la diferencia no se nota, asi que
+ * el numero es uno solo para los dos mapas.
+ */
+function CELL_GAP() {
+  return 3;
+}

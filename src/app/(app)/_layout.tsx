@@ -38,6 +38,19 @@ export default function AppLayout() {
         no en el canto izquierdo de la pantalla.
       */}
       <Stack.Screen name="new-task" options={{ presentation: 'modal' }} />
+
+      {/*
+        Estas dos SI son push de tarjeta, al reves que `new-task`, y por lo mismo que aquella es hoja:
+        no son un parentesis, son destinos.
+
+        Ajustes termina en una alerta destructiva — borrar la cuenta — y una hoja que se arrastra
+        hacia abajo a media confirmacion es el gesto equivocado. Editar perfil tiene una rejilla de
+        cuarenta y cinco caras que hay que recorrer, y ese scroll pelearia con el arrastre de cerrar;
+        ademas todo guarda al toque, asi que no hay borrador que descartar, que es justo el argumento
+        con el que los paneles del perfil ya descartaron la hoja.
+      */}
+      <Stack.Screen name="settings" />
+      <Stack.Screen name="edit-profile" />
     </Stack>
   );
 }

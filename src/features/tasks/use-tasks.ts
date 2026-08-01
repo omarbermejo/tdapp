@@ -25,6 +25,14 @@ export type TaskMutations = {
   patch: (task: Task, changes: Partial<Task>) => () => void;
   /** Quita la fila del estado local. Si el servidor rechaza, se restaura con `reload`. */
   drop: (task: Task) => void;
+  /**
+   * Cambia el orden de la lista local y devuelve el deshacer.
+   *
+   * Recibe las DOS listas ya calculadas y no un par (id, indice): es la misma regla que obliga a
+   * `patch` a recibir la tarea entera. Estos mutadores corren dentro de updaters de `setState`, que
+   * React puede ejecutar dos veces, asi que no pueden leer el estado ni calcular nada dentro.
+   */
+  reorder: (next: Task[], previous: Task[]) => () => void;
   reload: () => Promise<void> | void;
 };
 
@@ -53,6 +61,17 @@ const mutators = (setState: React.Dispatch<React.SetStateAction<State>>) => ({
     return () => setState((s) => replace(s, task.id, task));
   },
   drop: (task: Task) => setState((s) => replace(s, task.id, null)),
+  /**
+   * El orden nuevo se pinta YA y el deshacer restaura el anterior tal cual.
+   *
+   * Los dos arrays llegan hechos desde fuera justo para que este updater sea PURO: calcular el nuevo
+   * orden aqui dentro (mover el elemento i al hueco j) correria dos veces en desarrollo y la segunda
+   * partiria de una lista ya movida.
+   */
+  reorder: (next: Task[], previous: Task[]) => {
+    setState((s) => (s.tasks ? { ...s, tasks: next } : s));
+    return () => setState((s) => (s.tasks ? { ...s, tasks: previous } : s));
+  },
 });
 
 /**
