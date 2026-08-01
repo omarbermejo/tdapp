@@ -2,7 +2,14 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AVATAR_NAMES, Avatar3D, Avatar3DSize, type Avatar3DName } from '@/components/ui/avatar3d';
 import { Radius, Type, useAccent, useTheme } from '@/constants/theme';
-import type { User } from '@/features/auth/api';
+import type { AccentName } from '@/constants/theme';
+
+/**
+ * Lo minimo para pintar una cara. `User` y `Member` lo cumplen los dos, y por eso el prop es esto y no
+ * `User`: la lista de miembros de un espacio trae `toPublicMember` —id, nombre, avatar y acento— y
+ * pedirle un `User` entero obligaria a inventarle un correo y una fecha de nacimiento que no tiene.
+ */
+type Face = { name: string; avatar?: string | null; accentColor: AccentName };
 
 /**
  * El nombre guardado, si esta version de la app tiene esa cara.
@@ -25,7 +32,7 @@ export const avatarOf = (value?: string | null): Avatar3DName | null =>
  * Vive en `features/profile` y no en `components/ui` porque conoce `User`; `Avatar3D`, que solo sabe
  * de imagenes, si es de `ui`.
  */
-export function ProfileAvatar({ user, size = Avatar3DSize.md }: { user: User; size?: number }) {
+export function ProfileAvatar({ user, size = Avatar3DSize.md }: { user: Face; size?: number }) {
   const t = useTheme();
   const accent = useAccent(user.accentColor);
   const name = avatarOf(user.avatar);

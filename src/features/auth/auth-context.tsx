@@ -84,6 +84,13 @@ type AuthValue = {
    */
   updateProfile: (patch: Partial<ProfileInput>) => Promise<void>;
   /**
+   * Entra a un espacio de trabajo, o vuelve al modo general con `null`.
+   *
+   * Aparte de `updateProfile` aunque escriba el mismo endpoint: la firma pide un espacio y no un
+   * parche de perfil, y quien la llama esta cambiando el CONTEXTO de la app, no editando sus ajustes.
+   */
+  setActiveSpace: (space: User['activeWorkspace']) => Promise<void>;
+  /**
    * Cambia la contraseña con el codigo del correo. Vive aqui y no en la pantalla —al contrario que
    * `api.forgot`— porque devuelve sesion: es un `start`, como `signUp` y `verify`.
    */
@@ -195,6 +202,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (patch.accentColor) void syncTodayWidget(token);
           } catch (error) {
             // Vuelve a lo que habia. Quien llamo se encarga de contarlo; aqui no se traga nada.
+            setSession({ token, user: previous });
+            throw error;
+          }
+        });
+
+        return queue as Promise<void>;
+      },
+      /**
+       * Entra a un espacio, o vuelve al modo general con `null`.
+       *
+       * Hermana de `updateProfile` y **comparte su `queue`**, que no es cosmetico: las dos escriben en
+       * `user_profiles` y el API hace `findById -> createProfile -> saveProfile` sin transaccion, asi
+       * que dos en vuelo se pisan. Cambiar de espacio mientras se guarda un color es un caso real.
+       *
+       * Optimista con el objeto entero y no solo el id: la pastilla del saludo lee `name`, `icon` y
+       * `accent`, y sin ellos parpadearia vacia hasta que volviera el servidor. Es el mismo argumento
+       * del acento en `updateProfile`.
+       */
+      setActiveSpace: async (space) => {
+        const previous = session?.user;
+        if (!token || !previous) return;
+
+        setSession({ token, user: { ...previous, activeWorkspace: space } });
+
+        queue = queue.then(async () => {
+          try {
+            const { user } = await api.onboard(token, { activeWorkspaceId: space?.id ?? null });
+            await start({ token, user });
+          } catch (error) {
             setSession({ token, user: previous });
             throw error;
           }

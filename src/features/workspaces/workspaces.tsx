@@ -1,65 +1,46 @@
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { router } from 'expo-router';
-import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
 import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
-import { Motion, Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import { Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import { usePressScale } from '@/hooks/use-press-scale';
+
+import type { Workspace } from '@/features/auth/api';
 
 import type { useWorkspaces } from './use-workspaces';
 import { WorkspaceCard } from './workspace-card';
-
-/**
- * Las opciones SALEN del boton, escalonadas.
- *
- * Cada una entra 30ms despues de la anterior, asi que la lista se despliega de arriba a abajo desde el
- * "+" en vez de aparecer entera de golpe — es lo que hace que se lean como opciones DE ese boton y no
- * como un bloque nuevo en la pantalla. `FadeOutDown` y no Up al cerrar: simetrico a la entrada, la
- * misma pareja que usan los paneles del perfil.
- */
-const optionIn = (index: number) => FadeInDown.delay(index * Motion.step).duration(Motion.enter);
-const OUT = FadeOutDown.duration(Motion.exit);
 
 /** Proporcion del viewBox del sticker, para escalar por ancho sin deformarlo. */
 const TANGLE_RATIO = 96 / 84;
 
 /**
- * Las dos cosas que se pueden crear desde aqui.
- *
- * `light` (la bombilla) para la tarea y no `check`: lo que se anota es una idea, no algo ya hecho —
- * la palomita es el final del camino y ponerla en el boton de crear cuenta la historia al reves.
- *
- * Sin linea de descripcion. La tenian ("Algo que hay que hacer", "Para agrupar lo que va junto") y se
- * fue: con dos opciones y un icono que ya dice de que va cada una, el subtitulo solo servia para que
- * el panel ocupara el ancho entero de la pantalla — y un menu de dos cosas que abarca todo se lee como
- * una seccion nueva, no como las opciones del boton que acabas de tocar.
- */
-const CREATE = [
-  { icon: 'light', label: 'Tarea nueva', to: '/new-task' },
-  { icon: 'work', label: 'Espacio de trabajo', to: '/new-workspace' },
-] as const satisfies readonly { icon: Icon3DName; label: string; to: string }[];
-
-/**
- * Los espacios de trabajo del inicio, con el boton que abre las dos formas de crear.
+ * Los espacios de trabajo del inicio, con el boton de anotar.
  *
  * **El "+" se pinta SIEMPRE**, con espacios, sin ellos, cargando y con error, y eso no es un detalle
  * de layout: aqui vivia el `BigButton "Anotar algo"` de la tarjeta del dia, que estaba fuera de su
  * cuerpo condicional justo para que ningun estado dejara la pantalla sin la unica forma de crear una
  * tarea. Al quitar esa tarjeta, esta cabecera hereda esa responsabilidad.
+ *
+ * El "+" ABRIA un panel con dos opciones —tarea nueva y espacio de trabajo— y ahora empuja directo a
+ * anotar. Crear un espacio se mudo al selector de "¿En qué estás?", que se abre desde cualquier
+ * pantalla: dejarlo tambien aqui serian dos caminos a la misma pantalla a un centimetro uno de otro, y
+ * un menu de una sola opcion es un boton con un paso de mas.
  */
 export function Workspaces({
   workspaces: data,
   accent,
+  onActivate,
 }: {
   workspaces: ReturnType<typeof useWorkspaces>;
   accent?: AccentName;
+  /** Entrar a un espacio. Lo resuelve la pantalla, que es quien tiene `setActiveSpace`. */
+  onActivate: (workspace: Workspace) => void;
 }) {
   const t = useTheme();
   const { workspaces, error } = data;
-  const [open, setOpen] = useState(false);
 
   return (
     <View style={styles.block}>
@@ -72,30 +53,8 @@ export function Workspaces({
             </Text>
           )}
         </View>
-        <PlusButton open={open} accent={accent} onPress={() => setOpen(!open)} />
+        <PlusButton accent={accent} onPress={() => router.push('/new-task')} />
       </View>
-
-      {/*
-        Pegado a la derecha y del ancho de su contenido, no de la pantalla: nace debajo del "+" y en su
-        misma columna, que es lo que lo ata visualmente al boton que lo abrio.
-      */}
-      {open && (
-        <View style={styles.panel}>
-          {CREATE.map((option, i) => (
-            <CreateOption
-              key={option.to}
-              option={option}
-              index={i}
-              accent={accent}
-              onPress={() => {
-                // Se cierra antes de navegar: al volver, el panel abierto detras seria un resto.
-                setOpen(false);
-                router.push(option.to);
-              }}
-            />
-          ))}
-        </View>
-      )}
 
       {/* `null` es "todavia no llego" y se pinta callado: un hueco vacio no dice nada falso. */}
       {workspaces?.length === 0 && <EmptyWorkspaces />}
@@ -103,7 +62,11 @@ export function Workspaces({
       {!!workspaces?.length && (
         <View style={styles.grid}>
           {workspaces.map((workspace) => (
-            <WorkspaceCard key={workspace.id} workspace={workspace} />
+            <WorkspaceCard
+              key={workspace.id}
+              workspace={workspace}
+              onActivate={() => onActivate(workspace)}
+            />
           ))}
         </View>
       )}
@@ -114,19 +77,8 @@ export function Workspaces({
   );
 }
 
-/**
- * El "+". Gira 45 grados al abrirse, asi que se convierte en la cruz de cerrar sin cambiar de glifo:
- * un icono que se transforma dice "esto que abri se cierra aqui" mejor que dos iconos distintos.
- */
-function PlusButton({
-  open,
-  accent,
-  onPress,
-}: {
-  open: boolean;
-  accent?: AccentName;
-  onPress: () => void;
-}) {
+/** El "+" de anotar. La accion mas repetida de la app, y por eso vive donde cae el pulgar. */
+function PlusButton({ accent, onPress }: { accent?: AccentName; onPress: () => void }) {
   const t = useTheme();
   const tint = useAccent(accent);
   const press = usePressScale({ to: 0.92 });
@@ -135,54 +87,17 @@ function PlusButton({
     <Animated.View style={press.style}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={open ? 'Cerrar' : 'Crear algo nuevo'}
-        accessibilityState={{ expanded: open }}
+        accessibilityLabel="Anotar algo"
         onPress={onPress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
         style={[styles.plus, { backgroundColor: tint.ink }]}>
-        <View style={open ? styles.turned : undefined}>
-          <SymbolView
-            name={{ ios: 'plus', android: 'add', web: 'add' }}
-            size={20}
-            tintColor={t.onInk}
-            fallback={<Text style={[Type.button, { color: t.onInk }]}>+</Text>}
-          />
-        </View>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-/** Una de las dos opciones del panel. El icono 3D a `md` (32), el piso donde todavia se lee. */
-function CreateOption({
-  option,
-  index,
-  accent,
-  onPress,
-}: {
-  option: (typeof CREATE)[number];
-  index: number;
-  accent?: AccentName;
-  onPress: () => void;
-}) {
-  const t = useTheme();
-  const tint = useAccent(accent);
-  const press = usePressScale({ to: 0.96 });
-
-  return (
-    <Animated.View entering={optionIn(index)} exiting={OUT} style={press.style}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={option.label}
-        onPress={onPress}
-        onPressIn={press.onPressIn}
-        onPressOut={press.onPressOut}
-        style={[styles.optionTouch, { backgroundColor: tint.soft }]}>
-        <Icon3D name={option.icon} size={Icon3DSize.md} />
-        <Text style={[Type.label, { color: t.text }]} numberOfLines={1}>
-          {option.label}
-        </Text>
+        <SymbolView
+          name={{ ios: 'plus', android: 'add', web: 'add' }}
+          size={20}
+          tintColor={t.onInk}
+          fallback={<Text style={[Type.button, { color: t.onInk }]}>+</Text>}
+        />
       </Pressable>
     </Animated.View>
   );

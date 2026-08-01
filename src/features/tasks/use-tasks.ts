@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { ApiError, type Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
+import { useActiveSpaceId } from '@/features/workspaces/active-space';
 
 import { tasksApi } from './api';
 
@@ -85,19 +86,30 @@ const mutators = (setState: React.Dispatch<React.SetStateAction<State>>) => ({
  */
 export function useTasks(date: string) {
   const { token } = useAuth();
+  /**
+   * El espacio activo se lee AQUI DENTRO y no llega por parametro, y es deliberado: si fuera un
+   * argumento, cada pantalla tendria que acordarse de pasarlo y la que lo olvidara enseñaria el dia
+   * equivocado sin ningun error. Es el mismo argumento por el que `andSync` vive en el cliente de la
+   * API y no en cada sitio que muta una tarea.
+   */
+  const space = useActiveSpaceId();
   const [state, setState] = useState<State>({ for: null, tasks: null, error: '' });
+
+  // La llave de lo guardado lleva el espacio: al cambiar de espacio, lo del anterior se descarta al
+  // pintar en vez de quedarse un frame diciendo lo que no es.
+  const key = `${date}:${space ?? ''}`;
 
   const reload = useCallback(async () => {
     if (!token || !date) return;
     try {
-      const { tasks } = await tasksApi.list(token, { date });
-      setState({ for: date, tasks, error: '' });
+      const { tasks } = await tasksApi.list(token, { date, workspaceId: space });
+      setState({ for: key, tasks, error: '' });
     } catch (e) {
       const error = e instanceof ApiError ? e.message : 'No pudimos traer ese día';
       // Si ya habia tareas de ESTE dia se quedan: un fallo no borra lo que se esta viendo.
-      setState((s) => (s.for === date ? { ...s, error } : { for: date, tasks: null, error }));
+      setState((s) => (s.for === key ? { ...s, error } : { for: key, tasks: null, error }));
     }
-  }, [token, date]);
+  }, [token, date, space, key]);
 
   // useFocusEffect y no useEffect: corre al montar Y al VOLVER, asi lo que se crea en /new-task
   // aparece al regresar. La carga va dentro y no llama a reload en seco, asi el primer setState
@@ -120,7 +132,7 @@ export function useTasks(date: string) {
    * limpiarlo con un setState: pintar el lunes bajo el encabezado del martes es peor que
    * un instante de "cargando".
    */
-  const fresh = state.for === date;
+  const fresh = state.for === key;
 
   /**
    * Se arman con `useMemo` y no en el cuerpo: la fila los recibe como prop y los mete en las
@@ -204,19 +216,26 @@ export function useWorkspaceTasks(workspaceId: number) {
  */
 export function useBacklog(today: string) {
   const { token } = useAuth();
+  // Dentro de un espacio, el atraso tambien es el suyo. Ver la nota de `useTasks`.
+  const space = useActiveSpaceId();
   const [state, setState] = useState<State>({ for: null, tasks: null, error: '' });
+  const key = `${today}:${space ?? ''}`;
 
   const reload = useCallback(async () => {
     if (!token || !today) return;
     try {
-      const { tasks } = await tasksApi.list(token, { backlog: today, status: 'pending' });
-      setState({ for: today, tasks, error: '' });
+      const { tasks } = await tasksApi.list(token, {
+        backlog: today,
+        status: 'pending',
+        workspaceId: space,
+      });
+      setState({ for: key, tasks, error: '' });
     } catch {
       // Sin mensaje: el backlog es una seccion secundaria y un error suyo no debe robarle la
       // pantalla al dia. Si falla, no aparece.
-      setState({ for: today, tasks: null, error: '' });
+      setState({ for: key, tasks: null, error: '' });
     }
-  }, [token, today]);
+  }, [token, today, space, key]);
 
   useFocusEffect(
     useCallback(() => {
@@ -224,7 +243,7 @@ export function useBacklog(today: string) {
     }, [reload])
   );
 
-  const fresh = state.for === today;
+  const fresh = state.for === key;
   const mutate = useMemo(() => mutators(setState), []);
   return { tasks: fresh ? state.tasks : null, reload, ...mutate };
 }

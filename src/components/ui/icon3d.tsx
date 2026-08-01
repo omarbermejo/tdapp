@@ -84,6 +84,14 @@ export const AREA_ICON: Record<string, Icon3DName> = {
   money: 'money',
   relationships: 'relationships',
   creativity: 'creativity',
+  /*
+    Las tres clasificaciones nuevas reusan slugs que ya estan horneados: `trophy` y `graph-up`
+    llevaban en el bundle sin usarse desde el principio, y `calendar` ya existia para la pestaña.
+    Cero assets nuevos, cero `npm run build:icons3d`.
+  */
+  fitness: 'trophy',
+  event: 'calendar',
+  business: 'graph-up',
 };
 
 /** El icono de un tamaño de tarea: un rayo, un reloj y una luna. */

@@ -22,10 +22,10 @@ import { AREA_ICON, Icon3D, Icon3DSize, SIZE_ICON } from '@/components/ui/icon3d
 import { Motion, Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
-import { FOCUS_AREAS } from '@/features/auth/options';
+import { WORKSPACE_TAGS } from '@/features/auth/options';
 
 import { tasksApi } from './api';
-import { accentForFocus } from './focus-accent';
+import { accentForFocus, focusOf } from './focus-accent';
 import type { TaskMutations } from './use-tasks';
 
 /**
@@ -82,8 +82,9 @@ const thud = () => {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 };
 
+/** Busca en las DIEZ y no en los siete focos: una tarea puede heredar la clasificacion del espacio. */
 const focusLabel = (value: string | null) =>
-  value ? (FOCUS_AREAS.find((o) => o.value === value)?.label ?? value) : null;
+  value ? (WORKSPACE_TAGS.find((o) => o.value === value)?.label ?? value) : null;
 
 /** Solo la hora agendada, nunca la actual: leer el reloj en el render es impuro. */
 const timeLabel = (iso: string | null) =>
@@ -107,7 +108,7 @@ const dayStamp = (dueDate: string | null) => {
  * Nunca queda sin icono. Una fila sin ancla en una lista donde las demas si la tienen deja un
  * hueco que se lee como error, y el tamaño es un dato que TODA tarea tiene.
  */
-const rowIcon = (task: Task) => AREA_ICON[task.focusArea ?? ''] ?? SIZE_ICON[task.size] ?? 'clock';
+const rowIcon = (task: Task) => AREA_ICON[focusOf(task) ?? ''] ?? SIZE_ICON[task.size] ?? 'clock';
 
 /**
  * El panel de detras. Vive en su propio componente porque necesita hooks de reanimated y
@@ -237,7 +238,7 @@ export function TaskRow({
   // El tinte sale de la familia del foco, no del acento del usuario: asi un dia entero de
   // trabajo se lee verde de un vistazo. Sin foco cae en el acento del usuario, y sin acento
   // en el mismo default que `useAccent`.
-  const tint = useAccent(accentForFocus(task.focusArea, accent ?? 'olive'));
+  const tint = useAccent(accentForFocus(focusOf(task), accent ?? 'olive'));
   const { token } = useAuth();
   const swipe = useRef<SwipeableMethods | null>(null);
   /**
@@ -417,7 +418,7 @@ export function TaskRow({
             {[
               showDay ? dayStamp(task.dueDate) : null,
               `${task.suggestedMinutes} min`,
-              focusLabel(task.focusArea),
+              focusLabel(focusOf(task)),
               showTime ? timeLabel(task.dueAt) : null,
             ]
               .filter(Boolean)

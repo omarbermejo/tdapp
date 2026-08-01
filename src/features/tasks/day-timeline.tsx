@@ -11,7 +11,7 @@ import Animated, {
 import { Motion, Radius, Space, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
 
-import { accentForFocus } from './focus-accent';
+import { accentForFocus, focusOf } from './focus-accent';
 import { TaskRow } from './task-row';
 import type { TaskMutations } from './use-tasks';
 
@@ -213,7 +213,7 @@ function Slot({
   index: number;
 }) {
   const t = useTheme();
-  const accent = accentForFocus(task.focusArea, fallback);
+  const accent = accentForFocus(focusOf(task), fallback);
   const tint = useAccent(accent);
   const done = task.status === 'done';
 

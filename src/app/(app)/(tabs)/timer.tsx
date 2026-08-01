@@ -32,7 +32,9 @@ import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { tasksApi } from '@/features/tasks/api';
 import { useLocalToday } from '@/features/tasks/day';
-import { accentForFocus } from '@/features/tasks/focus-accent';
+import { SpacePill } from '@/components/ui/space-pill';
+import { accentForFocus, focusOf } from '@/features/tasks/focus-accent';
+import { useActiveSpace } from '@/features/workspaces/active-space';
 import { useTasks } from '@/features/tasks/use-tasks';
 import { armAlarm, disarmAlarm, forgetAlarm } from '@/features/timer/alarm';
 import { cheer, coolCheer, warmCheer } from '@/features/timer/cheer';
@@ -120,6 +122,7 @@ export default function TimerScreen() {
   // Las tareas de hoy son las que se pueden enfocar: enganchar la del jueves no significa nada.
   const day = useTasks(today);
   const focus = useFocusMode();
+  const space = useActiveSpace();
   /**
    * "Reducir movimiento" del sistema, leído con el hook de reanimated en vez de resolviendo
    * `AccessibilityInfo` en un efecto: es la API oficial, no parpadea el primer frame y sigue los
@@ -297,7 +300,7 @@ export default function TimerScreen() {
    *
    * El hook va aquí arriba con los demás: debajo del guard de `user` sería un hook condicional.
    */
-  const accent: AccentName = pom.phase === 'focus' ? accentForFocus(task?.focusArea, fallback) : 'clay';
+  const accent: AccentName = pom.phase === 'focus' ? accentForFocus(task ? focusOf(task) : null, fallback) : 'clay';
   const tint = useAccent(accent);
 
   /**
@@ -474,6 +477,17 @@ export default function TimerScreen() {
             { paddingTop: pad.top, paddingBottom: pad.bottom },
           ]}
           showsVerticalScrollIndicator={false}>
+          {/*
+            Esta pantalla no tiene cabecera —su docstring dice que el dial ES la cabecera— asi que la
+            pastilla va como primer hijo del scroll, sobre el dial. Se esconde en modo enfoque junto
+            con la capsula de pestañas: ahi la pantalla se queda con una sola cosa a proposito.
+          */}
+          {!focus.hidden && (
+            <View style={styles.spaceRow}>
+              <SpacePill space={space} />
+            </View>
+          )}
+
           <Animated.View layout={animate ? LinearTransition : undefined} style={styles.stack}>
             {editable ? (
               <DialPicker minutes={pom.focusMinutes} onChange={pom.setFocusMinutes}>
@@ -604,6 +618,8 @@ const styles = StyleSheet.create({
   focused: { flexGrow: 1, justifyContent: 'center' },
   // La carátula, su línea, el ciclo y los botones se mueven JUNTOS al centrarse. Sin este grupo,
   // cada uno animaría por su cuenta y el bloque se leería como cuatro cosas cayendo.
+  // Centrada, como todo lo demas de esta pantalla.
+  spaceRow: { alignItems: 'center', paddingBottom: Space.md },
   stack: { gap: Space.xl, alignItems: 'stretch' },
   dialWrap: { width: DIAL, height: DIAL, alignSelf: 'center' },
   // Ocupa el dial entero y centra: así los dígitos quedan en el centro geométrico del aro y no

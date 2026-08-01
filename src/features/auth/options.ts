@@ -4,9 +4,11 @@
  * Mismo criterio que la barra de pestañas. Los nombres de mas de una palabra van en kebab-case.
  */
 import Banknote from 'lucide-react-native/icons/banknote';
+import CalendarDays from 'lucide-react-native/icons/calendar-days';
 import BellRing from 'lucide-react-native/icons/bell-ring';
 import BookOpen from 'lucide-react-native/icons/book-open';
 import BriefcaseBusiness from 'lucide-react-native/icons/briefcase-business';
+import Dumbbell from 'lucide-react-native/icons/dumbbell';
 import Feather from 'lucide-react-native/icons/feather';
 import HeartPulse from 'lucide-react-native/icons/heart-pulse';
 import House from 'lucide-react-native/icons/house';
@@ -14,6 +16,7 @@ import Megaphone from 'lucide-react-native/icons/megaphone';
 import Moon from 'lucide-react-native/icons/moon';
 import Shuffle from 'lucide-react-native/icons/shuffle';
 import Sparkles from 'lucide-react-native/icons/sparkles';
+import TrendingUp from 'lucide-react-native/icons/trending-up';
 import Sun from 'lucide-react-native/icons/sun';
 import Sunrise from 'lucide-react-native/icons/sunrise';
 import Users from 'lucide-react-native/icons/users';
@@ -36,6 +39,26 @@ import type { Option } from '@/components/ui/choice';
  * onboarding), asi que el sistema queda en dos niveles: ilustracion para heroes, linea para
  * controles.
  */
+/**
+ * De que puede ser un espacio de trabajo. Diez, y espejan `WORKSPACE_TAGS` del API.
+ *
+ * Los SIETE primeros son exactamente `FOCUS_AREAS`, y eso es lo que hace el cambio seguro: el catalogo
+ * se ENSANCHA en vez de reescribirse, asi que ninguna tarea historica con un foco viejo se queda con un
+ * valor que el API ya no acepta. Las tres nuevas cubren lo que la gente crea y los focos no nombraban.
+ */
+export const WORKSPACE_TAGS: readonly Option[] = [
+  { value: 'study', label: 'Estudio', icon: BookOpen },
+  { value: 'work', label: 'Trabajo', icon: BriefcaseBusiness },
+  { value: 'creativity', label: 'Creatividad', icon: Sparkles },
+  { value: 'fitness', label: 'Ejercicio', icon: Dumbbell },
+  { value: 'home', label: 'Casa', icon: House },
+  { value: 'health', label: 'Salud', icon: HeartPulse },
+  { value: 'relationships', label: 'Relaciones', icon: Users },
+  { value: 'event', label: 'Evento', icon: CalendarDays },
+  { value: 'money', label: 'Dinero', icon: Banknote },
+  { value: 'business', label: 'Negocio', icon: TrendingUp },
+];
+
 export const FOCUS_AREAS: readonly Option[] = [
   { value: 'study', label: 'Estudio', icon: BookOpen },
   { value: 'work', label: 'Trabajo', icon: BriefcaseBusiness },

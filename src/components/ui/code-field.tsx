@@ -4,7 +4,7 @@ import { OtpInput, type OtpInputRef } from 'react-native-otp-entry';
 
 import { Radius, Space, Touch, Type, useAccent, useShadow, useTheme, type AccentName } from '@/constants/theme';
 
-/** Seis dígitos, como los emite el API (`CODE = /^\d{6}$/` en `domain/otp.js`). */
+/** Seis, que es lo que emiten los dos catálogos: `CODE` en `domain/otp.js` e `INVITE_CODE` en `domain/invite.js`. */
 const DIGITS = 6;
 
 type Props = {
@@ -12,10 +12,19 @@ type Props = {
   ref?: Ref<OtpInputRef>;
   onFilled: (code: string) => void;
   /** Para apagar el error en cuanto se vuelve a teclear. */
-  onType?: () => void;
+  onType?: (code: string) => void;
   error?: boolean;
   disabled?: boolean;
   accent?: AccentName;
+  /** Cuántas celdas. Seis en los tres usos de hoy; existe para no cablear el número aquí dentro. */
+  length?: number;
+  /**
+   * Qué se puede teclear.
+   *
+   * `numeric` para los códigos de correo, que son dígitos. `alphanumeric` para los de invitación, que
+   * son base32 — y ahí el teclado numérico dejaría a la persona sin poder escribir la mitad del código.
+   */
+  type?: 'numeric' | 'alphanumeric';
 };
 
 /**
@@ -28,7 +37,16 @@ type Props = {
  *
  * React 19: `ref` es una prop normal, sin `forwardRef`.
  */
-export function CodeField({ ref, onFilled, onType, error, disabled, accent = 'olive' }: Props) {
+export function CodeField({
+  ref,
+  onFilled,
+  onType,
+  error,
+  disabled,
+  accent = 'olive',
+  length = DIGITS,
+  type = 'numeric',
+}: Props) {
   const th = useTheme();
   const shadow = useShadow();
   const tint = useAccent(accent).ink;
@@ -36,8 +54,8 @@ export function CodeField({ ref, onFilled, onType, error, disabled, accent = 'ol
   return (
     <OtpInput
       ref={ref}
-      numberOfDigits={DIGITS}
-      type="numeric"
+      numberOfDigits={length}
+      type={type}
       autoFocus
       blurOnFilled
       focusColor={tint}
@@ -46,7 +64,13 @@ export function CodeField({ ref, onFilled, onType, error, disabled, accent = 'ol
       onFilled={onFilled}
       // No pasar autoComplete aqui: la libreria ya pone oneTimeCode / sms-otp y esto
       // se hace spread despues, asi que los pisaria.
-      textInputProps={{ accessibilityLabel: 'Código de 6 dígitos', autoCorrect: false }}
+      textInputProps={{
+        // El rótulo dice lo que de verdad se puede teclear: "6 dígitos" en un campo alfanumérico
+        // manda a quien usa un lector de pantalla a buscar un teclado que no es.
+        accessibilityLabel: `Código de ${length} ${type === 'numeric' ? 'dígitos' : 'caracteres'}`,
+        autoCorrect: false,
+        autoCapitalize: type === 'numeric' ? 'none' : 'characters',
+      }}
       theme={{
         containerStyle: styles.cells,
         pinCodeContainerStyle: {

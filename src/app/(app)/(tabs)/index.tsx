@@ -17,6 +17,8 @@ import { useBacklog, useTasks } from '@/features/tasks/use-tasks';
 import { WeekStrip } from '@/features/tasks/week-strip';
 import { Workspaces } from '@/features/workspaces/workspaces';
 import { useWorkspaces } from '@/features/workspaces/use-workspaces';
+import { SpacePill } from '@/components/ui/space-pill';
+import { useActiveSpace } from '@/features/workspaces/active-space';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
 
@@ -74,9 +76,11 @@ const longDate = (date: string) => {
  * heredó de la tarjeta del dia que estuvo aqui.
  */
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, setActiveSpace } = useAuth();
   const t = useTheme();
   const today = useLocalToday();
+  /** El espacio activo acota `useTasks` y `useBacklog` por dentro; aqui solo se pinta. */
+  const space = useActiveSpace();
 
   /**
    * El dia que se esta mirando. En `useState` y no en la ruta, al reves que `calendar.tsx`: alli el dia
@@ -137,6 +141,15 @@ export default function HomeScreen() {
             <Text style={[Type.label, { color: t.textMuted }]} numberOfLines={1}>
               {longDate(today)}
             </Text>
+            {/*
+              La pastilla va DEBAJO de las tres lineas y no entre ellas: el saludo, el dia y la fecha
+              son UNA unidad ("quien eres y que dia es") y meterle algo en medio la parte. Aqui es lo
+              ultimo que se lee antes de caer al contenido, que es justo donde se declara su ALCANCE.
+
+              Se pinta sola cuando hay espacio activo, y devuelve null cuando no: en modo general la
+              cabecera se ve EXACTAMENTE como siempre.
+            */}
+            <SpacePill space={space} />
           </View>
           {/* Arriba a la derecha: es lo primero que alguien abre la app a comprobar. */}
           <StreakFlame streak={streak.streak} accent={user.accentColor} />
@@ -144,7 +157,19 @@ export default function HomeScreen() {
 
         <HeatMap stats={stats} today={today} accent={user.accentColor} spec={QUARTER_HEAT} />
 
-        <Workspaces workspaces={workspaces} accent={user.accentColor} />
+        <Workspaces
+          workspaces={workspaces}
+          accent={user.accentColor}
+          onActivate={(space) =>
+            void setActiveSpace({
+              id: space.id,
+              name: space.name,
+              icon: space.icon,
+              accent: space.accent,
+              tag: space.tag ?? null,
+            })
+          }
+        />
 
         <NextUp day={day} />
 

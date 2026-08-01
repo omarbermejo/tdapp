@@ -29,6 +29,8 @@ import { DayTimeline } from '@/features/tasks/day-timeline';
 import { useTasks } from '@/features/tasks/use-tasks';
 import { usePressScale } from '@/hooks/use-press-scale';
 
+import { SpacePill } from '@/components/ui/space-pill';
+import { useActiveSpace } from '@/features/workspaces/active-space';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 import { TAB_DOCK } from './_layout';
@@ -128,6 +130,8 @@ export default function CalendarScreen() {
   // El objeto entero se guarda además de desestructurarlo: el riel se lo pasa tal cual a las filas
   // como `mutate`, porque el hook ya cumple `TaskMutations` (pintar ya, quitar ya, traer la verdad).
   const day = useTasks(selected);
+  /** El espacio activo ya acota `useTasks` por dentro; aqui solo se pinta la señal. */
+  const space = useActiveSpace();
   const { tasks, error, loading, reload } = day;
 
   // El aire va en el contenido, no en un SafeAreaView: ver `use-screen-padding`.
@@ -247,7 +251,12 @@ export default function CalendarScreen() {
 
         {/* El hueco del notch le toca al encabezado: es lo unico pegado al borde de arriba. */}
         <View style={[styles.head, { paddingTop: pad.top }]}>
-          <Micro>{relative || 'Que viene'}</Micro>
+          {/* La pastilla comparte fila con el rotulo: esta cabecera flota con blur y una linea mas la
+              haria crecer sobre la tira de dias. */}
+          <View style={styles.headTop}>
+            <Micro>{relative || 'Que viene'}</Micro>
+            <SpacePill space={space} />
+          </View>
           <Text style={[Type.display, { color: t.text }]} numberOfLines={2}>
             {selected ? upper(long(parse(selected))) : ''}
           </Text>
@@ -337,6 +346,9 @@ const styles = StyleSheet.create({
   // Un pelo, no un borde: separa la barra de la lista sin dibujar una caja.
   edge: { position: 'absolute', bottom: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth },
   // El paddingTop lo pone `useScreenPadding`: es el unico elemento pegado al borde de arriba.
+  // Rotulo a la izquierda, espacio activo a la derecha. `space-between` y no un gap: la pastilla
+  // mide lo que mide su nombre y tiene que quedarse pegada al borde.
+  headTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.sm },
   head: { paddingHorizontal: Space.xl, gap: Space.xs },
   strip: {
     flexDirection: 'row',

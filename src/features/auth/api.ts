@@ -43,6 +43,14 @@ export type User = {
    * valida al pintar, con la misma tolerancia con la que `useAccent` cae al acento por defecto.
    */
   avatar?: string | null;
+  /**
+   * El espacio en el que esta trabajando, ya resuelto. `null` = el modo general.
+   *
+   * Viene el OBJETO y no solo el id para que la pastilla se pinte en el primer frame, sin esperar a
+   * la lista de espacios. Opcional por lo mismo que `stage`: un API desplegado sin la columna no lo
+   * manda, y ahi la app se comporta como siempre (modo general).
+   */
+  activeWorkspace?: { id: number; name: string; icon: string; accent: AccentName; tag: string | null } | null;
   createdAt: string;
   /**
    * ponytail: opcionales mientras haya APIs desplegadas sin estos campos. `stageOf` compara
@@ -71,6 +79,8 @@ export type ProfileInput = {
    * la cara. Si fuera obligatorio habria que inventarle un valor ahi para satisfacer al tipo.
    */
   avatar?: string | null;
+  /** Opcional por lo mismo que `avatar`: quien cambia de espacio no manda el perfil entero. */
+  activeWorkspaceId?: number | null;
 };
 
 /** Lo que el API considera una tarea. Solo los campos que hoy consume la app. */
@@ -90,6 +100,16 @@ export type Task = {
    * promete un numero.
    */
   workspaceId?: number | null;
+  /**
+   * La clasificacion del ESPACIO al que pertenece, resuelta por el API.
+   *
+   * De aqui sale el icono y el color de la fila cuando la tarea no trae foco propio: `focusOf(task)`
+   * es `focusArea ?? workspaceTag`. La resuelve el servidor porque el cliente tiene el id del espacio
+   * pero no el espacio entero, y tenerlo a mano en cada fila obligaria a pasar la lista por props.
+   */
+  workspaceTag?: string | null;
+  /** Quien la cerro. En un espacio compartido puede no ser su dueño. null en las abiertas. */
+  completedBy?: number | null;
   /** Orden manual dentro del dia. null = nunca se reordeno. Lo escribe solo PATCH /tasks/order. */
   position?: number | null;
   /** ISO con zona, tal como lo mando el cliente. */
@@ -117,8 +137,47 @@ export type Workspace = {
   icon: string;
   accent: AccentName;
   position: number;
+  /** De que es. `null` = sin clasificar, que es un estado y no un hueco. Ver `WORKSPACE_TAGS`. */
+  tag?: string | null;
   total: number;
   done: number;
+};
+
+/**
+ * Otra persona, vista desde aqui. Espeja `toPublicMember` del API: cuatro campos y ni uno mas.
+ *
+ * Deliberadamente NO es un `User`: aquel trae correo, fecha de nacimiento y el perfil entero, y esto
+ * se pinta en listas de gente que no eres tu.
+ */
+export type Member = {
+  id: number;
+  name: string;
+  avatar: string | null;
+  accentColor: AccentName;
+  /** Solo en la lista de un espacio: 'owner' o 'member'. */
+  role?: string;
+};
+
+/** Alguien con quien ya trabajaste, y el espacio donde mas han colaborado juntos. */
+export type Collaborator = {
+  person: Member;
+  workspace: { id: number; name: string; icon: string; accent: AccentName };
+  tasks: number;
+};
+
+/** Una invitacion viva a un espacio. `email` null = codigo abierto, lo usa quien lo tenga. */
+export type Invite = {
+  code: string;
+  email: string | null;
+  expiresAt: string;
+  createdAt: string;
+};
+
+/** Lo que se ve de un espacio ANTES de entrar, con solo el codigo. */
+export type InvitePreview = {
+  workspace: { id: number; name: string; icon: string; accent: AccentName };
+  invitedBy: Member | null;
+  members: number;
 };
 
 /**

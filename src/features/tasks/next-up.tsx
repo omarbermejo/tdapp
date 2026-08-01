@@ -9,7 +9,7 @@ import type { Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { usePressScale } from '@/hooks/use-press-scale';
 
-import { accentForFocus } from './focus-accent';
+import { accentForFocus, focusOf } from './focus-accent';
 import type { useTasks } from './use-tasks';
 
 /**
@@ -34,7 +34,7 @@ export function NextUp({ day }: { day: ReturnType<typeof useTasks> }) {
 
   const pending = day.tasks?.filter((task) => task.status === 'pending') ?? [];
   const next = pickNext(pending);
-  const tint = useAccent(accentForFocus(next?.focusArea ?? null, user?.accentColor ?? 'olive'));
+  const tint = useAccent(accentForFocus(next ? focusOf(next) : null, user?.accentColor ?? 'olive'));
 
   // Sin nada pendiente no hay "lo siguiente". El dia cerrado lo celebra la card de arriba; dos
   // mensajes de felicitacion apilados se leen como una plantilla, no como la app hablandote.

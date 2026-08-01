@@ -40,11 +40,17 @@ export default function AppLayout() {
       <Stack.Screen name="new-task" options={{ presentation: 'modal' }} />
 
       {/*
-        Crear un espacio tambien es hoja, por el mismo argumento: es un parentesis sobre el dia y no un
-        destino. Se abre desde el panel del "+" en el inicio, encima de la rejilla que va a recibir la
-        card nueva — con la rejilla visible detras, y eso es la mitad del sentido.
+        Crear un espacio ERA hoja y ahora es push, al reves que `new-task`. Cambió cuando dejó de ser un
+        formulario de un campo y pasó a ser cuatro pasos:
+
+        - Cuatro pasos con rejillas y scroll pelean contra el gesto de arrastrar hacia abajo para
+          cerrar. Es el mismo argumento con el que `edit-profile` descartó la hoja por su rejilla de
+          cuarenta y cinco caras.
+        - El paso 3 CREA el espacio, así que a partir de ahí ya no hay borrador que descartar — y una
+          hoja promete justo eso, que soltarla no deja nada hecho.
+        - Ya no es un paréntesis de tres segundos sobre el día: es donde se decide de qué va tu trabajo.
       */}
-      <Stack.Screen name="new-workspace" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="new-workspace" />
 
       {/*
         Estas dos SI son push de tarjeta, al reves que `new-task`, y por lo mismo que aquella es hoja:
@@ -65,6 +71,31 @@ export default function AppLayout() {
         eso es scroll, que pelearia con el arrastre de cerrar una hoja.
       */}
       <Stack.Screen name="workspace/[id]" />
+
+      {/*
+        El selector de espacio, ENCIMA de lo que haya.
+        `transparentModal` y no `modal`: la pantalla de abajo se queda visible, que es la mitad del
+        sentido — la hoja dice "estas cambiando el contexto de ESTO". Es el unico mecanismo del repo
+        que pinta sobre cualquier pantalla sin que cada una lo monte, y por eso vive como ruta.
+        `animation: 'fade'` porque el movimiento lo pone la hoja por dentro, con su propio FadeInDown:
+        dos deslizamientos superpuestos se leen como un tirón.
+      */}
+      <Stack.Screen
+        name="spaces"
+        options={{
+          presentation: 'transparentModal',
+          animation: 'fade',
+          /**
+           * El `contentStyle` de arriba pinta `canvas` en TODAS las pantallas de esta pila, y aqui eso
+           * tapaba justo lo que la hoja tiene que dejar ver. Transparente, el velo se superpone a la
+           * pantalla de verdad y "estas cambiando el contexto de ESTO" se lee de un vistazo.
+           */
+          contentStyle: { backgroundColor: 'transparent' },
+        }}
+      />
+
+      {/* Unirse con un codigo. Hoja como `new-task`: es un paréntesis, no un destino. */}
+      <Stack.Screen name="join-workspace" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

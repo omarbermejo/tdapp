@@ -24,7 +24,27 @@ const FAMILY: Record<string, AccentName> = {
   health: 'clay',
   relationships: 'clay',
   money: 'copper',
+  /*
+    Las tres clasificaciones que los siete focos no nombraban, repartidas por la misma regla:
+    entrenar es produccion sobre uno mismo (verde), un evento se organiza y se vive (calido), y un
+    negocio es dinero — que sigue sin ser ninguna de las dos familias.
+  */
+  fitness: 'leaf',
+  event: 'clay',
+  business: 'copper',
 };
+
+/**
+ * De que va una tarea: su foco propio si lo tiene, y si no, la clasificacion de su espacio.
+ *
+ * **Esta es la herencia**, y vive aqui para que exista en UN solo sitio: el icono, el color y la
+ * etiqueta de una fila salen los tres de esta funcion, y si cada uno resolviera su propio fallback
+ * acabarian discrepando. El foco propio gana siempre — es un override explicito.
+ */
+export const focusOf = (task: {
+  focusArea?: string | null;
+  workspaceTag?: string | null;
+}): string | null => task.focusArea ?? task.workspaceTag ?? null;
 
 /**
  * El acento de una tarea. Sin foco cae en el del usuario: una tarea recien anotada no tiene

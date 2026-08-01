@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
@@ -35,7 +34,19 @@ const chipsOf = (total: number, done: number): string[] => {
  * Card propia y no `Card` del sistema: esa trae `padding: Space.xl` (24) y `gap: Space.md`, que en
  * 157pt de ancho deja 109 utiles para un anillo de 44 y un icono de 32. Aqui el aire es `Space.lg`.
  */
-export function WorkspaceCard({ workspace }: { workspace: Workspace }) {
+export function WorkspaceCard({
+  workspace,
+  onActivate,
+}: {
+  workspace: Workspace;
+  /**
+   * Tocar la card ENTRA al espacio, no navega a su detalle.
+   *
+   * Es la decision que evita tener dos formas de "estar en un espacio": el detalle sigue existiendo
+   * como pantalla para mirar uno sin salir del que estas, pero la card es la puerta de entrada.
+   */
+  onActivate: () => void;
+}) {
   const t = useTheme();
   const tint = useAccent(workspace.accent);
   const shadow = useShadow();
@@ -56,8 +67,8 @@ export function WorkspaceCard({ workspace }: { workspace: Workspace }) {
         accessibilityRole="button"
         accessibilityLabel={`${workspace.name}. ${tasksLine(total)}`}
         accessibilityValue={{ min: 0, max: total, now: done }}
-        accessibilityHint="Abre el espacio"
-        onPress={() => router.push(`/workspace/${workspace.id}`)}
+        accessibilityHint="Trabaja en este espacio"
+        onPress={onActivate}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
         style={[styles.card, { backgroundColor: t.surface }, shadow]}>
