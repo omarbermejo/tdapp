@@ -47,7 +47,16 @@ export type NewTask = {
   dueAt?: string | null;
 };
 
-export type TaskQuery = { date?: string; status?: Task['status']; focusArea?: string };
+export type TaskQuery = {
+  date?: string;
+  status?: Task['status'];
+  focusArea?: string;
+  /**
+   * Una fecha, y trae lo que quedo ATRAS de ella: vencido o sin agendar nunca. Los dos casos en un
+   * solo filtro porque son la misma pantalla — ver `listByUser` en el API.
+   */
+  backlog?: string;
+};
 
 /**
  * Refresca el widget despues de una mutacion, y devuelve lo que devolvia la mutacion.

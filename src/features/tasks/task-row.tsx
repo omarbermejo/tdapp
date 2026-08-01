@@ -18,6 +18,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
+import { AREA_ICON, Icon3D, Icon3DSize, SIZE_ICON } from '@/components/ui/icon3d';
 import { Motion, Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
@@ -77,6 +78,26 @@ const focusLabel = (value: string | null) =>
 /** Solo la hora agendada, nunca la actual: leer el reloj en el render es impuro. */
 const timeLabel = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' }) : null;
+
+/**
+ * El dia de una tarea que NO es del dia que se esta viendo: '28 jul', o 'Sin fecha'.
+ *
+ * Se construye con numeros y no con `new Date(iso)`: parsear 'YYYY-MM-DD' lo trata como UTC y al
+ * oeste de Greenwich devuelve el dia anterior. Es el mismo cuidado que en `day.ts`.
+ */
+const dayStamp = (dueDate: string | null) => {
+  if (!dueDate) return 'Sin fecha';
+  const [y, m, d] = dueDate.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+};
+
+/**
+ * El icono de la fila: el del area, y si no tiene, el del tamaño.
+ *
+ * Nunca queda sin icono. Una fila sin ancla en una lista donde las demas si la tienen deja un
+ * hueco que se lee como error, y el tamaño es un dato que TODA tarea tiene.
+ */
+const rowIcon = (task: Task) => AREA_ICON[task.focusArea ?? ''] ?? SIZE_ICON[task.size] ?? 'clock';
 
 /**
  * El panel de detras. Vive en su propio componente porque necesita hooks de reanimated y
@@ -167,12 +188,18 @@ export function TaskRow({
   accent,
   reload,
   showTime = true,
+  showDay = false,
 }: {
   task: Task;
   accent?: AccentName;
   reload: () => Promise<void> | void;
   /** El calendario ya pinta la hora en su columna: ahi la fila no la repite. */
   showTime?: boolean;
+  /**
+   * Cuando la fila NO pertenece al dia que se esta viendo hay que decir de cuando es. Lo usa el
+   * backlog, que mezcla dias distintos y tareas sin fecha en una sola lista.
+   */
+  showDay?: boolean;
 }) {
   const t = useTheme();
   // El tinte sale de la familia del foco, no del acento del usuario: asi un dia entero de
@@ -221,6 +248,10 @@ export function TaskRow({
     // Entra creciendo desde el centro; sin esto el check aparece seco a tamaño final.
     transform: [{ scale: 0.6 + mark.value * 0.4 }],
   }));
+
+  // El icono se apaga con el titulo. No desaparece: lo cerrado sigue siendo tuyo y se ve, solo que
+  // ya no compite. 0.45 es donde deja de leerse como activo sin volverse invisible.
+  const iconStyle = useAnimatedStyle(() => ({ opacity: 1 - mark.value * 0.55 }));
 
   // `textDecorationLine` no se puede animar, asi que el tachado sigue siendo instantaneo; lo que
   // cruza es el color, que es el cambio que ocupa toda la linea.
@@ -286,12 +317,11 @@ export function TaskRow({
     <ReanimatedSwipeable
       ref={swipe}
       enabled={!busy}
-      // El cuerpo de la fila: `surface` sobre el canvas blanco da 1.02:1 y se lee como texto
-      // flotando sin caja. Y una sombra como la de Card no sirve aqui, porque el `overflow:
-      // 'hidden'` que el panel necesita para recortarse tambien recorta la sombra del propio
-      // layer en iOS. Asi que el peso viene de dos señales y en cada esquema manda una:
-      // `sunken` (1.14:1 en claro, 1.27:1 en oscuro) y el hairline de `line` (1.26:1 sobre
-      // blanco, donde el relleno casi no se ve).
+      // El cuerpo de la fila es `surface`, o sea blanco, sobre el papel calido. Una sombra como la
+      // de Card no sirve aqui: el `overflow: 'hidden'` que el panel necesita para recortarse
+      // tambien recorta la sombra del propio layer en iOS. Asi que la fila se levanta con dos
+      // señales planas — el blanco contra el papel (1.07:1) y el hairline de `line` encima — que
+      // es poco a proposito: una lista de doce cajas con borde pesa mas que la lista misma.
       containerStyle={[styles.container, { borderColor: t.line }]}
       // Arrastrar hacia la derecha revela el panel de la IZQUIERDA. De ahi el cruce.
       renderLeftActions={(progress) => (
@@ -326,7 +356,36 @@ export function TaskRow({
       dragOffsetFromRightEdge={DRAG_OFFSET}
       animationOptions={SPRING}
       onSwipeableOpen={onOpen}>
-      <Animated.View style={[styles.row, { backgroundColor: t.sunken }, rowStyle]}>
+      <Animated.View style={[styles.row, { backgroundColor: t.surface }, rowStyle]}>
+        {/* El ancla de la fila. Es lo que hace escaneable una lista larga: el area se reconoce por
+            forma y color antes de leer una sola palabra, que es exactamente lo que hacen Tiimo con
+            su emoji en circulo y las dos referencias de Dribbble con su cuadro tintado. Se apaga
+            junto con el titulo al cerrar la tarea. */}
+        <Animated.View style={iconStyle}>
+          <Icon3D name={rowIcon(task)} size={Icon3DSize.md} />
+        </Animated.View>
+
+        <View style={styles.text}>
+          <Animated.Text
+            style={[Type.body, styles.title, titleStyle, done && styles.struck]}
+            numberOfLines={2}>
+            {task.title}
+          </Animated.Text>
+          <Text style={[Type.hint, { color: t.textMuted }]} numberOfLines={1}>
+            {[
+              showDay ? dayStamp(task.dueDate) : null,
+              `${task.suggestedMinutes} min`,
+              focusLabel(task.focusArea),
+              showTime ? timeLabel(task.dueAt) : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </Text>
+        </View>
+
+        {/* La casilla va al riel DERECHO. Es el patron de Tiimo y de Abode, y el argumento es de
+            pulgar: en un telefono la mano llega antes a la derecha que a la izquierda, y ahi no
+            compite con el icono por ser lo primero que se mira. */}
         <Pressable
           accessibilityRole="checkbox"
           accessibilityState={{ checked: done, disabled: busy }}
@@ -335,11 +394,12 @@ export function TaskRow({
           onPress={onCheck}
           hitSlop={Space.sm}
           style={styles.check}>
-          {/* `line` sobre `sunken` da 1.11:1 y el borde desaparece; `textMuted` da 5.0:1 en claro
-              y 6.0:1 en oscuro, que es lo que hace que se lea como casilla y no como adorno.
+          {/* Sin marcar es un borde PUNTEADO: es la misma regla que el resto de la app usa para
+              "esto te espera" (ver `dashed` en theme.ts), y de paso separa la casilla vacia de
+              cualquier otro circulo. Al marcar el borde se vuelve solido y del color del relleno.
               Relleno en `tint.ink` con el glifo en `onInk`: ink es el unico paso que pasa AA y
               como invierte su luz entre esquemas el check contrasta en los dos. */}
-          <Animated.View style={[styles.circle, circleStyle]}>
+          <Animated.View style={[styles.circle, done ? styles.solid : styles.pending, circleStyle]}>
             {/* Montado siempre, no `done && ...`: un glifo que aparece no puede crecer. */}
             <Animated.View style={glyphStyle}>
               <SymbolView
@@ -351,23 +411,6 @@ export function TaskRow({
             </Animated.View>
           </Animated.View>
         </Pressable>
-
-        <View style={styles.text}>
-          <Animated.Text
-            style={[Type.body, styles.title, titleStyle, done && styles.struck]}
-            numberOfLines={2}>
-            {task.title}
-          </Animated.Text>
-          <Text style={[Type.hint, { color: t.textMuted }]} numberOfLines={1}>
-            {[
-              `${task.suggestedMinutes} min`,
-              focusLabel(task.focusArea),
-              showTime ? timeLabel(task.dueAt) : null,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </Text>
-        </View>
       </Animated.View>
     </ReanimatedSwipeable>
   );
@@ -383,12 +426,12 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    gap: Space.md,
     paddingVertical: Space.md,
-    // La casilla ya trae 10pt de aire propio dentro de su area tactil de 44: con Space.xs el
-    // circulo queda a 14 del borde, casi simetrico con los 16 de la derecha.
-    paddingLeft: Space.xs,
-    paddingRight: Space.lg,
+    // A la izquierda menos aire que a la derecha: la casilla trae 10pt propios dentro de su area
+    // tactil de 44, asi que con Space.sm los dos extremos quedan opticamente a la misma distancia.
+    paddingLeft: Space.lg,
+    paddingRight: Space.sm,
     borderRadius: Radius.md,
   },
   check: {
@@ -407,6 +450,12 @@ const styles = StyleSheet.create({
     // de aparecer y desaparecer. En hecha queda del color del relleno y no se distingue.
     borderWidth: 2,
   },
+  /**
+   * `borderStyle` no se puede animar, asi que el punteado no cruza: cambia de golpe al marcar. Es
+   * justo el momento en que el relleno tambien salta, asi que se lee como UN cambio y no como dos.
+   */
+  pending: { borderStyle: 'dashed' },
+  solid: { borderStyle: 'solid' },
   text: { flex: 1, gap: Space.xs },
   // El titulo es lo primero que se lee y ahora es lo unico que el usuario ve de su dia: medio
   // paso mas de peso que el resto del cuerpo lo separa de la meta gris de abajo.

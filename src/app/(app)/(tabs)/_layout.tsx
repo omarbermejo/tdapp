@@ -1,29 +1,6 @@
 import { GlassContainer, GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import * as Haptics from 'expo-haptics';
 import { Tabs, type BottomTabBarProps } from 'expo-router/js-tabs';
-/**
- * Import POR ICONO y no del barril (`from 'lucide-react-native'`).
- *
- * No es estilo: medido contra el bundle de Metro, el barril mete **1756 modulos de icono** para usar
- * cuatro. Metro no hace tree-shaking de un re-export asi, asi que eso viaja tambien al build de
- * produccion. Con la ruta por icono entran cuatro archivos.
- *
- * El especificador es el que el propio paquete declara en su `exports` (`"./icons/*"`), no una ruta
- * a `dist/` inventada: los nombres de mas de una palabra van en kebab-case.
- *
- * `LucideIcon` va como `import type`, que se borra al compilar y no arrastra nada.
- */
-/*
-  `calendar` y no `calendar-days`: los seis puntos del segundo se vuelven bolas al trazo grueso de
-  la pestaña activa, y ahi el calendario volvia a pesar mas que los otros tres — la misma queja que
-  traia SF Symbols, en version suave. Sin puntos, los cuatro glifos pesan igual en los dos estados,
-  y con un sol, un cronometro y una persona al lado no hay forma de leer el rectangulo como otra cosa.
-*/
-import Calendar from 'lucide-react-native/icons/calendar';
-import Sun from 'lucide-react-native/icons/sun';
-import Timer from 'lucide-react-native/icons/timer';
-import User from 'lucide-react-native/icons/user';
-import type { LucideIcon } from 'lucide-react-native';
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
@@ -34,6 +11,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
+import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
 import { Radius, Space, useAccent, useScheme, useShadow, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
 import { FocusModeProvider, useFocusMode } from '@/features/timer/focus-mode';
@@ -77,24 +55,27 @@ const GAP = Space.sm;
 /**
  * El glifo crece con el hueco, pero menos: sigue habiendo anillo de vidrio alrededor.
  *
- * Baja de 28 a 26 al cambiar de familia. SF Symbols trae su propio aire dentro de la caja y Lucide
- * dibuja hasta el canto de su rejilla de 24, asi que el mismo numero se veia mas grande.
+ * Sube de 26 a 32 al pasar a los iconos 3D. No es preferencia: 32 es el PISO al que un render con
+ * volumen todavia se lee como objeto — por debajo queda una silueta, que es peor que un trazo. Se
+ * midio con seis iconos a 24, 28, 32, 44 y 88pt sobre papel y sobre tarjeta, y dentro de una
+ * maqueta de esta misma capsula. Que quepa es cosa de que la barra tiene CUATRO pestañas: con cinco
+ * el hueco habria bajado a 54 y el glifo con el.
  */
-const GLYPH = 26;
+const GLYPH = Icon3DSize.md;
 
 /**
- * El grosor del trazo. Es la perilla por la que se cambio de familia de iconos.
+ * Cuanto encoge la pestaña inactiva. Es la UNICA diferencia entre activa e inactiva en el glifo.
  *
- * SF Symbols no la tiene: cada simbolo trae el diseño optico de Apple, y por eso `calendar` (una
- * rejilla densa) pesaba visiblemente mas que `sun.max` (trazos radiales con aire) al mismo tamaño.
- * `weight` solo se mueve dentro de los rangos de Apple y no iguala nada. Con una sola familia
- * dibujada sobre una sola rejilla, un solo numero pone a los cuatro glifos en el mismo peso.
+ * Antes eran dos señales — color y grosor de trazo — porque un glifo monocromo de linea es poco
+ * llamativo y "dos señales se leen antes que una". Un objeto 3D de color no tiene ese problema, y
+ * ninguna de las dos perillas viejas existe en un PNG. Lo que si existe ya estaba: el resaltado de
+ * vidrio que se desliza bajo la pestaña activa. Esa es la señal.
  *
- * La activa sube a 2.25: es una segunda señal, por peso, ademas del resaltado y del acento. En una
- * barra que se toca a ciegas con el pulgar, dos señales se leen antes que una.
+ * Y NO se baja la opacidad de la inactiva. Sobre liquid glass, que de por si baja el contraste, un
+ * glifo a media opacidad da lodo y no un estado apagado; y una segunda copia del asset tintada
+ * obligaria a `Image.prefetch` para que no se viera un frame del bitmap anterior al cambiar.
  */
-const STROKE = 1.75;
-const STROKE_ON = 2.25;
+const GLYPH_OFF = 0.92;
 
 /** El paso del resaltado: el ancho de un hueco mas el gap. Fijo, asi no hay que medir nada. */
 const SLOT_STEP = SLOT + GAP;
@@ -158,10 +139,10 @@ type Tab = {
   name: string;
   label: string;
   /**
-   * El icono, como componente. Ya no hay pareja ios/android ni etiqueta de repuesto: Lucide dibuja
-   * el mismo SVG en las tres plataformas, asi que no hay nada que se pueda quedar sin cargar.
+   * El icono 3D, por slug. No hay pareja ios/android ni etiqueta de repuesto: es un asset del
+   * bundle y se dibuja igual en las tres plataformas.
    */
-  icon: LucideIcon;
+  icon: Icon3DName;
 };
 
 /**
@@ -169,11 +150,11 @@ type Tab = {
  * del grupo que no este aqui (new-task) no sale en la barra ni la lleva encima.
  */
 const TABS: Tab[] = [
-  { name: 'index', label: 'Hoy', icon: Sun },
+  { name: 'index', label: 'Hoy', icon: 'home' },
   // Segunda y no ultima: el cronometro es lo que se hace CON el dia, asi que va pegado al dia.
-  { name: 'timer', label: 'Enfoque', icon: Timer },
-  { name: 'calendar', label: 'Calendario', icon: Calendar },
-  { name: 'profile', label: 'Perfil', icon: User },
+  { name: 'timer', label: 'Enfoque', icon: 'clock' },
+  { name: 'calendar', label: 'Calendario', icon: 'calendar' },
+  { name: 'profile', label: 'Perfil', icon: 'user' },
 ];
 
 /**
@@ -199,12 +180,9 @@ function TabSlot({
   focused: boolean;
   onPress: () => void;
 }) {
-  const t = useTheme();
   // 0.9 y no 0.86: es el mismo hundido que la celda de dia de la tira de semana, el otro objetivo
   // pequeño y redondo de la app. A 0.86 el glifo brincaba mas que cualquier otra cosa que se toca.
   const press = usePressScale({ to: 0.9, haptic: Haptics.ImpactFeedbackStyle.Light });
-  const tint = focused ? t.text : t.textMuted;
-  const Icon = tab.icon;
 
   return (
     <Pressable
@@ -217,9 +195,9 @@ function TabSlot({
       style={styles.slot}>
       {/* El escalado va en el glifo y no en el Pressable: el area tactil se queda entera. */}
       <Animated.View style={press.style}>
-        {/* Un SVG, no un simbolo del sistema: no hace falta `fallback`, asi que tampoco hay una
-            etiqueta de texto con su propia tipografia colandose en la barra. */}
-        <Icon size={GLYPH} color={tint} strokeWidth={focused ? STROKE_ON : STROKE} />
+        {/* Un asset del bundle, no un simbolo del sistema: no hace falta `fallback`, asi que
+            tampoco hay una etiqueta de texto con su propia tipografia colandose en la barra. */}
+        <Icon3D name={tab.icon} size={focused ? GLYPH : GLYPH * GLYPH_OFF} />
       </Animated.View>
     </Pressable>
   );

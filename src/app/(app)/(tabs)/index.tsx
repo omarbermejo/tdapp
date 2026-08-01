@@ -1,15 +1,15 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Space, Type, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
+import { BacklogList } from '@/features/tasks/backlog-list';
 import { DayCard } from '@/features/tasks/day-card';
 import { useLocalToday } from '@/features/tasks/day';
+import { NextUp } from '@/features/tasks/next-up';
 import { TodayList } from '@/features/tasks/today-list';
-import { useTasks } from '@/features/tasks/use-tasks';
+import { useBacklog, useTasks } from '@/features/tasks/use-tasks';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
-import { WeekStrip } from '@/features/tasks/week-strip';
 
 import { TAB_DOCK } from './_layout';
 
@@ -17,30 +17,47 @@ import { TAB_DOCK } from './_layout';
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 
 /**
- * El dia, y nada mas.
+ * El titulo: el dia de la semana con mayuscula, en la serif.
  *
- * Aqui vivia una tarjeta "En curso" con el cronometro al frente. Se fue: contaba hacia ARRIBA
- * y pasarse de los 25 min se leia como una app rota, y encima le robaba la pantalla a lo unico
- * que el usuario viene a ver, que son sus tareas. El cronometro sigue vivo en el API
- * (POST /tasks/:id/timer) para cuando vuelva, y cuando vuelva cuenta hacia abajo.
+ * Se construye con numeros y no con `new Date(iso)`: parsear 'YYYY-MM-DD' lo trata como UTC y al
+ * oeste de Greenwich devuelve el dia anterior.
+ */
+const weekday = (date: string) => {
+  if (!date) return '';
+  const [y, m, d] = date.split('-').map(Number);
+  const label = new Date(y, m - 1, d).toLocaleDateString('es-MX', { weekday: 'long' });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
+
+/** '31 de julio'. Debajo del titulo, en la voz de los controles. */
+const longDate = (date: string) => {
+  if (!date) return '';
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' });
+};
+
+/**
+ * HOY. No "el dia que estas viendo" — hoy.
  *
- * El orden de arriba a abajo es donde estoy (la semana), como voy (la card) y que falta (la
- * lista). Anotar vive en la card y no flotando: la barra de abajo es solo para navegar.
+ * Aqui vivia una tira de la semana que cambiaba el dia de esta pantalla sin salir de ella, y con
+ * ella esta pantalla y Planear eran la MISMA pantalla dos veces: las dos llamaban a `useTasks` con
+ * un dia elegido y pintaban las mismas filas, y la unica diferencia era la tira de 7 dias contra la
+ * de 14 y el riel de horas. Se fue la tira. Ahora **Hoy es ahora y Planear es cuando**, que es lo
+ * que le da sentido a que sean dos pestañas — y es una decision menos en la pantalla que alguien
+ * con TDAH abre veinte veces al dia.
  *
- * Tocar un dia de la tira NO navega: cambia el dia de ESTA pantalla. El home dejo de ser "hoy"
- * para ser "el dia que estas viendo", asi que los datos ya no salen de /me/today (que solo sabe
- * de hoy) sino de /tasks?date=, y los conteos se cuentan aqui. La agenda sigue siendo otra
- * cosa: ahi se ve el riel de horas de dos semanas, aqui se ve UN dia y se trabaja en el.
+ * El orden de arriba a abajo es una frase: quien eres (el saludo), cuando estas (el dia), que se te
+ * quedo atras (el backlog), como vas (la card), que sigue AHORA (la siguiente) y que falta (la
+ * lista). El backlog va arriba de todo porque lo que se te paso es lo primero que hay que decidir.
+ *
+ * Anotar vive en la card y no flotando: la barra de abajo es solo para navegar.
  */
 export default function HomeScreen() {
   const { user } = useAuth();
   const t = useTheme();
   const today = useLocalToday();
-  // '' significa "sin elegir", que es hoy: asi al cruzar la medianoche la pantalla se reancla sola.
-  const [picked, setPicked] = useState('');
-  const selected = picked || today;
-  // El dia vive aqui porque lo comparten la tira, la card y la lista.
-  const day = useTasks(selected);
+  const day = useTasks(today);
+  const backlog = useBacklog(today);
   // El aire va en el CONTENIDO y no en un SafeAreaView: así el scroll pasa por debajo de la barra de
   // estado en vez de cortarse contra ella. Ver `use-screen-padding`.
   const pad = useScreenPadding(TAB_DOCK);
@@ -54,26 +71,26 @@ export default function HomeScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
         showsVerticalScrollIndicator={false}>
-        <Text style={[Type.display, { color: t.text }]} numberOfLines={1}>
-          Hola, {firstName(user.name)}
-        </Text>
+        <View style={styles.head}>
+          <Text style={[Type.hint, { color: t.textMuted }]} numberOfLines={1}>
+            Hola, {firstName(user.name)}
+          </Text>
+          {/* El unico sitio de la app con serif. Ver la nota de `Type` en constants/theme. */}
+          <Text style={[Type.day, { color: t.text }]} numberOfLines={1}>
+            {weekday(today)}
+          </Text>
+          <Text style={[Type.label, { color: t.textMuted }]} numberOfLines={1}>
+            {longDate(today)}
+          </Text>
+        </View>
 
-        {/* La tira ES la fecha de la pantalla: el home ya no imprime el dia en ninguna otra parte. */}
-        <WeekStrip
-          today={today}
-          selected={selected}
-          onPickDay={setPicked}
-          accent={user.accentColor}
-        />
+        <BacklogList backlog={backlog} />
 
-        <DayCard
-          day={day}
-          today={today}
-          selected={selected}
-          onCapture={() => router.push('/new-task')}
-        />
+        <DayCard day={day} today={today} selected={today} onCapture={() => router.push('/new-task')} />
 
-        <TodayList day={day} today={today} selected={selected} />
+        <NextUp day={day} />
+
+        <TodayList day={day} today={today} selected={today} />
       </ScrollView>
     </View>
   );
@@ -86,4 +103,6 @@ const styles = StyleSheet.create({
     // El vertical lo pone `useScreenPadding`: depende de los insets del telefono, que no son estaticos.
     gap: Space.xl,
   },
+  // El encabezado respira por dentro y no con el `gap` del scroll: las tres lineas son UNA cosa.
+  head: { gap: Space.xs },
 });
