@@ -1,14 +1,21 @@
-import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Space, Type, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
+import { QUARTER_HEAT } from '@/features/stats/grid';
+import { HeatMap } from '@/features/stats/heat-map';
+import { useStats } from '@/features/stats/use-stats';
+import { StreakFlame } from '@/features/streak/streak-flame';
+import { useStreak } from '@/features/streak/use-streak';
 import { BacklogList } from '@/features/tasks/backlog-list';
-import { DayCard } from '@/features/tasks/day-card';
 import { useLocalToday } from '@/features/tasks/day';
 import { NextUp } from '@/features/tasks/next-up';
 import { TodayList } from '@/features/tasks/today-list';
 import { useBacklog, useTasks } from '@/features/tasks/use-tasks';
+import { WeekStrip } from '@/features/tasks/week-strip';
+import { Workspaces } from '@/features/workspaces/workspaces';
+import { useWorkspaces } from '@/features/workspaces/use-workspaces';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 import { TAB_DOCK } from './_layout';
@@ -37,27 +44,69 @@ const longDate = (date: string) => {
 };
 
 /**
- * HOY. No "el dia que estas viendo" — hoy.
+ * HOY. El tablero de la app.
  *
- * Aqui vivia una tira de la semana que cambiaba el dia de esta pantalla sin salir de ella, y con
- * ella esta pantalla y Planear eran la MISMA pantalla dos veces: las dos llamaban a `useTasks` con
- * un dia elegido y pintaban las mismas filas, y la unica diferencia era la tira de 7 dias contra la
- * de 14 y el riel de horas. Se fue la tira. Ahora **Hoy es ahora y Planear es cuando**, que es lo
- * que le da sentido a que sean dos pestañas — y es una decision menos en la pantalla que alguien
- * con TDAH abre veinte veces al dia.
+ * El orden de arriba a abajo es una frase, y tiene una FRONTERA a la mitad:
  *
- * El orden de arriba a abajo es una frase: quien eres (el saludo), cuando estas (el dia), que se te
- * quedo atras (el backlog), como vas (la card), que sigue AHORA (la siguiente) y que falta (la
- * lista). El backlog va arriba de todo porque lo que se te paso es lo primero que hay que decidir.
+ *   quien eres y como vas         el saludo, el dia en serif, y la racha
+ *   cuanto has cargado            el mapa del trimestre
+ *   en que estas trabajando       los espacios, con el "+" que crea
+ *   que toca AHORA                lo que sigue
+ *   ─────────────────────────     de aqui abajo se habla del dia que ESTAS MIRANDO
+ *   donde estas en la semana      la tira, que es el control del dia
+ *   que se te quedo atras         el backlog
+ *   que falta                     la lista, que se puede reordenar arrastrando
  *
- * Anotar vive en la card y no flotando: la barra de abajo es solo para navegar.
+ * Esa frontera es la regla que mantiene la pantalla honesta: todo lo de arriba habla de siempre o de
+ * ahora y NO sigue a `selected`. `NextUp` esta arriba justo por eso — "que sigue" es siempre sobre
+ * ahora, y debajo de la tira se quedaria mintiendo en cuanto tocas el jueves.
+ *
+ * La tira de la semana estuvo aqui, se fue, y volvio. Se fue porque entonces esta pantalla y Planear
+ * eran la MISMA pantalla dos veces: las dos llamaban a `useTasks` con un dia elegido y pintaban las
+ * mismas filas. Ya no lo son — aqui hay un mapa de tres meses, los espacios y la racha, y alla hay un
+ * riel de horas que aqui no esta. Y la tira NO navega a Planear: esa agenda solo construye catorce dias
+ * hacia adelante, asi que no puede mostrar el lunes de esta semana.
+ *
+ * Anotar vive en el "+" de los espacios y no flotando: la barra de abajo es solo para navegar. Ese
+ * boton se pinta en TODOS los estados de la seccion (cargando, error, vacio), que es la promesa que
+ * heredó de la tarjeta del dia que estuvo aqui.
  */
 export default function HomeScreen() {
   const { user } = useAuth();
   const t = useTheme();
   const today = useLocalToday();
-  const day = useTasks(today);
+
+  /**
+   * El dia que se esta mirando. En `useState` y no en la ruta, al reves que `calendar.tsx`: alli el dia
+   * sobrevive a navegar porque la pestaña ya esta montada y se llega con `?date=`; aqui Hoy es siempre
+   * el default y nadie enlaza a "el inicio viendo el jueves".
+   */
+  const [selected, setSelected] = useState('');
+  const day = useTasks(selected || today);
   const backlog = useBacklog(today);
+  const workspaces = useWorkspaces();
+  const streak = useStreak(today);
+
+  /**
+   * Una sola peticion de stats para DOS consumidores: el mapa la pinta entera y la tira saca de ella el
+   * punto de densidad de cada dia. Elevada aqui a proposito — un `useStats` dentro de cada uno serian
+   * dos `GET /me/stats` de 119 dias en cada foco de la pantalla.
+   *
+   * ponytail: con cinco hooks, volver a esta pestaña dispara cinco peticiones. Todas son consultas
+   * indexadas y pequeñas y van en paralelo, asi que se acepta — pero es el techo real de la pantalla.
+   * El siguiente paso seria un `/me/home` que devuelva dia + backlog + stats + espacios + racha junto.
+   */
+  const stats = useStats(today, { days: QUARTER_HEAT.days });
+
+  /** El mapa fecha -> cuantas agendadas, para la tira. `planned` cae en `done` si el API es viejo. */
+  const load = useMemo(
+    () => new Map(stats.stats?.byDay.map((d) => [d.date, d.planned ?? d.done]) ?? []),
+    [stats.stats]
+  );
+
+  /** Mientras una fila se arrastra, el scroll de la pantalla se apaga o pelea con el gesto. */
+  const [dragging, setDragging] = useState(false);
+
   // El aire va en el CONTENIDO y no en un SafeAreaView: así el scroll pasa por debajo de la barra de
   // estado en vez de cortarse contra ella. Ver `use-screen-padding`.
   const pad = useScreenPadding(TAB_DOCK);
@@ -70,27 +119,48 @@ export default function HomeScreen() {
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
       <ScrollView
         contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
+        scrollEnabled={!dragging}
         showsVerticalScrollIndicator={false}>
         <View style={styles.head}>
-          <Text style={[Type.hint, { color: t.textMuted }]} numberOfLines={1}>
-            Hola, {firstName(user.name)}
-          </Text>
-          {/* El unico sitio de la app con serif. Ver la nota de `Type` en constants/theme. */}
-          <Text style={[Type.day, { color: t.text }]} numberOfLines={1}>
-            {weekday(today)}
-          </Text>
-          <Text style={[Type.label, { color: t.textMuted }]} numberOfLines={1}>
-            {longDate(today)}
-          </Text>
+          <View style={styles.greeting}>
+            <Text style={[Type.hint, { color: t.textMuted }]} numberOfLines={1}>
+              Hola, {firstName(user.name)}
+            </Text>
+            {/* El unico sitio de la app con serif, junto con los numeros de la tira. Ver `Type`. */}
+            <Text style={[Type.day, { color: t.text }]} numberOfLines={1}>
+              {weekday(today)}
+            </Text>
+            <Text style={[Type.label, { color: t.textMuted }]} numberOfLines={1}>
+              {longDate(today)}
+            </Text>
+          </View>
+          {/* Arriba a la derecha: es lo primero que alguien abre la app a comprobar. */}
+          <StreakFlame streak={streak.streak} accent={user.accentColor} />
         </View>
 
-        <BacklogList backlog={backlog} />
+        <HeatMap stats={stats} today={today} accent={user.accentColor} spec={QUARTER_HEAT} />
 
-        <DayCard day={day} today={today} selected={today} onCapture={() => router.push('/new-task')} />
+        <Workspaces workspaces={workspaces} accent={user.accentColor} />
 
         <NextUp day={day} />
 
-        <TodayList day={day} today={today} selected={today} />
+        {/* La frontera: de aqui abajo, el dia que estas mirando. */}
+        <WeekStrip
+          today={today}
+          selected={selected || today}
+          onPickDay={setSelected}
+          accent={user.accentColor}
+          counts={load}
+        />
+
+        <BacklogList backlog={backlog} />
+
+        <TodayList
+          day={day}
+          today={today}
+          selected={selected || today}
+          onDragChange={setDragging}
+        />
       </ScrollView>
     </View>
   );
@@ -103,6 +173,11 @@ const styles = StyleSheet.create({
     // El vertical lo pone `useScreenPadding`: depende de los insets del telefono, que no son estaticos.
     gap: Space.xl,
   },
+  /**
+   * `flex-start` y no `center`: la insignia se alinea con el saludo, arriba, en vez de flotar a media
+   * altura de un titular de 50pt de interlineado.
+   */
+  head: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: Space.md },
   // El encabezado respira por dentro y no con el `gap` del scroll: las tres lineas son UNA cosa.
-  head: { gap: Space.xs },
+  greeting: { flex: 1, gap: Space.xs },
 });

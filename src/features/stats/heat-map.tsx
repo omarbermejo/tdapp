@@ -138,11 +138,28 @@ export function HeatMap({
         <View style={styles.months}>
           {/* Hueco del riel de iniciales, para que las etiquetas caigan sobre su columna. */}
           <View style={styles.rail} />
-          {months.map((label, i) => (
-            <Text key={i} style={[Type.micro, styles.month, { color: t.textMuted }]} numberOfLines={1}>
-              {label}
-            </Text>
-          ))}
+          {/*
+            Las etiquetas van ABSOLUTAS sobre un riel, no en columnas a `flex: 1`.
+            Con flex, cada una recibia el ancho de UNA celda (~13pt) y "ago" salia como "a…" — el mes
+            necesita tres caracteres y la columna mide uno. Absolutas, arrancan en su columna y se
+            desbordan hacia la derecha sobre las siguientes, que estan vacias justo hasta el mes que
+            viene.
+          */}
+          <View style={styles.monthRail}>
+            {months.map((label, i) =>
+              label ? (
+                <Text
+                  key={i}
+                  style={[
+                    Type.micro,
+                    styles.month,
+                    { color: t.textMuted, left: `${(i / months.length) * 100}%` },
+                  ]}>
+                  {label}
+                </Text>
+              ) : null
+            )}
+          </View>
         </View>
       )}
 
@@ -183,30 +200,33 @@ export function HeatMap({
 /** Ancho del riel de iniciales. Cabe una letra de `micro` sin empujar la rejilla. */
 const RAIL = 14;
 
-const styles = StyleSheet.create({
-  wrap: { gap: Space.xs },
-  grid: { gap: CELL_GAP() },
-  row: { flexDirection: 'row', alignItems: 'center', gap: CELL_GAP() },
-  months: { flexDirection: 'row', gap: CELL_GAP() },
-  rail: { width: RAIL },
-  // flex:1 para que caiga sobre su columna, igual que las celdas.
-  month: { flex: 1 },
-  // flex + aspectRatio y no un tamaño en puntos: la rejilla ocupa el ancho que le den y tiene que
-  // caber igual en un SE que en un Max.
-  slot: { flex: 1, aspectRatio: 1 },
-  cell: { flex: 1, borderRadius: Radius.sm },
-  ring: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: Radius.sm,
-    borderWidth: RING,
-  },
-});
-
 /**
  * 3pt y no `Space.xs` (4): con 17 columnas, un punto mas de aire por hueco se come 16pt del ancho y
  * las celdas caen por debajo de los 13 en un telefono chico. En 4x7 la diferencia no se nota, asi que
  * el numero es uno solo para los dos mapas.
  */
-function CELL_GAP() {
-  return 3;
-}
+const GAP = 3;
+
+const styles = StyleSheet.create({
+  wrap: { gap: Space.xs },
+  grid: { gap: GAP },
+  row: { flexDirection: 'row', alignItems: 'center', gap: GAP },
+  months: { flexDirection: 'row', gap: GAP },
+  rail: { width: RAIL },
+  // El riel ocupa lo mismo que la rejilla; las etiquetas se colocan dentro por porcentaje.
+  monthRail: { flex: 1, height: Type.micro.lineHeight },
+  month: { position: 'absolute', top: 0 },
+  // flex + aspectRatio y no un tamaño en puntos: la rejilla ocupa el ancho que le den y tiene que
+  // caber igual en un SE que en un Max.
+  slot: { flex: 1, aspectRatio: 1 },
+  cell: { flex: 1, borderRadius: Radius.sm },
+  ring: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: Radius.sm,
+    borderWidth: RING,
+  },
+});

@@ -500,6 +500,23 @@ export const Type = {
    * a cuerpo chico pierde justo lo que la hace valer: el contraste de trazo.
    */
   day: { fontFamily: Serif, fontSize: 44, lineHeight: 50, letterSpacing: -0.5 },
+  /**
+   * El número de un día en la tira de la semana.
+   *
+   * Lleva la serif y eso NO rompe la regla de arriba, que es que Fraunces vive en UN sitio: es el
+   * MISMO dato —el día— a otra escala, no un segundo uso de la serif. La tira y el titular de Hoy
+   * cuentan la misma cosa (en qué día estás) con la misma voz, uno en grande y otro en pequeño; media
+   * adopción se vería como error justo porque los dos hablan del día.
+   *
+   * `tabular-nums` porque el relleno del acento VIAJA de columna en columna: con figuras
+   * proporcionales el 11 es más angosto que el 30 y el número bailaría dentro de su círculo al llegar.
+   */
+  dayNum: {
+    fontFamily: Serif,
+    fontSize: 17,
+    lineHeight: 22,
+    fontVariant: ['tabular-nums'] as TextStyle['fontVariant'],
+  },
   display: { fontFamily: Display, fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
   /** El número grande de una métrica: el hero del día, la racha, un total de Progreso. */
   hero: { fontFamily: Display, fontSize: 44, lineHeight: 48, letterSpacing: -1 },

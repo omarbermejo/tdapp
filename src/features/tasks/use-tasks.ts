@@ -139,6 +139,58 @@ export function useTasks(date: string) {
 }
 
 /**
+ * TODAS las tareas de un espacio de trabajo, de cualquier dia y sin fecha incluidas.
+ *
+ * Sin filtro de dia a proposito: la pantalla de un espacio es la vista del PROYECTO, no de una fecha —
+ * ahi lo que se quiere ver es todo lo que hay dentro. El orden lo pone el API (pendientes primero, y
+ * dentro de ellas el orden manual si existe).
+ *
+ * Comparte forma con `useTasks` —mismo estado, mismo `useFocusEffect`, mismos mutadores— pero su llave
+ * es un id y no una fecha, asi que no se fusionan en un hook con bandera: son dos preguntas distintas.
+ */
+export function useWorkspaceTasks(workspaceId: number) {
+  const { token } = useAuth();
+  const [state, setState] = useState<State>({ for: null, tasks: null, error: '' });
+  // El estado guarda su llave como texto, igual que los otros dos hooks.
+  const key = String(workspaceId);
+
+  const reload = useCallback(async () => {
+    if (!token || !workspaceId) return;
+    try {
+      const { tasks } = await tasksApi.list(token, { workspaceId });
+      setState({ for: key, tasks, error: '' });
+    } catch (e) {
+      const error = e instanceof ApiError ? e.message : 'No pudimos traer las tareas';
+      setState((s) => (s.for === key ? { ...s, error } : { for: key, tasks: null, error }));
+    }
+  }, [token, workspaceId, key]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        if (cancelled) return;
+        await reload();
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [reload])
+  );
+
+  const fresh = state.for === key;
+  const mutate = useMemo(() => mutators(setState), []);
+
+  return {
+    tasks: fresh ? state.tasks : null,
+    error: fresh ? state.error : '',
+    loading: !fresh,
+    reload,
+    ...mutate,
+  };
+}
+
+/**
  * Lo que quedo atras: pendiente de un dia anterior, o anotado sin fecha.
  *
  * Existe porque hasta ahora esas tareas NO SALIAN EN NINGUNA PANTALLA. `list` filtra por fecha

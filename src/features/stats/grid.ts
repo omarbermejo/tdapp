@@ -54,6 +54,16 @@ export const PROGRESS_HEAT: HeatSpec = { days: 28, metric: 'done', cap: 3, weekA
  */
 export const QUARTER_HEAT: HeatSpec = { days: 119, metric: 'planned', cap: 6, weekAligned: true };
 
+/**
+ * El mismo trimestre, pero de UN espacio de trabajo.
+ *
+ * Solo cambia el tope, y no es un detalle: `cap: 6` esta calibrado para la cuenta entera, donde un dia
+ * lleno son seis cosas de todo lo que llevas. Dentro de un solo proyecto, dos tareas en un dia YA es un
+ * dia dedicado a el — con el tope en 6, una tarea pintaba la celda al 17% del acento y el mapa del
+ * espacio se veia en blanco aunque hubiera trabajo todos los dias.
+ */
+export const WORKSPACE_HEAT: HeatSpec = { ...QUARTER_HEAT, cap: 2 };
+
 export type Cell = {
   date: string;
   count: number;

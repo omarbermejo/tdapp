@@ -28,14 +28,23 @@ import { tasksApi } from './api';
 import { accentForFocus } from './focus-accent';
 import type { TaskMutations } from './use-tasks';
 
-/** Ancho del panel que se revela detras de la fila. */
-const ACTION = 104;
+/**
+ * Ancho del panel que se revela detras de la fila.
+ *
+ * Bajo de 104 a 88: el panel solo carga un glifo de 22 y una palabra de `micro`, y con 104 habia que
+ * arrastrar 75pt para confirmar — la mitad del pulgar de alguien con el telefono en una mano.
+ */
+const ACTION = 88;
 
 /**
  * Fraccion del panel que hay que arrastrar para que la accion cuente. El mismo numero manda
  * el umbral del gesto Y el haptico, para que lo que sientes sea exactamente lo que va a pasar.
+ *
+ * Baja de 0.72 a 0.6: con 88pt de panel son 53pt de viaje, asi que la accion se confirma antes de que
+ * el brazo se estire. Las dos acciones son reversibles (marcar se desmarca, borrar pregunta), asi que
+ * un umbral generoso no cuesta nada.
  */
-const COMMIT = 0.72;
+const COMMIT = 0.6;
 
 /**
  * Intencion horizontal antes de que la fila se mueva.
@@ -140,16 +149,26 @@ function SwipeFace({
     }
   );
 
+  /*
+    El movimiento del panel, afinado a la baja. Los tres numeros de antes juntos hacian que un swipe
+    se leyera como un zoom: el contenido entraba de golpe, recorria 52pt y crecia un 34%.
+
+    - `p / 0.5` en vez de `/ 0.35`: el glifo aparece a mitad de la rendija y no de golpe con ella
+      apenas abierta.
+    - `ACTION * 0.28` (≈25pt) en vez de `ACTION / 2` (52pt): el contenido sigue centrandose en lo
+      REVELADO —que es lo que arreglaba la etiqueta cortada— pero sin cruzar media pantalla.
+    - `0.94 + p*0.06 + armed*0.04` (tope 1.04) en vez de `0.82 + p*0.18 + armed*0.1` (tope 1.10): un 10%
+      de recorrido de escala se lee como respuesta; un 34% se lee como que algo se acerca a la camara.
+  */
   const content = useAnimatedStyle(() => {
     // Sin overshoot el progreso no pasa de 1, pero se acota igual: un clamp de mas nunca
     // rompio nada y un NaN en un transform deja el panel invisible.
     const p = Math.min(Math.max(progress.value, 0), 1);
     return {
-      // Aparece en el primer tercio: antes de eso la rendija es mas angosta que el glifo.
-      opacity: Math.min(1, p / 0.35),
+      opacity: Math.min(1, p / 0.5),
       transform: [
-        { translateX: direction * (1 - p) * (ACTION / 2) },
-        { scale: 0.82 + p * 0.18 + armed.value * 0.1 },
+        { translateX: direction * (1 - p) * (ACTION * 0.28) },
+        { scale: 0.94 + p * 0.06 + armed.value * 0.04 },
       ],
     };
   });
@@ -193,11 +212,19 @@ export function TaskRow({
   mutate,
   showTime = true,
   showDay = false,
+  swipeEnabled = true,
 }: {
   task: Task;
   accent?: AccentName;
   /** Pintar ya, quitar ya, y traer la verdad. Ver `TaskMutations` en `use-tasks`. */
   mutate: TaskMutations;
+  /**
+   * Apagar el gesto lateral. Lo usa la lista mientras se ARRASTRA una fila para reordenar: el asa vive
+   * fuera de este componente justo para no compartir subarbol con el Pan del Swipeable, y apagarlo
+   * durante el arrastre cierra el ultimo caso — el diagonal, donde un pulgar que sube tambien se
+   * mueve de lado y el swipeable podria quedarse el gesto a medio viaje.
+   */
+  swipeEnabled?: boolean;
   /** El calendario ya pinta la hora en su columna: ahi la fila no la repite. */
   showTime?: boolean;
   /**
@@ -234,7 +261,9 @@ export function TaskRow({
     if (wasDone.current === done) return;
     wasDone.current = done;
     mark.value = withTiming(done ? 1 : 0, CROSS);
-    pop.value = withSequence(withTiming(1.16, { duration: Motion.pop }), withSpring(1, Motion.confirm));
+    // 1.10 y no 1.16: en un circulo de 24pt un 16% son casi 4pt de salto, que en una lista de doce
+    // filas se lee como un tic nervioso. 1.10 sigue acusando el toque sin brincar.
+    pop.value = withSequence(withTiming(1.1, { duration: Motion.pop }), withSpring(1, Motion.confirm));
   }, [done, mark, pop]);
 
   // De `sunken` (el propio fondo de la fila, o sea "vacio") a `ink`, y el borde con el. En hecha
@@ -367,6 +396,7 @@ export function TaskRow({
       dragOffsetFromLeftEdge={DRAG_OFFSET}
       dragOffsetFromRightEdge={DRAG_OFFSET}
       animationOptions={SPRING}
+      enabled={swipeEnabled}
       onSwipeableOpen={onOpen}>
       <View style={[styles.row, { backgroundColor: t.surface }]}>
         {/* El ancla de la fila. Es lo que hace escaneable una lista larga: el area se reconoce por

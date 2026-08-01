@@ -40,6 +40,13 @@ export default function AppLayout() {
       <Stack.Screen name="new-task" options={{ presentation: 'modal' }} />
 
       {/*
+        Crear un espacio tambien es hoja, por el mismo argumento: es un parentesis sobre el dia y no un
+        destino. Se abre desde el panel del "+" en el inicio, encima de la rejilla que va a recibir la
+        card nueva — con la rejilla visible detras, y eso es la mitad del sentido.
+      */}
+      <Stack.Screen name="new-workspace" options={{ presentation: 'modal' }} />
+
+      {/*
         Estas dos SI son push de tarjeta, al reves que `new-task`, y por lo mismo que aquella es hoja:
         no son un parentesis, son destinos.
 
@@ -51,6 +58,13 @@ export default function AppLayout() {
       */}
       <Stack.Screen name="settings" />
       <Stack.Screen name="edit-profile" />
+
+      {/*
+        El detalle de un espacio tambien es push y no hoja, por el mismo argumento: no es un parentesis
+        de tres segundos, es un destino donde se entra a mirar el mapa, el reparto y la lista entera — y
+        eso es scroll, que pelearia con el arrastre de cerrar una hoja.
+      */}
+      <Stack.Screen name="workspace/[id]" />
     </Stack>
   );
 }

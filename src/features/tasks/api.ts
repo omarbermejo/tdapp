@@ -53,6 +53,8 @@ export type TaskQuery = {
   date?: string;
   status?: Task['status'];
   focusArea?: string;
+  /** Todas las de un espacio, de cualquier dia y sin fecha incluidas. Es su pantalla de detalle. */
+  workspaceId?: number;
   /**
    * Una fecha, y trae lo que quedo ATRAS de ella: vencido o sin agendar nunca. Los dos casos en un
    * solo filtro porque son la misma pantalla — ver `listByUser` en el API.

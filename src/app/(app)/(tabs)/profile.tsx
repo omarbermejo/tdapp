@@ -1,10 +1,12 @@
 import { router } from 'expo-router';
 import Settings from 'lucide-react-native/icons/settings';
 import UserPen from 'lucide-react-native/icons/user-pen';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { Avatar3DSize } from '@/components/ui/avatar3d';
 import { HeaderAction, ScreenHeader } from '@/components/ui/screen-header';
+import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
 import { Space, Type, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
 import { ProfileAvatar } from '@/features/profile/avatar';
@@ -47,6 +49,7 @@ const sinceLabel = (createdAt: string) => {
 export default function ProfileScreen() {
   const { user } = useAuth();
   const t = useTheme();
+  const veil = useScrollVeil();
   const today = useLocalToday();
   const streak = useStreak(today);
   const stats = useStats(today);
@@ -62,7 +65,8 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
-      <ScrollView
+      <Animated.ScrollView
+        {...veil.scrollProps}
         contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
         showsVerticalScrollIndicator={false}>
         <ScreenHeader
@@ -111,7 +115,9 @@ export default function ProfileScreen() {
         <StreakCard streak={streak} accent={user.accentColor} />
 
         <SummaryCards counts={counts} />
-      </ScrollView>
+      </Animated.ScrollView>
+
+      <StatusVeil scrollY={veil.scrollY} />
     </View>
   );
 }

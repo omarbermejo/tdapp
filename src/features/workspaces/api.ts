@@ -23,6 +23,10 @@ export const workspacesApi = {
   list: (token: string) =>
     request<{ workspaces: Workspace[] }>('/workspaces', { headers: bearer(token) }),
 
+  /** Uno solo, con su progreso. 404 si no existe o no es tuyo: la pantalla de detalle lo distingue. */
+  get: (token: string, id: number) =>
+    request<{ workspace: Workspace }>(`/workspaces/${id}`, { headers: bearer(token) }),
+
   create: (token: string, input: NewWorkspace) =>
     request<{ workspace: Workspace }>('/workspaces', {
       method: 'POST',

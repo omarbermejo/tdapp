@@ -171,6 +171,36 @@ export type Stats = {
  */
 export type TaskCounts = { counts: { total: number; pending: number; done: number } };
 
+/**
+ * Un logro y las tres caras que abre.
+ *
+ * De las tres se elige UNA, no se ganan las tres: `chosen` es la elegida y las otras dos se quedan
+ * cerradas para siempre. `claimable` es el estado que importa a la pantalla — cumplido y sin elegir,
+ * o sea hay un premio esperando.
+ */
+export type Milestone = {
+  id: string;
+  label: string;
+  hint: string;
+  /** Los tres nombres de memoji, en el orden en que se pintan. */
+  choices: string[];
+  metric: 'done' | 'best';
+  target: number;
+  /** Lo que lleva, ya topado en `target`: "50 de 50" y nunca "173 de 50". */
+  progress: number;
+  unlocked: boolean;
+  chosen: string | null;
+  claimable: boolean;
+};
+
+/**
+ * El vestidor: que caras hay libres y como van los cinco logros.
+ *
+ * Lo arma el API y no la app a proposito. Cruzar el catalogo con el avance y con lo ya elegido aqui
+ * significaria que la app decide que esta desbloqueado — y entonces el candado seria decorativo.
+ */
+export type AvatarState = { free: string[]; milestones: Milestone[] };
+
 /** El dia completo en una sola llamada: es lo que alimentan el widget y la Live Activity. */
 export type Today = {
   date: string;
@@ -250,18 +280,35 @@ export const api = {
    * alla ya sale de la misma rejilla.
    *
    * Lo manda quien necesita otra ventana, como el mapa del trimestre en Hoy, que pide 17 semanas.
-   * Con `URLSearchParams` y no plantillas: es el mismo patron de `tasksApi.list` y resuelve solo el
-   * caso de `from` sin `date`.
+   * `workspaceId` acota todo a un espacio, para su pantalla de detalle.
+   *
+   * Un objeto y no tres posicionales: con `date`, `from` y `workspaceId` sueltos, pedir solo el espacio
+   * obligaba a escribir dos `undefined` de relleno. Con `URLSearchParams` y no plantillas, igual que
+   * `tasksApi.list`.
    */
-  stats: (token: string, date?: string, from?: string) => {
+  stats: (token: string, query: { date?: string; from?: string; workspaceId?: number } = {}) => {
     const search = new URLSearchParams(
-      Object.entries({ date, from }).filter(([, v]) => !!v) as [string, string][]
+      Object.entries(query)
+        .filter(([, v]) => v != null && v !== '')
+        .map(([k, v]) => [k, String(v)])
     ).toString();
     return request<Stats>(`/me/stats${search ? `?${search}` : ''}`, { headers: bearer(token) });
   },
 
   taskCounts: (token: string) =>
     request<TaskCounts>('/me/tasks/summary', { headers: bearer(token) }),
+
+  /** `date` por lo mismo que en la racha: la mejor marca se mide en dias locales del telefono. */
+  avatars: (token: string, date?: string) =>
+    request<AvatarState>(`/me/avatars${date ? `?date=${date}` : ''}`, { headers: bearer(token) }),
+
+  /** Devuelve el vestidor entero al dia, para no encadenar una segunda peticion. */
+  claimAvatar: (token: string, milestone: string, avatar: string, date?: string) =>
+    request<AvatarState>(`/me/avatars${date ? `?date=${date}` : ''}`, {
+      method: 'POST',
+      headers: bearer(token),
+      body: JSON.stringify({ milestone, avatar }),
+    }),
 
   /** Devuelve token nuevo: el de antes decia que el correo no estaba verificado. */
   verify: (token: string, code: string) =>

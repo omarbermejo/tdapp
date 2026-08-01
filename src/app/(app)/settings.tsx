@@ -1,9 +1,11 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro } from '@/components/ui/card';
 import { SchemeToggle } from '@/components/ui/scheme-toggle';
 import { ScreenHeader } from '@/components/ui/screen-header';
+import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
 import { Space, Type, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
 import { DeleteAccount } from '@/features/profile/delete-account';
@@ -30,6 +32,7 @@ const ENTRY: Record<string, string> = {
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const t = useTheme();
+  const veil = useScrollVeil();
   // `Space.breath` y no `TAB_DOCK`: fuera de las pestañas la capsula flotante no se pinta, asi que
   // reservarle su hueco dejaria un vacio al final del scroll.
   const pad = useScreenPadding(Space.breath);
@@ -40,7 +43,8 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
-      <ScrollView
+      <Animated.ScrollView
+        {...veil.scrollProps}
         contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
         showsVerticalScrollIndicator={false}>
         <ScreenHeader back title="Ajustes" />
@@ -78,7 +82,9 @@ export default function SettingsScreen() {
         </Card>
 
         <BigButton label="Cerrar sesión" variant="ghost" accent="copper" onPress={signOut} />
-      </ScrollView>
+      </Animated.ScrollView>
+
+      <StatusVeil scrollY={veil.scrollY} />
     </View>
   );
 }
