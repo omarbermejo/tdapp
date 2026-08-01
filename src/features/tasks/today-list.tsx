@@ -67,7 +67,7 @@ export function TodayList({
 }) {
   const t = useTheme();
   const { user } = useAuth();
-  const { tasks, error, reload } = day;
+  const { tasks, error } = day;
 
   const pending = tasks?.filter((task) => task.status === 'pending') ?? [];
   const done = tasks?.filter((task) => task.status === 'done') ?? [];
@@ -87,7 +87,7 @@ export function TodayList({
           layout={ROW_LAYOUT}
           entering={rowEntering(i)}
           exiting={ROW_EXIT}>
-          <TaskRow task={task} accent={user?.accentColor} reload={reload} />
+          <TaskRow task={task} accent={user?.accentColor} mutate={day} />
         </Animated.View>
       ))}
 

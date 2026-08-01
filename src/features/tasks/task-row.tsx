@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
+import { useCallback, useEffect, useRef, type ComponentProps } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import ReanimatedSwipeable, {
   SwipeDirection,
@@ -26,6 +26,7 @@ import { FOCUS_AREAS } from '@/features/auth/options';
 
 import { tasksApi } from './api';
 import { accentForFocus } from './focus-accent';
+import type { TaskMutations } from './use-tasks';
 
 /** Ancho del panel que se revela detras de la fila. */
 const ACTION = 104;
@@ -212,7 +213,12 @@ export function TaskRow({
   const tint = useAccent(accentForFocus(task.focusArea, accent ?? 'olive'));
   const { token } = useAuth();
   const swipe = useRef<SwipeableMethods | null>(null);
-  const [busy, setBusy] = useState(false);
+  /**
+   * Guarda contra el doble toque. Es un ref y NO estado a proposito: no tiene que repintar nada —
+   * con optimismo la fila ya se ve cambiada — y un estado aqui devolveria el parpadeo que se acaba
+   * de quitar.
+   */
+  const sending = useRef(false);
 
   const done = task.status === 'done';
 
@@ -221,7 +227,6 @@ export function TaskRow({
   // tareas ya hechas no se animen al montar la lista.
   const mark = useSharedValue(done ? 1 : 0);
   const pop = useSharedValue(1);
-  const dim = useSharedValue(1);
   // El estado anterior en un ref: el efecto tambien corre al montar y ahi no hay nada que animar.
   const wasDone = useRef(done);
 
@@ -231,13 +236,6 @@ export function TaskRow({
     mark.value = withTiming(done ? 1 : 0, CROSS);
     pop.value = withSequence(withTiming(1.16, { duration: Motion.pop }), withSpring(1, Motion.confirm));
   }, [done, mark, pop]);
-
-  useEffect(() => {
-    // La espera del servidor ya no es un corte a opacidad 0.5: se apaga y se prende.
-    dim.value = withTiming(busy ? 0.55 : 1, { duration: Motion.exit });
-  }, [busy, dim]);
-
-  const rowStyle = useAnimatedStyle(() => ({ opacity: dim.value }));
 
   // De `sunken` (el propio fondo de la fila, o sea "vacio") a `ink`, y el borde con el. En hecha
   // el borde queda del mismo color que el relleno: se lee como el circulo lleno de siempre.
@@ -263,32 +261,42 @@ export function TaskRow({
     color: interpolateColor(mark.value, [0, 1], [t.text, t.textMuted]),
   }));
 
-  const toggle = useCallback(async () => {
-    if (!token) return;
-    setBusy(true);
-    try {
-      await tasksApi.update(token, task.id, { status: done ? 'pending' : 'done' });
-      await reload();
-    } catch {
-      Alert.alert('No pudimos guardarla', 'Inténtalo otra vez.');
-    } finally {
-      // Siempre, tambien tras un fallo: si `busy` se queda pegado la fila queda muerta al gesto.
-      setBusy(false);
-    }
-  }, [token, task.id, done, reload]);
+  const toggle = useCallback(() => {
+    if (!token || sending.current) return;
+    sending.current = true;
+    const status = done ? 'pending' : 'done';
+    // El cambio se ve AQUI, antes de que salga la peticion. `undo` restaura la tarea tal cual estaba.
+    const undo = mutate.patch(task, { status });
 
-  const remove = useCallback(async () => {
+    void (async () => {
+      try {
+        await tasksApi.update(token, task.id, { status });
+      } catch {
+        undo();
+        Alert.alert('No pudimos guardarla', 'Inténtalo otra vez.');
+      } finally {
+        sending.current = false;
+      }
+    })();
+  }, [token, task, done, mutate]);
+
+  const remove = useCallback(() => {
     if (!token) return;
-    setBusy(true);
-    try {
-      await tasksApi.remove(token, task.id);
-      await reload();
-    } catch {
-      Alert.alert('No pudimos borrarla', 'Inténtalo otra vez.');
-    } finally {
-      setBusy(false);
-    }
-  }, [token, task.id, reload]);
+    // La fila se va en el mismo frame del toque. Borrar ya paso por un Alert, asi que aqui no hay
+    // nada mas que preguntar.
+    mutate.drop(task);
+
+    void (async () => {
+      try {
+        await tasksApi.remove(token, task.id);
+      } catch {
+        // Sin deshacer propio: reinsertar en su sitio exacto necesitaria recordar el indice, y
+        // `reload` trae la verdad entera — que es lo correcto cuando ya no sabemos que paso.
+        await mutate.reload();
+        Alert.alert('No pudimos borrarla', 'Inténtalo otra vez.');
+      }
+    })();
+  }, [token, task, mutate]);
 
   const confirmRemove = useCallback(() => {
     // Borrar no se deshace, asi que se pregunta. Es la unica friccion a proposito de la fila.
@@ -299,8 +307,7 @@ export function TaskRow({
   }, [task.title, remove]);
 
   const onCheck = useCallback(() => {
-    // El mismo golpe que el gesto: la casilla y el swipe hacen lo mismo y tienen que sentirse
-    // igual. Y es la respuesta inmediata al toque, porque el relleno espera al servidor.
+    // El mismo golpe que el gesto: la casilla y el swipe hacen lo mismo y tienen que sentirse igual.
     thud();
     void toggle();
   }, [toggle]);
@@ -320,7 +327,6 @@ export function TaskRow({
   return (
     <ReanimatedSwipeable
       ref={swipe}
-      enabled={!busy}
       // La fila NO se puede levantar con sombra: el `overflow: 'hidden'` que el panel del swipe
       // necesita para recortarse tambien recorta la sombra del propio layer en iOS.
       //
@@ -362,7 +368,7 @@ export function TaskRow({
       dragOffsetFromRightEdge={DRAG_OFFSET}
       animationOptions={SPRING}
       onSwipeableOpen={onOpen}>
-      <Animated.View style={[styles.row, { backgroundColor: t.surface }, rowStyle]}>
+      <View style={[styles.row, { backgroundColor: t.surface }]}>
         {/* El ancla de la fila. Es lo que hace escaneable una lista larga: el area se reconoce por
             forma y color antes de leer una sola palabra, que es exactamente lo que hacen Tiimo con
             su emoji en circulo y las dos referencias de Dribbble con su cuadro tintado. Se apaga
@@ -394,9 +400,8 @@ export function TaskRow({
             compite con el icono por ser lo primero que se mira. */}
         <Pressable
           accessibilityRole="checkbox"
-          accessibilityState={{ checked: done, disabled: busy }}
+          accessibilityState={{ checked: done }}
           accessibilityLabel={done ? 'Marcar como pendiente' : 'Marcar como hecha'}
-          disabled={busy}
           onPress={onCheck}
           hitSlop={Space.sm}
           style={styles.check}>
@@ -417,7 +422,7 @@ export function TaskRow({
             </Animated.View>
           </Animated.View>
         </Pressable>
-      </Animated.View>
+      </View>
     </ReanimatedSwipeable>
   );
 }

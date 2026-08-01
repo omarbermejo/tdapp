@@ -27,7 +27,7 @@ const ROW_EXIT = FadeOut.duration(Motion.exit);
 export function BacklogList({ backlog }: { backlog: ReturnType<typeof useBacklog> }) {
   const t = useTheme();
   const { user } = useAuth();
-  const { tasks, reload } = backlog;
+  const { tasks } = backlog;
 
   if (!tasks?.length) return null;
 
@@ -51,7 +51,7 @@ export function BacklogList({ backlog }: { backlog: ReturnType<typeof useBacklog
             nada — "5:00 p.m." del martes no te dice cuando hacerla, te dice cuando NO la hiciste.
             Lo que decide aqui es de que dia es, para moverla o soltarla.
           */}
-          <TaskRow task={task} accent={user?.accentColor} reload={reload} showDay showTime={false} />
+          <TaskRow task={task} accent={user?.accentColor} mutate={backlog} showDay showTime={false} />
         </Animated.View>
       ))}
 

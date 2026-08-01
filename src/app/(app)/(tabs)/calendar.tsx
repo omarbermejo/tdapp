@@ -94,7 +94,10 @@ export default function CalendarScreen() {
   const { date } = useLocalSearchParams<{ date?: string }>();
   const selected = date || today;
 
-  const { tasks, error, loading, reload } = useTasks(selected);
+  // El objeto entero se guarda además de desestructurarlo: el riel se lo pasa tal cual a las filas
+  // como `mutate`, porque el hook ya cumple `TaskMutations` (pintar ya, quitar ya, traer la verdad).
+  const day = useTasks(selected);
+  const { tasks, error, loading, reload } = day;
 
   // El aire va en el contenido, no en un SafeAreaView: ver `use-screen-padding`.
   const pad = useScreenPadding(TAB_DOCK);
@@ -201,7 +204,7 @@ export default function CalendarScreen() {
               peakEnergy={user.peakEnergy}
               isToday={isViewingToday}
               minutes={minutes}
-              reload={reload}
+              mutate={day}
             />
           </>
         )}

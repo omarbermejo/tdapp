@@ -13,6 +13,7 @@ import type { Task } from '@/features/auth/api';
 
 import { accentForFocus } from './focus-accent';
 import { TaskRow } from './task-row';
+import type { TaskMutations } from './use-tasks';
 
 /** Ancho de la columna de horas: '09:00' en 15pt cabe aqui. */
 const HOUR_W = 46;
@@ -78,7 +79,8 @@ type Props = {
   isToday: boolean;
   /** Minutos desde medianoche; el padre lo mueve cada minuto. */
   minutes: number;
-  reload: () => Promise<void> | void;
+  /** Pintar ya, quitar ya, y traer la verdad. Un prop en vez de tres de paso. */
+  mutate: TaskMutations;
 };
 
 /**
@@ -95,7 +97,7 @@ type Props = {
  * El riel lo tine cada tarea con el color de su familia: la columna izquierda contesta
  * "¿mi dia es todo trabajo?" sin leer un solo titulo.
  */
-export function DayTimeline({ tasks, fallback, peakEnergy, isToday, minutes, reload }: Props) {
+export function DayTimeline({ tasks, fallback, peakEnergy, isToday, minutes, mutate }: Props) {
   const timed = tasks.filter((task) => task.dueAt);
   const untimed = tasks.filter((task) => !task.dueAt);
 
@@ -119,7 +121,7 @@ export function DayTimeline({ tasks, fallback, peakEnergy, isToday, minutes, rel
             fallback={fallback}
             isToday={isToday}
             minutes={minutes}
-            reload={reload}
+            mutate={mutate}
             order={order}
           />
         );
@@ -133,7 +135,7 @@ export function DayTimeline({ tasks, fallback, peakEnergy, isToday, minutes, rel
           fallback={fallback}
           isToday={false}
           minutes={minutes}
-          reload={reload}
+          mutate={mutate}
           order={order}
         />
       )}
@@ -149,7 +151,7 @@ function Band({
   fallback,
   isToday,
   minutes,
-  reload,
+  mutate,
   order,
 }: {
   label: string;
@@ -158,7 +160,8 @@ function Band({
   fallback: AccentName;
   isToday: boolean;
   minutes: number;
-  reload: () => Promise<void> | void;
+  /** Pintar ya, quitar ya, y traer la verdad. Un prop en vez de tres de paso. */
+  mutate: TaskMutations;
   order: Map<number, number>;
 }) {
   const t = useTheme();
@@ -188,7 +191,7 @@ function Band({
                 fallback={fallback}
               />
             )}
-            <Slot task={task} fallback={fallback} reload={reload} index={order.get(task.id) ?? i} />
+            <Slot task={task} fallback={fallback} mutate={mutate} index={order.get(task.id) ?? i} />
           </View>
         );
       })}
@@ -200,12 +203,13 @@ function Band({
 function Slot({
   task,
   fallback,
-  reload,
+  mutate,
   index,
 }: {
   task: Task;
   fallback: AccentName;
-  reload: () => Promise<void> | void;
+  /** Pintar ya, quitar ya, y traer la verdad. Un prop en vez de tres de paso. */
+  mutate: TaskMutations;
   index: number;
 }) {
   const t = useTheme();
@@ -233,7 +237,7 @@ function Slot({
       </View>
 
       <View style={styles.body}>
-        <TaskRow task={task} accent={accent} reload={reload} showTime={false} />
+        <TaskRow task={task} accent={accent} mutate={mutate} showTime={false} />
       </View>
     </Animated.View>
   );
