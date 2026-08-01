@@ -178,21 +178,25 @@ function SwipeFace({
  * gesto que nadie descubre no existe, y desmarcar cuesta lo mismo que marcar: equivocarse
  * no puede castigar.
  *
- * ponytail: no hay optimistic update — se espera al servidor y se recarga el dia entero. Con
- * pocas tareas el viaje se nota menos que el riesgo de pintar un estado que el API rechazo
- * (el 409 del cronometro es real). Techo: si la lista crece o la red empieza a doler, hay que
- * mover el estado a un cache de verdad y ahi si pintar antes de confirmar.
+ * **Pinta antes de confirmar.** Antes esperaba al servidor y recargaba el dia entero: tachar una
+ * tarea tardaba un viaje de red y mientras la fila se quedaba al 55% de opacidad. En la interaccion
+ * mas frecuente de la app eso es justo la friccion que hace que no se use.
+ *
+ * Ahora el cambio se pinta YA con `mutate.patch`, que devuelve su propio deshacer, y la peticion va
+ * detras. Si el servidor rechaza, se deshace y se avisa. Es lo que el comentario viejo dejaba como
+ * techo, y ya se cruzo: el riesgo real no era pintar de mas, era que marcar se sintiera lento.
  */
 export function TaskRow({
   task,
   accent,
-  reload,
+  mutate,
   showTime = true,
   showDay = false,
 }: {
   task: Task;
   accent?: AccentName;
-  reload: () => Promise<void> | void;
+  /** Pintar ya, quitar ya, y traer la verdad. Ver `TaskMutations` en `use-tasks`. */
+  mutate: TaskMutations;
   /** El calendario ya pinta la hora en su columna: ahi la fila no la repite. */
   showTime?: boolean;
   /**
@@ -317,11 +321,13 @@ export function TaskRow({
     <ReanimatedSwipeable
       ref={swipe}
       enabled={!busy}
-      // El cuerpo de la fila es `surface`, o sea blanco, sobre el papel calido. Una sombra como la
-      // de Card no sirve aqui: el `overflow: 'hidden'` que el panel necesita para recortarse
-      // tambien recorta la sombra del propio layer en iOS. Asi que la fila se levanta con dos
-      // señales planas — el blanco contra el papel (1.07:1) y el hairline de `line` encima — que
-      // es poco a proposito: una lista de doce cajas con borde pesa mas que la lista misma.
+      // La fila NO se puede levantar con sombra: el `overflow: 'hidden'` que el panel del swipe
+      // necesita para recortarse tambien recorta la sombra del propio layer en iOS.
+      //
+      // Asi que con el papel de vuelta en blanco le queda UNA señal: el hairline de `line`, que es
+      // calido y por eso se ve sobre blanco. Es poco a proposito — una lista de doce cajas con
+      // borde pesa mas que la lista misma — y es el limite: si la fila necesitara separarse mas,
+      // el camino es `sunken` de relleno, no un borde mas grueso.
       containerStyle={[styles.container, { borderColor: t.line }]}
       // Arrastrar hacia la derecha revela el panel de la IZQUIERDA. De ahi el cruce.
       renderLeftActions={(progress) => (

@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { ApiError, type Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
@@ -12,6 +12,48 @@ import { tasksApi } from './api';
  * (cuando la pantalla todavia no sabe que dia es hoy) sale como "cargando" y no como "vacio".
  */
 type State = { for: string | null; tasks: Task[] | null; error: string };
+
+/**
+ * Lo que una fila necesita para cambiar la lista: pintar YA, quitar YA, y traer la verdad.
+ *
+ * Va como UN tipo y no como tres props porque `day-timeline` lo enhebra por tres niveles: con
+ * `reload`, `patch` y `drop` sueltos serian nueve props de paso. Y los dos hooks de abajo lo
+ * cumplen estructuralmente, asi que una pantalla puede pasar su hook entero sin desestructurar.
+ */
+export type TaskMutations = {
+  /** Aplica el cambio en el estado local y devuelve la funcion que lo deshace. */
+  patch: (task: Task, changes: Partial<Task>) => () => void;
+  /** Quita la fila del estado local. Si el servidor rechaza, se restaura con `reload`. */
+  drop: (task: Task) => void;
+  reload: () => Promise<void> | void;
+};
+
+/**
+ * Reemplaza o quita una tarea del estado. PURA, y eso es el requisito: la usan updaters de
+ * `setState`, que React puede ejecutar dos veces — un efecto o una captura ahi dentro se
+ * duplicaria. Es la misma regla que obliga al espejo sincrono de `usePomodoro`.
+ */
+const replace = (s: State, id: number, next: Task | null): State => {
+  if (!s.tasks) return s;
+  return {
+    ...s,
+    tasks: next ? s.tasks.map((t) => (t.id === id ? next : t)) : s.tasks.filter((t) => t.id !== id),
+  };
+};
+
+/**
+ * Los dos mutadores optimistas. Iguales para los dos hooks, asi que se arman una vez.
+ *
+ * `patch` recibe la tarea ENTERA y no un id: el deshacer restaura ese objeto tal cual estaba, sin
+ * tener que leer el estado desde dentro del updater. Es lo que permite que todo esto sea puro.
+ */
+const mutators = (setState: React.Dispatch<React.SetStateAction<State>>) => ({
+  patch: (task: Task, changes: Partial<Task>) => {
+    setState((s) => replace(s, task.id, { ...task, ...changes }));
+    return () => setState((s) => replace(s, task.id, task));
+  },
+  drop: (task: Task) => setState((s) => replace(s, task.id, null)),
+});
 
 /**
  * Las tareas de UN dia, listas para pintar.
@@ -61,11 +103,19 @@ export function useTasks(date: string) {
    */
   const fresh = state.for === date;
 
+  /**
+   * Se arman con `useMemo` y no en el cuerpo: la fila los recibe como prop y los mete en las
+   * dependencias de sus callbacks. Un objeto nuevo por render volveria a crear esos callbacks en
+   * cada pintada de la pantalla.
+   */
+  const mutate = useMemo(() => mutators(setState), []);
+
   return {
     tasks: fresh ? state.tasks : null,
     error: fresh ? state.error : '',
     loading: !fresh,
     reload,
+    ...mutate,
   };
 }
 
@@ -104,5 +154,6 @@ export function useBacklog(today: string) {
   );
 
   const fresh = state.for === today;
-  return { tasks: fresh ? state.tasks : null, reload };
+  const mutate = useMemo(() => mutators(setState), []);
+  return { tasks: fresh ? state.tasks : null, reload, ...mutate };
 }

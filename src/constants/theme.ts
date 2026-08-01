@@ -12,14 +12,14 @@ import { getPreference, subscribe } from './scheme-store';
  * generosos, jerarquía por tamaño y color de texto (no por cajas), y un solo CTA sólido por
  * pantalla.
  *
- * **El papel es cálido y la tarjeta es blanca.** Es la inversión del escalón anterior (papel
- * blanco, tarjeta crema) y es una decisión sensorial antes que estética: es lo que hace Tiimo,
- * que diseña para el mismo público, y su argumento es que el blanco puro a pantalla completa es
- * un estímulo que cansa. Además los iconos 3D de la app traen su propio modelado en gris, y sobre
- * blanco puro flotan sin asentarse.
+ * **El papel es blanco y la tarjeta también.** El crema a pantalla completa se leía como un tinte
+ * sucio, así que el papel vuelve a blanco puro y lo que separa una tarjeta es SOLO su sombra
+ * (`Elevation.raised`), nunca un escalón de valor ni un borde grueso. Es lo que ya decía el
+ * sistema: el escalón de 1.07:1 que había antes no era lo que levantaba nada.
  *
- * De ahí sale la regla de temperatura: **una sola, y se hace cumplir**. Un gris frío sobre papel
- * cálido se ve sucio, así que en modo claro no hay grises neutros — todo neutro es cálido.
+ * La regla de temperatura sigue en pie para todo lo que NO es el papel: **una sola, y se hace
+ * cumplir**. Un gris frío junto a los cremas de la marca se ve sucio, así que en modo claro no hay
+ * grises neutros — todo neutro (lo hundido, la línea, la superficie de acento) es cálido.
  *
  * Regla: ningún hex vive fuera de este archivo. Los componentes consumen tokens, y los
  * de color SOLO a través de `useTheme()` / `useAccent()` — un import estático se
@@ -100,13 +100,12 @@ export const Palette = {
    * ensuciarse.
    */
   paper: {
-    /** La tarjeta. Blanco puro, y solo aquí: es lo único que se levanta. */
+    /** El papel Y la tarjeta. Blanco puro: entre los dos no hay escalón, solo la sombra. */
     0: '#ffffff',
     /**
-     * El papel de la app. Medido: la tinta encima da 12.0:1 y la tarjeta se separa 1.07:1 — poco
-     * a propósito, porque lo que levanta una tarjeta es su sombra (`Elevation.raised`), no un
-     * escalón de valor. Un escalón fuerte convierte cada tarjeta en una caja, que es justo lo que
-     * la referencia no hace.
+     * Crema apenas teñido. Ya NO es el papel — quedó para lo que necesita un fondo cálido sin
+     * llegar al crema de marca (`sand`). Se mantiene porque `paper[100]` y `[200]` se derivan
+     * visualmente de él y la rampa se leería rota sin este paso.
      */
     50: '#faf7ef',
     /** Lo hundido: chips sin seleccionar, pistas de progreso, avatares. `textMuted` encima da 6.7:1. */
@@ -183,9 +182,9 @@ export type Tokens = {
 
 const TOKENS: Record<Scheme, Tokens> = {
   light: {
-    /** El papel cálido. 12.0:1 con la tinta encima. */
-    canvas: Palette.paper[50],
-    /** La tarjeta: blanco, y lo único blanco. Se separa por sombra, no por escalón de valor. */
+    /** El papel: blanco puro. 12.6:1 con la tinta encima. */
+    canvas: Palette.paper[0],
+    /** La tarjeta: el mismo blanco. Se separa SOLO por sombra, nunca por escalón de valor. */
     surface: Palette.paper[0],
     /** El crema de la marca, ahora como superficie de acento. 12.2:1 con la tinta encima. */
     surfaceAlt: Palette.sand[0],
@@ -197,9 +196,9 @@ const TOKENS: Record<Scheme, Tokens> = {
 
     text: Palette.blackForest[500],
     /**
-     * Sube un paso (era `oliveLeaf[500]`). Sobre el papel cálido ese daba 5.3:1 y este da 7.3:1 —
-     * el papel tiene menos luz que el blanco de antes, así que mantener el paso viejo habría sido
-     * perder contraste sin que se notara en ninguna revisión.
+     * Un paso por debajo de `oliveLeaf[500]`, que sobre blanco daba 5.6:1. Este da 7.7:1 y se queda
+     * aunque el papel haya vuelto a blanco: el texto secundario también se lee sobre `surfaceAlt`
+     * (el crema de marca), que es la superficie con menos luz de la app.
      */
     textMuted: Palette.oliveLeaf[400],
 
@@ -207,9 +206,9 @@ const TOKENS: Record<Scheme, Tokens> = {
     inkPressed: Palette.blackForest[400],
     onInk: Palette.paper[0],
 
-    /** 5.2:1 sobre el papel. Verde, no del acento: cerrar algo se ve igual para todo el mundo. */
+    /** 5.5:1 sobre el papel. Verde, no del acento: cerrar algo se ve igual para todo el mundo. */
     success: Palette.blackForest[600],
-    /** 5.4:1 sobre el papel: el mensaje de error es justo el que hay que poder leer. */
+    /** 5.7:1 sobre el papel: el mensaje de error es justo el que hay que poder leer. */
     danger: Palette.copperwood[400],
     // Tinta de la marca al 40%, no negro puro: el velo tambien es de la paleta.
     scrim: 'rgba(40, 54, 24, 0.40)',
@@ -348,10 +347,10 @@ export function accentInks(name?: string | null): { light: string; dark: string 
  * Las sombras solo existen en claro: en oscuro una sombra negra sobre fondo oscuro no se ve, y lo
  * que separa es el escalón de luz de `surface`.
  *
- * Son tres y antes era una. La razón es el papel cálido: con la tarjeta blanca a 1.07:1 contra el
- * papel, la sombra dejó de ser un adorno y pasó a ser LO que separa, así que necesita decir a qué
- * altura está cada cosa. Y todas usan la tinta de la marca, nunca negro: una sombra negra sobre
- * papel cálido lo agrisa.
+ * Son tres y antes era una, y ahora cargan aún más: con el papel de vuelta en blanco, la tarjeta y
+ * el fondo son el MISMO color y la sombra es lo único que separa, así que tiene que decir a qué
+ * altura está cada cosa. Y todas usan la tinta de la marca, nunca negro: una sombra negra junto a
+ * los cremas de la marca los agrisa.
  */
 export type Elevation = 'raised' | 'floating' | 'pressed';
 
@@ -360,11 +359,14 @@ export function useShadow(level: Elevation = 'raised') {
 }
 
 const SHADOWS = {
-  /** La tarjeta apoyada en el papel. */
+  /**
+   * La tarjeta apoyada en el papel. Sube de 0.07 a 0.10 al volver el papel a blanco: sin el
+   * escalón de valor que había antes, con 0.07 la tarjeta se disolvía en el fondo.
+   */
   raised: {
     shadowColor: Palette.blackForest[500],
-    shadowOpacity: 0.07,
-    shadowRadius: 18,
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },

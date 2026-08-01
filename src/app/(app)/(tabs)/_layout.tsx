@@ -150,7 +150,8 @@ type Tab = {
  * del grupo que no este aqui (new-task) no sale en la barra ni la lleva encima.
  */
 const TABS: Tab[] = [
-  { name: 'index', label: 'Hoy', icon: 'home' },
+  // 'home-chrome' y no 'home': la casa del AREA es calida y aqui tiene que ser cromo. Ver icon3d.
+  { name: 'index', label: 'Hoy', icon: 'home-chrome' },
   // Segunda y no ultima: el cronometro es lo que se hace CON el dia, asi que va pegado al dia.
   { name: 'timer', label: 'Enfoque', icon: 'clock' },
   { name: 'calendar', label: 'Calendario', icon: 'calendar' },

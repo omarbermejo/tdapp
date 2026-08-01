@@ -47,6 +47,21 @@ const PAD = 0.08;
 const INK = 0.34;
 /** Debajo de esto un pixel es borde suavizado y no define el rango tonal del objeto. */
 const SOLID = 200;
+/**
+ * Que fraccion del objeto se recorta en CADA extremo antes de estirar el modelado sobre la rampa.
+ *
+ * Es la perilla que decide si un icono se lee con volumen o como silueta. Con los extremos en el
+ * minimo y el maximo absolutos, un filo especular de dos pixeles se lleva el paso claro de la rampa
+ * entero y el CUERPO del objeto queda comprimido en la parte baja. Se veia en el rayo y en la hoja
+ * —casi una sola faceta mas un filo de luz, que salian planos— mientras el reloj y la paleta, que
+ * reparten su luz sobre area grande, si modelaban. O sea que el defecto no estaba en el tinte:
+ * estaba en dejar que dos outliers fijaran la escala de todo el icono.
+ *
+ * Recortar no pierde nada. El clamp del mapa aplasta lo que queda fuera contra los topes, que es
+ * justo lo que se quiere: un reflejo especular DEBE saturar. Lo que gana es el 96% central, que se
+ * estira sobre la rampa completa.
+ */
+const CLIP = 0.02;
 
 /**
  * Los extremos del mapa salen de las rampas de `theme.ts`, nunca de un hex escrito aqui.
@@ -162,19 +177,36 @@ export async function bake(dir, loHex, hiHex) {
 
   const n = width * height;
   const lum = new Float32Array(n);
-  let min = 255;
-  let max = 0;
+
+  // Un histograma de 256 cubetas sobre los pixeles solidos. Es todo lo que hace falta para sacar un
+  // percentil, y evita ordenar las decenas de miles de luminancias de cada icono.
+  const hist = new Uint32Array(256);
+  let solid = 0;
 
   for (let i = 0, p = 0; p < n; i += 4, p++) {
     if (!stencil[p]) continue;
     lum[p] = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
     if (stencil[p] < SOLID) continue;
-    if (lum[p] < min) min = lum[p];
-    if (lum[p] > max) max = lum[p];
+    hist[Math.round(lum[p])]++;
+    solid++;
   }
 
+  /** La luminancia por debajo de la cual queda `fraction` del objeto. */
+  const percentile = (fraction) => {
+    const target = fraction * solid;
+    let seen = 0;
+    for (let v = 0; v < 256; v++) {
+      seen += hist[v];
+      if (seen >= target) return v;
+    }
+    return 255;
+  };
+
   // 3. El mapa de degradado. El rojo de origen no ocupa 0-255: sin estirar su rango real se tira
-  //    la mayor parte del modelado antes de empezar.
+  //    la mayor parte del modelado antes de empezar. Los extremos son percentiles y no el minimo y
+  //    el maximo — ver `CLIP`, que es lo que separa un objeto con volumen de una silueta.
+  const min = percentile(CLIP);
+  const max = percentile(1 - CLIP);
   const span = max - min || 1;
   for (let i = 0, p = 0; p < n; i += 4, p++) {
     data[i + 3] = stencil[p];
@@ -280,6 +312,21 @@ export const AREA_ACCENT = {
   money: 'copper',
 };
 
+/**
+ * Los iconos que se hornean DOS veces.
+ *
+ * La casa es la unica con dos trabajos, y son incompatibles: como area de enfoque "hogar" el color
+ * ES el dato y tiene que ser calido —la misma familia que salud y relaciones, la que dice "vida" de
+ * un vistazo en la agenda— y como pestaña de Hoy tiene que ser cromo, porque al lado van el reloj,
+ * el calendario y el usuario.
+ *
+ * El mapa de arriba esta indexado por AREA, pero el nombre del area y el del asset coinciden, asi
+ * que la barra se llevaba el clay sin que nadie lo decidiera: la unica casa marron entre tres verdes
+ * — que es justo lo que `CHROME` existe para impedir. Un archivo no puede ser dos colores, asi que
+ * son dos archivos.
+ */
+export const EXTRA = [{ dir: 'home', name: 'home-chrome', accent: CHROME }];
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const palette = await loadPalette();
   await mkdir(OUT, { recursive: true });
@@ -288,10 +335,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if ((await stat(join(RAW, entry))).isDirectory()) slugs.push(entry);
   }
 
-  for (const slug of slugs.sort()) {
-    const [ramp, lo, hi] = TINT[AREA_ACCENT[slug] ?? CHROME];
-    const webp = await bake(join(RAW, slug), palette[ramp][lo], palette[ramp][hi]);
-    await writeFile(join(OUT, `${slug}.webp`), webp);
-    console.log(`${slug.padEnd(16)} ${(webp.length / 1024).toFixed(1)} KB`);
+  const jobs = [
+    ...slugs.sort().map((slug) => ({ dir: slug, name: slug, accent: AREA_ACCENT[slug] ?? CHROME })),
+    ...EXTRA,
+  ];
+
+  for (const job of jobs) {
+    const [ramp, lo, hi] = TINT[job.accent];
+    const webp = await bake(join(RAW, job.dir), palette[ramp][lo], palette[ramp][hi]);
+    await writeFile(join(OUT, `${job.name}.webp`), webp);
+    console.log(`${job.name.padEnd(16)} ${(webp.length / 1024).toFixed(1)} KB`);
   }
 }

@@ -1,0 +1,57 @@
+# Las tres comprobaciones que ya existen en el repo, corriendo en cada push y cada PR.
+#
+# Existe por un fallo concreto: llegó a `main` código que importaba `lucide-react-native`,
+# `react-native-svg` y `@expo-google-fonts/fraunces` sin que estuvieran instalados. El proyecto no
+# arrancaba y no se supo hasta que alguien intentó levantarlo. `tsc` lo caza en segundos — un módulo
+# ausente es un `TS2307`.
+#
+# No compila para iOS a propósito: eso necesita un runner de macOS (10x el coste en minutos) y aquí
+# no hay nada nativo que revisar en cada commit. Lo nativo se revisa cuando se toca, con un build de
+# verdad.
+
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+# Un push nuevo cancela el anterior: en una rama activa nadie espera el resultado del commit viejo.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: tipos · lint · contrato de widgets
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # 22 LTS. El desarrollo va en 24, pero para CI vale más la versión estable que la paridad.
+          node-version: 22
+          cache: npm
+
+      # `npm ci` y no `npm install`: falla si el lock no cuadra con package.json, en vez de
+      # arreglarlo en silencio y esconder que alguien añadió un import sin instalar nada.
+      - run: npm ci
+
+      # Los tipos son lo que caza el fallo que motivó este archivo. No necesita los tipos de ruta
+      # generados por expo-router (viven en `.expo/`, que está en .gitignore): comprobado apartándolos
+      # y volviendo a correr tsc. Sin ellos `Href` cae a un tipo permisivo, así que CI puede ser algo
+      # menos estricto que local — nunca al contrario, que es lo que importa.
+      - name: Tipos
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx expo lint
+
+      # El único que no es genérico. El layout de un widget no se ejecuta en la app: la directiva
+      # `'widget'` lo convierte en un STRING y lo evalúa otro proceso con un JSContext pelado. Un
+      # layout que use algo de fuera de su función compila, pasa el lint, y sale VACÍO en el teléfono.
+      # Este script lo rearma igual que la extensión y lo llama.
+      - name: Contrato del layout de widgets
+        run: npm run check:widgets
