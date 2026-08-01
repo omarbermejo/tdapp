@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { Space, Type, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
@@ -17,6 +18,7 @@ import { WeekStrip } from '@/features/tasks/week-strip';
 import { Workspaces } from '@/features/workspaces/workspaces';
 import { useWorkspaces } from '@/features/workspaces/use-workspaces';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
 
 import { TAB_DOCK } from './_layout';
 
@@ -109,6 +111,7 @@ export default function HomeScreen() {
 
   // El aire va en el CONTENIDO y no en un SafeAreaView: así el scroll pasa por debajo de la barra de
   // estado en vez de cortarse contra ella. Ver `use-screen-padding`.
+  const veil = useScrollVeil();
   const pad = useScreenPadding(TAB_DOCK);
 
   // El guard va DESPUES de los hooks: al cerrar sesion el user se vuelve null, y salir antes
@@ -117,7 +120,8 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
-      <ScrollView
+      <Animated.ScrollView
+        {...veil.scrollProps}
         contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
         scrollEnabled={!dragging}
         showsVerticalScrollIndicator={false}>
@@ -161,7 +165,9 @@ export default function HomeScreen() {
           selected={selected || today}
           onDragChange={setDragging}
         />
-      </ScrollView>
+      </Animated.ScrollView>
+
+      <StatusVeil scrollY={veil.scrollY} />
     </View>
   );
 }

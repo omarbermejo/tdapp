@@ -1,17 +1,17 @@
-import MaskedView from '@react-native-masked-view/masked-view';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet } from 'react-native';
+import MaskedView from "@react-native-masked-view/masked-view";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { StyleSheet } from "react-native";
 import Animated, {
   interpolate,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   type SharedValue,
-} from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useScheme } from '@/constants/theme';
+import { useScheme } from "@/constants/theme";
 
 /** A cuantos px de scroll el velo ya esta del todo. Corto: tiene que responder al primer gesto. */
 const VEIL_AT = 24;
@@ -26,35 +26,49 @@ const VEIL_AT = 24;
 const BLUR = 90;
 
 /**
- * Cuanto se estira el desvanecido por debajo de la franja del sistema.
+ * Cuanto sobra el velo por debajo del area segura.
  *
- * El largo es lo que decide si se lee como un degradado o como un borde suavizado: corto, el ojo
- * todavia localiza donde acaba; a partir de una linea de texto de distancia deja de haber un
- * "donde".
+ * La referencia es la ISLA DINAMICA: el velo muere poco despues de que ella acaba, no a media
+ * pantalla. Con cinco puntos quedaba pegado a la isla y el desvanecido salia tan corto que volvia a
+ * leerse como un borde; treinta le dan sitio a la curva sin que el velo empiece a teñir la cabecera.
+ *
+ * El primer intento fueron setenta y dos — mas del doble de alto que la propia franja del sistema —
+ * y por eso se sentia enorme: no protegia mejor el reloj, solo tapaba mas pantalla.
  */
-const FADE = 44;
+const TAIL = 30;
+
+/**
+ * Que parte del velo va opaca antes de empezar a desvanecerse.
+ *
+ * La mitad: el reloj y la bateria viven en la franja de arriba, asi que ahi el blur tiene que estar
+ * entero, y lo que queda por debajo es sitio suficiente para que la curva se apague sin que se note.
+ * Repartirlo en fraccion y no en puntos fijos hace que el velo encoja solo en un telefono sin isla,
+ * donde el area segura es la mitad.
+ */
+const SOLID = 0.5;
 
 /**
  * Cuantos puntos de control se generan para la curva del alfa.
  *
- * No son bandas: `LinearGradient` interpola entre ellos de forma continua, asi que ocho paradas
+ * No son bandas: `LinearGradient` interpola entre ellos de forma continua, asi que doce paradas
  * describen una curva y no una escalera. Con menos, los tramos rectos entre paradas empiezan a
  * notarse en la parte alta del degradado, que es donde el ojo tiene mas resolucion.
  */
-const STOPS = 8;
+const STOPS = 12;
 
 /**
- * `smoothstep`: la curva en S clasica, con pendiente CERO en los dos extremos.
+ * `smootherstep` (Perlin): 6t⁵ − 15t⁴ + 10t³.
  *
- * Un gradiente lineal de opaco a transparente no se ve lineal. La percepcion del alfa no lo es, asi
- * que una rampa recta deja dos quiebres: uno arriba, donde el velo pasa de solido a empezar a caer,
- * y otro abajo, donde deja de caer de golpe al llegar a cero. Ese segundo quiebre es la "cola" que
- * todavia se distinguia.
+ * La version anterior usaba `smoothstep` (3t² − 2t³), que ya llega a los extremos con pendiente
+ * cero. No basto: la pendiente para, pero la ACELERACION no, y ese cambio brusco de ritmo justo
+ * donde el velo se apaga es lo que todavia se percibia abajo — el ojo no ve el valor del alfa, ve
+ * como cambia.
  *
- * Con pendiente cero en ambos extremos el velo SALE de lo opaco y ENTRA en lo transparente sin que
- * haya un punto donde algo cambie de ritmo.
+ * `smootherstep` anula tambien la segunda derivada en los dos extremos, asi que el velo no solo
+ * llega a cero suavemente: llega SIN cambiar de ritmo al llegar. Es la misma curva que usan los
+ * degradados de ruido de Perlin por exactamente este motivo.
  */
-const smoothstep = (t: number) => t * t * (3 - 2 * t);
+const smootherstep = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
 
 /**
  * La franja del sistema, protegida.
@@ -87,24 +101,23 @@ export function StatusVeil({ scrollY }: { scrollY: SharedValue<number> }) {
   const insets = useSafeAreaInsets();
 
   const veil = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.get(), [0, VEIL_AT], [0, 1], 'clamp'),
+    opacity: interpolate(scrollY.get(), [0, VEIL_AT], [0, 1], "clamp"),
   }));
 
-  const height = insets.top + FADE;
-  // Donde acaba la franja del sistema, en fraccion de la altura total. Hasta aqui el alfa es 1: el
-  // reloj nunca cae dentro del degradado.
-  const solid = insets.top / height;
+  const height = insets.top + TAIL;
+  // Hasta aqui el alfa es 1: el reloj nunca cae dentro del degradado.
+  const solid = SOLID;
 
   /*
     La curva, resuelta en paradas de color. El COLOR da igual —`MaskedView` solo lee el alfa— pero se
     escribe en negro porque es lo que espera quien lea esto despues.
   */
-  const colors: string[] = ['#000'];
+  const colors: string[] = ["#000"];
   const locations: number[] = [0];
 
   for (let i = 0; i <= STOPS; i++) {
     const t = i / STOPS;
-    colors.push(`rgba(0,0,0,${(1 - smoothstep(t)).toFixed(3)})`);
+    colors.push(`rgba(0,0,0,${(1 - smootherstep(t)).toFixed(3)})`);
     locations.push(solid + (1 - solid) * t);
   }
 
@@ -118,10 +131,11 @@ export function StatusVeil({ scrollY }: { scrollY: SharedValue<number> }) {
             locations={locations as [number, number, ...number[]]}
             style={StyleSheet.absoluteFill}
           />
-        }>
+        }
+      >
         <BlurView
           intensity={BLUR}
-          tint={scheme === 'dark' ? 'dark' : 'light'}
+          tint={scheme === "dark" ? "dark" : "light"}
           style={StyleSheet.absoluteFill}
         />
       </MaskedView>
@@ -149,5 +163,5 @@ export function useScrollVeil() {
 }
 
 const styles = StyleSheet.create({
-  veil: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1 },
+  veil: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 1 },
 });

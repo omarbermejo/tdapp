@@ -73,12 +73,30 @@ function HeatCell({
   */
   const empty = cell.future ? t.surface : t.sunken;
 
+  /*
+    La rampa va `soft` -> `solid`, y el vacio se queda FUERA de ella.
+
+    Antes interpolaba `sunken` -> `solid` directo, y con un acento oscuro eso pintaba gris: en claro
+    `forest.solid` es `blackForest[500]`, un verde casi negro, y el camino en RGB desde un beige calido
+    hasta ahi pasa por el gris. Un dia con una tarea (nivel 0.5 con tope 2) caia exactamente en el
+    punto mas turbio, asi que el mapa de un espacio se veia gris aunque el color estuviera aplicado.
+
+    Con el vacio en su propia parada y la rampa entera dentro de la familia del acento —de su tinte
+    claro a su tono lleno— todos los pasos intermedios son del mismo color. Es el modelo de GitHub:
+    una casilla neutra para el cero y cuatro tonos del MISMO color para el resto.
+
+    El 0.001 es lo que separa las dos cosas: por debajo es "no hay nada", desde ahi arriba es color.
+  */
   const style = useAnimatedStyle(
     () => ({
       opacity: enter.get(),
-      backgroundColor: interpolateColor(fill.get(), [0, 1], [empty, tint.solid]),
+      backgroundColor: interpolateColor(
+        fill.get(),
+        [0, 0.001, 1],
+        [empty, tint.soft, tint.solid]
+      ),
     }),
-    [empty, tint.solid]
+    [empty, tint.soft, tint.solid]
   );
 
   return (

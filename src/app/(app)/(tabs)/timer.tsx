@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -43,6 +43,7 @@ import { clearFocusWidget } from '@/features/widgets/sync-focus';
 import { adoptBlock, hideBlock, showBlock } from '@/features/timer/outside';
 import { ROUNDS, clock, usePomodoro, type Phase } from '@/features/timer/pomodoro';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
 
 import { TAB_DOCK } from './_layout';
 
@@ -133,6 +134,7 @@ export default function TimerScreen() {
    * En modo enfoque el hueco de abajo es solo el borde del teléfono: la cápsula se aparta, así que
    * reservarle sitio dejaría el bloque descentrado hacia arriba justo cuando se quiere centrado.
    */
+  const veil = useScrollVeil();
   const pad = useScreenPadding(focus.hidden ? Space.xl : TAB_DOCK);
 
   /**
@@ -463,7 +465,8 @@ export default function TimerScreen() {
         // Sin rol ni etiqueta: para un lector de pantalla esto no es un botón, es el fondo. La
         // navegación por accesibilidad no depende de la barra visible.
         accessible={false}>
-        <ScrollView
+        <Animated.ScrollView
+          {...veil.scrollProps}
           contentContainerStyle={[
             styles.content,
             // En modo enfoque el contenido sobrante se va y lo que queda se centra en la pantalla.
@@ -577,8 +580,10 @@ export default function TimerScreen() {
               {note}
             </Text>
           )}
-        </ScrollView>
+        </Animated.ScrollView>
       </Pressable>
+
+      <StatusVeil scrollY={veil.scrollY} />
 
       {/* Encima de todo y fuera del scroll: el confeti tiene que caer sobre la pantalla entera. La
           `key` es lo que lo vuelve a montar en cada enfoque cerrado. */}

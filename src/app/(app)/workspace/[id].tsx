@@ -17,6 +17,7 @@ import { TaskRow } from '@/features/tasks/task-row';
 import { useWorkspaceTasks } from '@/features/tasks/use-tasks';
 import { useWorkspace } from '@/features/workspaces/use-workspace';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
 
 const ROW_LAYOUT = LinearTransition.springify().damping(22).stiffness(240);
 const ROW_EXIT = FadeOut.duration(Motion.exit);
@@ -60,6 +61,8 @@ export default function WorkspaceScreen() {
   const today = useLocalToday();
   const stats = useStats(today, { days: WORKSPACE_HEAT.days, workspaceId });
 
+  const veil = useScrollVeil();
+
   const pad = useScreenPadding(Space.xxl);
   // El acento del espacio manda en toda la pantalla: es lo que la ata a la card de la que vino.
   const accent = space.workspace?.accent;
@@ -83,6 +86,7 @@ export default function WorkspaceScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
       <Animated.ScrollView
+        {...veil.scrollProps}
         contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
         showsVerticalScrollIndicator={false}>
         {/* Flecha y no cruz: esto es un push, se vuelve atras. */}
@@ -159,8 +163,15 @@ export default function WorkspaceScreen() {
                       <Text style={[Type.label, styles.splitLabel, { color: t.text }]} numberOfLines={1}>
                         {focusLabel(focus || null)}
                       </Text>
-                      {/* Una barra proporcional al mayor: comparar es el punto, no el valor absoluto. */}
-                      <View style={[styles.track, { backgroundColor: t.sunken }]}>
+                      {/*
+                        Una barra proporcional al mayor: comparar es el punto, no el valor absoluto.
+
+                        El riel va en `soft` y no en `sunken`: con el riel neutro, un acento oscuro como
+                        `forest` dejaba la fila entera leyendose como verde-casi-negro sobre beige, o sea
+                        sin color. Con el riel en el tinte claro del acento, la barra y su fondo son la
+                        misma familia y el color del espacio se ve de verdad.
+                      */}
+                      <View style={[styles.track, { backgroundColor: tint.soft }]}>
                         <View
                           style={[
                             styles.bar,
@@ -213,6 +224,8 @@ export default function WorkspaceScreen() {
           </>
         )}
       </Animated.ScrollView>
+
+      <StatusVeil scrollY={veil.scrollY} />
     </View>
   );
 }
