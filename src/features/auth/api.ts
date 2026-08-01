@@ -35,6 +35,14 @@ export type User = {
   /** Hora del recordatorio diario, 0..23. Sin ella no hay nada que agendar. */
   reminderHour: number;
   accentColor: AccentName;
+  /**
+   * El memoji elegido, ej. 'memoji-07'. null = no eligio, y se pinta la inicial del nombre.
+   *
+   * `string` y no una union de nombres a proposito: el catalogo vive en los assets de ESTA version
+   * de la app, y el servidor puede devolver una cara que aqui todavia no exista (o que ya no). Se
+   * valida al pintar, con la misma tolerancia con la que `useAccent` cae al acento por defecto.
+   */
+  avatar?: string | null;
   createdAt: string;
   /**
    * ponytail: opcionales mientras haya APIs desplegadas sin estos campos. `stageOf` compara
@@ -58,6 +66,11 @@ export type ProfileInput = {
   reminderStyle: string;
   reminderHour: number;
   accentColor: AccentName;
+  /**
+   * OPCIONAL, y no por comodidad: el onboarding arma este objeto entero a mano y no pregunta por
+   * la cara. Si fuera obligatorio habria que inventarle un valor ahi para satisfacer al tipo.
+   */
+  avatar?: string | null;
 };
 
 /** Lo que el API considera una tarea. Solo los campos que hoy consume la app. */
@@ -90,6 +103,33 @@ export type Streak = {
   /** Lunes a domingo, con cuantas se cerraron cada dia. Un dia sin nada es 0, no un hueco. */
   week: { date: string; done: number }[];
 };
+
+/**
+ * El trabajo cerrado de una ventana, partido por dia y por area.
+ *
+ * `byDay` OMITE los dias sin nada cerrado: no es una serie completa, es una lista de dias con algo.
+ * Quien pinte una rejilla tiene que rellenar los ceros (ver `features/stats/grid.ts`).
+ *
+ * Los minutos son PLANEADOS, no cronometrados: casi nadie usa el temporizador, asi que un total de
+ * tiempo real saldria en cero. Y todo se agrupa por `dueDate` (el dia local de la tarea), no por
+ * cuando se cerro — por eso una tarea de ayer cerrada hoy cuenta para AYER.
+ */
+export type Stats = {
+  from: string;
+  to: string;
+  byDay: { date: string; done: number; minutes: number }[];
+  byArea: { focusArea: string | null; done: number; minutes: number }[];
+  totals: { done: number; minutes: number };
+};
+
+/**
+ * Cuantas tareas lleva la cuenta, de siempre.
+ *
+ * Es un numero distinto al de `Stats.totals.done`, y la diferencia importa: ese mira 28 dias y solo
+ * tareas con fecha, asi que encoge con el tiempo. Este solo sube, que es lo que puede vivir en un
+ * perfil. Mismas llaves que `Today.counts`.
+ */
+export type TaskCounts = { counts: { total: number; pending: number; done: number } };
 
 /** El dia completo en una sola llamada: es lo que alimentan el widget y la Live Activity. */
 export type Today = {
@@ -163,6 +203,16 @@ export const api = {
   /** La fecha va SIEMPRE desde aqui: quien sabe en que dia vive el usuario es su telefono. */
   streak: (token: string, date?: string) =>
     request<Streak>(`/me/streak${date ? `?date=${date}` : ''}`, { headers: bearer(token) }),
+
+  /**
+   * Sin `from`: el default del API son 28 dias contando hoy, que es exactamente la rejilla de 4x7
+   * del perfil. Mandarlo seria repetir aqui un numero que alla ya sale de la misma rejilla.
+   */
+  stats: (token: string, date?: string) =>
+    request<Stats>(`/me/stats${date ? `?date=${date}` : ''}`, { headers: bearer(token) }),
+
+  taskCounts: (token: string) =>
+    request<TaskCounts>('/me/tasks/summary', { headers: bearer(token) }),
 
   /** Devuelve token nuevo: el de antes decia que el correo no estaba verificado. */
   verify: (token: string, code: string) =>

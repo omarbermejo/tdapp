@@ -3,7 +3,9 @@ import * as Haptics from 'expo-haptics';
 import { Tabs, type BottomTabBarProps } from 'expo-router/js-tabs';
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  runOnJS,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -122,10 +124,26 @@ const DOCK_AWAY = BAR_H + Space.xl;
  * desde un handler, y una closure nueva cada vez obligaria a envolverla para las dependencias.
  */
 const slideTo = (x: SharedValue<number>, to: number, reduced: boolean) => {
+  // Worklet y no funcion normal: la llaman el efecto de reconciliacion (hilo de JS) y el final del
+  // arrastre (hilo de UI). Un worklet vale para las dos, asi que el muelle se define UNA vez.
+  'worklet';
   // .set() y no .value =: el compilador de React trata el shared value como inmutable y asignarle
   // rompe el lint (es el error que arrastra use-press-scale).
   x.set(reduced ? to * SLOT_STEP : withSpring(to * SLOT_STEP, SLIDE));
 };
+
+/**
+ * Lo que el dedo tiene que recorrer para que el arrastre se active y la pestaña pierda su toque.
+ *
+ * 8pt y no los 10 de fabrica: los huecos miden 60 y estan pegados, asi que el viaje entre dos
+ * centros es de 68 — con un umbral alto el resaltado no engancha al dedo hasta que ya casi ha
+ * llegado al vecino, y el gesto se lee como un salto y no como un arrastre. Por debajo de 8 empieza
+ * a comerse toques: el pulgar rueda un par de puntos al levantarse de un objetivo de 60.
+ *
+ * Solo se declara en X. Un deslizamiento vertical sobre la capsula no tiene que hacer nada, y
+ * dejarlo sin acotar convertiria cualquier roce en diagonal en un cambio de seccion.
+ */
+const GRAB = 8;
 
 /**
  * Distancia a la que dos piezas de vidrio empiezan a fundirse. Corta a proposito: el resaltado
@@ -221,6 +239,10 @@ const AnimatedGlass = Animated.createAnimatedComponent(GlassView);
  * El resaltado de la pestaña activa es su PROPIA pieza de vidrio, no un relleno plano: dentro
  * de un `GlassContainer` las dos piezas se atraen, y al cambiar de pestaña el resaltado se
  * desliza con muelle en vez de aparecer. Eso es lo que se lee como liquid glass.
+ *
+ * Y se puede ARRASTRAR: el dedo agarra el resaltado y las secciones van cambiando al pasar por
+ * cada hueco. Es el mismo control que el selector de modo de la camara de iOS — tocar sigue
+ * funcionando igual, pero recorrer la barra deja de costar cuatro toques. Ver `drag`.
  */
 function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
   const t = useTheme();
@@ -248,14 +270,104 @@ function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
   const slide = useAnimatedStyle(() => ({ transform: [{ translateX: x.get() }] }));
 
   /*
+    Mientras el dedo manda, la reconciliacion se calla.
+
+    Un shared value que se escribe SOLO desde el hilo de JS (`runOnJS(setDragging)`), no desde el
+    worklet. Asi la escritura y la lectura del efecto pasan en el mismo hilo y son sincronas: la
+    copia de JS de un shared value se actualiza al llamar `.set()`, mientras que lo escrito desde el
+    hilo de UI llega despues y el efecto lo leeria todavia en false.
+
+    Y no estado: esto no pinta nada, y un re-render de la barra entera en mitad de un arrastre es
+    justo el trabajo que el gesto no puede permitirse.
+  */
+  const dragging = useSharedValue(false);
+  const setDragging = (on: boolean) => {
+    dragging.set(on);
+  };
+
+  /*
     Reconciliacion, no la animacion principal: el toque ya movio el resaltado (ver abajo). Esto
     cubre lo que NO pasa por el toque — un deep link, el gesto de atras, un navigate desde otra
     pantalla. Cuando el toque se adelanto, el muelle ya apunta aqui y esto no se ve.
+
+    Y se salta durante el arrastre: cada hueco que cruza el dedo navega, y sin este seguro esa
+    navegacion devolveria el resaltado al centro del hueco a mitad del gesto. O sea que el resaltado
+    se despegaria del dedo justo cuando el dedo es quien lo lleva.
   */
   useEffect(() => {
-    if (index < 0) return;
+    if (index < 0 || dragging.get()) return;
     slideTo(x, index, reduced);
-  }, [index, x, reduced]);
+  }, [index, x, reduced, dragging]);
+
+  /** El hueco bajo el dedo. -1 cuando no hay arrastre, que es como `onFinalize` distingue un toque. */
+  const hover = useSharedValue(-1);
+  /** Tope del recorrido: del primer hueco al ultimo. Con una sola pestaña no hay a donde ir. */
+  const range = Math.max(visible.length - 1, 0) * SLOT_STEP;
+
+  /**
+   * Salta a la pestaña `to`. Corre en el hilo de JS, llamada desde el gesto.
+   *
+   * NO emite `tabPress`: un arrastre no es un toque. El evento es cancelable y existe para que una
+   * pantalla pueda interceptar el toque en su propia pestaña (volver arriba del scroll, por
+   * ejemplo); dispararlo tres veces mientras el dedo cruza la barra convertiria un gesto de
+   * navegacion en tres efectos secundarios que nadie pidio.
+   *
+   * Tampoco comprueba si ya estamos ahi: `hover` solo cambia al cruzar de hueco, asi que esto no se
+   * llama dos veces seguidas con el mismo destino, y navegar a la ruta activa es un no-op.
+   */
+  const jump = (to: number) => {
+    const tab = visible[to];
+    const route = tab && state.routes.find((r) => r.name === tab.name);
+    if (!route) return;
+    // El de seleccion y no un impacto: es el mismo tic que da el dial del cronometro al pasar de
+    // minuto. Un golpe de los de tocar, repetido tres veces en medio segundo, se siente a martillo.
+    Haptics.selectionAsync().catch(() => {});
+    navigation.navigate(route.name);
+  };
+
+  /**
+   * El arrastre. El resaltado sigue al dedo punto por punto y la seccion cambia al cruzar cada hueco.
+   *
+   * Va colgado de la FILA, que es la unica capa de la capsula que recibe toques (el vidrio de abajo
+   * los deja pasar a proposito, para estirarse). Como la fila es `box-none`, el gesto solo arranca
+   * si el dedo baja SOBRE una pestaña — no en los 8pt de aire entre dos. Es la unica forma de
+   * quedarse con el estirado del vidrio, y en la mano no se nota: nadie apunta al hueco.
+   */
+  const drag = Gesture.Pan()
+    .activeOffsetX([-GRAB, GRAB])
+    .onStart(() => {
+      runOnJS(setDragging)(true);
+      hover.set(index);
+    })
+    .onUpdate((e) => {
+      /*
+        `e.x` llega relativo a la fila, que TIENE el padding. El centro del hueco i esta en
+        GAP + i*SLOT_STEP + SLOT/2, y el resaltado nace en `left: GAP`: despejando, para que su
+        centro caiga bajo el dedo hay que desplazarlo esto. Acotado a los extremos, que es lo que
+        hace que pasarse de largo no arrastre el resaltado fuera de la capsula.
+      */
+      const to = Math.min(Math.max(e.x - GAP - SLOT / 2, 0), range);
+      x.set(to);
+
+      const next = Math.round(to / SLOT_STEP);
+      if (next === hover.get()) return;
+      hover.set(next);
+      runOnJS(jump)(next);
+    })
+    /*
+      `onFinalize` y no `onEnd`: tambien corre si el gesto se cancela (una llamada entrante, el
+      sistema robando el toque), y ahi el resaltado tiene que asentarse igual en vez de quedarse
+      clavado a medio camino entre dos huecos.
+    */
+    .onFinalize(() => {
+      runOnJS(setDragging)(false);
+      const to = hover.get();
+      // -1 es un toque que nunca llego a arrastrar: su `onPress` ya movio el resaltado y pisarlo
+      // aqui lo mandaria al hueco del arrastre ANTERIOR.
+      if (to < 0) return;
+      hover.set(-1);
+      slideTo(x, to, reduced);
+    });
 
   /**
    * Modo enfoque. Se anima `transform` y `opacity` y NUNCA se desmonta la capsula: un `GlassView`
@@ -330,38 +442,40 @@ function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
           style={[styles.highlight, slide, !GLASS && { backgroundColor: accent.soft }]}
         />
 
-        {/* box-none: los glifos capturan su toque y los huecos caen al vidrio, que asi se estira. */}
-        <View style={styles.row} pointerEvents="box-none">
-          {visible.map((tab, i) => {
-            const route = state.routes.find((r) => r.name === tab.name);
-            if (!route) return null;
+        <GestureDetector gesture={drag}>
+          {/* box-none: los glifos capturan su toque y los huecos caen al vidrio, que asi se estira. */}
+          <View style={styles.row} pointerEvents="box-none">
+            {visible.map((tab, i) => {
+              const route = state.routes.find((r) => r.name === tab.name);
+              if (!route) return null;
 
-            return (
-              <TabSlot
-                key={tab.name}
-                tab={tab}
-                focused={tab.name === current}
-                onPress={() => {
-                  const event = navigation.emit({
-                    type: 'tabPress',
-                    target: route.key,
-                    canPreventDefault: true,
-                  });
-                  if (tab.name === current || event.defaultPrevented) return;
-                  /*
-                    El resaltado arranca ANTES de navegar, y de ahi sale la mitad de la respuesta.
-                    El efecto de arriba corre despues de que el navegador confirme la ruta nueva, y
-                    entrar por primera vez a una pestaña monta su pantalla bloqueando el hilo de JS
-                    justo en medio: el muelle empezaba tarde y se veia el resaltado quieto bajo el
-                    dedo. Arrancado aqui ya vive en el hilo de UI y corre aunque JS este ocupado.
-                  */
-                  slideTo(x, i, reduced);
-                  navigation.navigate(route.name);
-                }}
-              />
-            );
-          })}
-        </View>
+              return (
+                <TabSlot
+                  key={tab.name}
+                  tab={tab}
+                  focused={tab.name === current}
+                  onPress={() => {
+                    const event = navigation.emit({
+                      type: 'tabPress',
+                      target: route.key,
+                      canPreventDefault: true,
+                    });
+                    if (tab.name === current || event.defaultPrevented) return;
+                    /*
+                      El resaltado arranca ANTES de navegar, y de ahi sale la mitad de la respuesta.
+                      El efecto de arriba corre despues de que el navegador confirme la ruta nueva, y
+                      entrar por primera vez a una pestaña monta su pantalla bloqueando el hilo de JS
+                      justo en medio: el muelle empezaba tarde y se veia el resaltado quieto bajo el
+                      dedo. Arrancado aqui ya vive en el hilo de UI y corre aunque JS este ocupado.
+                    */
+                    slideTo(x, i, reduced);
+                    navigation.navigate(route.name);
+                  }}
+                />
+              );
+            })}
+          </View>
+        </GestureDetector>
       </GlassContainer>
     </Animated.View>
   );
