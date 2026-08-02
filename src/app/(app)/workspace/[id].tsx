@@ -16,6 +16,7 @@ import { useLocalToday } from '@/features/tasks/day';
 import { TaskRow } from '@/features/tasks/task-row';
 import { useWorkspaceTasks } from '@/features/tasks/use-tasks';
 import { useWorkspace } from '@/features/workspaces/use-workspace';
+import { SpaceActions } from '@/features/workspaces/space-actions';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
 
@@ -220,6 +221,12 @@ export default function WorkspaceScreen() {
                 </Animated.View>
               ))}
             </View>
+            {/*
+              Lo que se puede HACER con el espacio, al final y solo si lo administras: invitar,
+              corregirlo y borrarlo. Va despues de los datos por la misma razon que "Salir" va al
+              final de Ajustes — primero lo que vienes a mirar, luego lo que puedes cambiar.
+            */}
+            {space.workspace && <SpaceActions workspace={space.workspace} />}
           </>
         )}
       </Animated.ScrollView>

@@ -92,8 +92,24 @@ export function useDock(): Dock {
   return use(DockContext) ?? FALLBACK;
 }
 
+/**
+ * El no-op de `onScroll` tiene que ser un WORKLET, y esto costo una pantalla entera.
+ *
+ * `useScrollVeil` lo llama desde dentro de `useAnimatedScrollHandler`, o sea desde el hilo de UI.
+ * Llamar ahi una funcion de JS normal LANZA, y lo que se rompe no es un detalle: se cae el handler
+ * completo y la pantalla deja de scrollear. Se vio en el detalle de un espacio — que es un push,
+ * fuera del grupo con pestañas, o sea justo donde este fallback aplica.
+ */
+const noScroll = (_y: number) => {
+  'worklet';
+};
+
 const FALLBACK: Dock = {
-  away: { value: 0, get: () => 0, set: () => {}, addListener: () => {}, removeListener: () => {}, modify: () => {} } as unknown as SharedValue<number>,
-  onScroll: () => {},
+  /**
+   * `away` solo lo LEE la capsula, y la capsula vive siempre dentro del proveedor: este valor falso
+   * nunca llega a un worklet. Por eso basta con que cumpla el tipo.
+   */
+  away: { value: 0, get: () => 0, set: () => {} } as unknown as SharedValue<number>,
+  onScroll: noScroll,
   reveal: () => {},
 };

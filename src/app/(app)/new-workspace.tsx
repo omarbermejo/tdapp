@@ -3,7 +3,6 @@ import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +20,7 @@ import { FormError } from '@/components/ui/form-error';
 import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { StepDots } from '@/components/ui/step-dots';
+import { IconChoice } from '@/features/workspaces/icon-choice';
 import {
   Motion,
   RESHAPE,
@@ -37,37 +37,10 @@ import { useAuth } from '@/features/auth/auth-context';
 import { WORKSPACE_TAGS } from '@/features/auth/options';
 import { workspacesApi } from '@/features/workspaces/api';
 import { InviteStep } from '@/features/workspaces/invite-step';
-import { usePressScale } from '@/hooks/use-press-scale';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 
-/**
- * Los iconos que se ofrecen, en el orden en que alguien busca un proyecto.
- *
- * Un subconjunto de los 18 horneados y no todos: `check` y `clock` son objetos de la app (una tarea
- * hecha, un temporizador), no cosas de las que alguien tenga un proyecto. Doce caben en DOS filas de
- * seis sin scroll, que es lo que hace que elegir sea un vistazo y no una lista. Las seis columnas no
- * se declaran: cada hueco mide `Touch.chip` y el `flexWrap` reparte lo que quepa, asi que en un
- * telefono estrecho pasan a tres filas de cinco solas.
- *
- * El catalogo REAL vive en el API (`GET /workspaces/catalogs`) y valida los 18; esto es la seleccion
- * que se pinta. Si algun dia hace falta ofrecerlos todos, se pide ahi y se pinta sin desplegar la app.
- */
-const ICONS: readonly Icon3DName[] = [
-  'work',
-  'academic',
-  'home',
-  'health',
-  'money',
-  'relationships',
-  'creativity',
-  'leaf',
-  'light',
-  'lightning',
-  'trophy',
-  'moon',
-];
 
 /** Los cuatro pasos. El titulo es la pregunta, como en el onboarding. */
 const STEPS = [
@@ -350,67 +323,6 @@ export default function NewWorkspaceScreen() {
   );
 }
 
-/**
- * La rejilla de iconos 3D.
- *
- * No usa `Choice` aunque se le parezca: `Choice` pinta un icono de LINEA de Lucide junto a una
- * etiqueta de texto, y aqui el icono ES la opcion — un render 3D de 32pt con la palabra "Trabajo" al
- * lado seria decir lo mismo dos veces, y con doce opciones eso son doce filas en vez de cuatro.
- */
-function IconChoice({
-  value,
-  onChange,
-  accent,
-}: {
-  value: Icon3DName;
-  onChange: (icon: Icon3DName) => void;
-  accent: AccentName;
-}) {
-  const t = useTheme();
-  const tint = useAccent(accent);
-
-  return (
-    <View style={styles.icons}>
-      <Micro>Icono</Micro>
-      <View style={styles.iconGrid}>
-        {ICONS.map((name) => {
-          const on = name === value;
-          return (
-            <View
-              key={name}
-              // El borde vive siempre y solo cambia de color: animar el grosor movia el icono un
-              // pixel en cada toque. Es la misma regla que `choice.tsx`.
-              style={[
-                styles.iconSlot,
-                { backgroundColor: on ? tint.soft : t.surface, borderColor: on ? tint.ink : t.line },
-              ]}>
-              <IconOption name={name} on={on} onPress={() => onChange(name)} />
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-/** Aparte para que cada opcion tenga sus propios shared values, como el `Card` de `choice.tsx`. */
-function IconOption({ name, on, onPress }: { name: Icon3DName; on: boolean; onPress: () => void }) {
-  const press = usePressScale({ to: 0.9 });
-  return (
-    <Animated.View style={press.style}>
-      <Pressable
-        accessibilityRole="radio"
-        accessibilityState={{ checked: on }}
-        accessibilityLabel={name}
-        onPress={onPress}
-        onPressIn={press.onPressIn}
-        onPressOut={press.onPressOut}
-        style={styles.iconTouch}>
-        <Icon3D name={name} size={Icon3DSize.md} />
-      </Pressable>
-    </Animated.View>
-  );
-}
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
@@ -457,14 +369,5 @@ const styles = StyleSheet.create({
   chip: { alignSelf: 'flex-start', borderRadius: Radius.pill, paddingHorizontal: Space.sm, paddingVertical: 2 },
   chipLabel: { letterSpacing: 0 },
   name: { minHeight: Touch.button, paddingTop: Space.sm },
-  icons: { gap: Space.sm },
-  iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  iconSlot: { borderRadius: Radius.md, borderWidth: 2 },
-  iconTouch: {
-    width: Touch.chip,
-    height: Touch.chip,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   actions: { paddingHorizontal: Space.xl, paddingTop: Space.md, borderTopWidth: 1 },
 });
