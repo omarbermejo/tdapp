@@ -1,24 +1,30 @@
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import Animated from "react-native-reanimated";
 
-import { BigButton } from '@/components/ui/big-button';
-import { Micro } from '@/components/ui/card';
-import { SchemeToggle } from '@/components/ui/scheme-toggle';
-import { ScreenHeader } from '@/components/ui/screen-header';
-import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
-import { Space, Type, useTheme } from '@/constants/theme';
-import { useAuth } from '@/features/auth/auth-context';
-import { DeleteAccount } from '@/features/profile/delete-account';
-import { ProfileFields } from '@/features/profile/profile-fields';
-import { OwnedSpaces } from '@/features/workspaces/owned-spaces';
-import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { BigButton } from "@/components/ui/big-button";
+import { Micro } from "@/components/ui/card";
+import { SchemeToggle } from "@/components/ui/scheme-toggle";
+import { ScreenHeader } from "@/components/ui/screen-header";
+import { StatusVeil, useScrollVeil } from "@/components/ui/status-veil";
+import { Space, Type, useTheme } from "@/constants/theme";
+import { useAuth } from "@/features/auth/auth-context";
+import { DeleteAccount } from "@/features/profile/delete-account";
+import { ProfileFields } from "@/features/profile/profile-fields";
+import { OwnedSpaces } from "@/features/workspaces/owned-spaces";
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
 /** Por que importa: una cuenta de Google o Apple no tiene contraseña con la que entrar. */
 const ENTRY: Record<string, string> = {
-  password: 'Con tu correo y contraseña',
-  google: 'Con tu cuenta de Google',
-  apple: 'Con tu cuenta de Apple',
-  oauth: 'Con un proveedor externo',
+  password: "Con tu correo y contraseña",
+  google: "Con tu cuenta de Google",
+  apple: "Con tu cuenta de Apple",
+  oauth: "Con un proveedor externo",
 };
 
 /**
@@ -49,7 +55,7 @@ export default function SettingsScreen() {
 
   // El guard va DESPUES de los hooks: al borrar la cuenta el user se vuelve null con esta pantalla
   // todavia montada, y salir antes dejaria a React con menos hooks que en el render anterior.
-  if (!user) return null;
+  if (!user) return <ScreenGuard />;
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
@@ -59,14 +65,19 @@ export default function SettingsScreen() {
         argumento en `edit-profile`.
       */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.screen}>
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.screen}
+      >
         <Animated.ScrollView
           {...veil.scrollProps}
-          contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
+          contentContainerStyle={[
+            styles.content,
+            { paddingTop: pad.top, paddingBottom: pad.bottom },
+          ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+        >
           <ScreenHeader back title="Ajustes" />
 
           {/*
@@ -103,9 +114,11 @@ export default function SettingsScreen() {
           */}
           <View style={styles.block}>
             <Micro>Tu cuenta</Micro>
-            <Text style={[Type.body, styles.email, { color: t.text }]}>{user.email}</Text>
+            <Text style={[Type.body, styles.email, { color: t.text }]}>
+              {user.email}
+            </Text>
             <Text style={[Type.hint, { color: t.textMuted }]}>
-              {ENTRY[user.authProvider ?? 'password']}
+              {ENTRY[user.authProvider ?? "password"]}
             </Text>
           </View>
 
@@ -119,7 +132,12 @@ export default function SettingsScreen() {
           <View style={styles.block}>
             <View style={[styles.rule, { backgroundColor: t.line }]} />
             <Micro>Salir</Micro>
-            <BigButton label="Cerrar sesión" variant="ghost" accent="copper" onPress={signOut} />
+            <BigButton
+              label="Cerrar sesión"
+              variant="ghost"
+              accent="copper"
+              onPress={signOut}
+            />
             <DeleteAccount user={user} />
           </View>
         </Animated.ScrollView>
@@ -135,9 +153,9 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: Space.xl, gap: Space.xl },
   /** Un bloque sin papel: el mismo aire interior que una `Card`, sin su fondo ni su sombra. */
   block: { gap: Space.sm },
-  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  row: { flexDirection: "row", alignItems: "center", gap: Space.md },
   label: { flex: 1, gap: 2 },
-  email: { fontWeight: '600' },
+  email: { fontWeight: "600" },
   /** Hairline por encima del rotulo: separa las salidas del resto sin gastar otra tarjeta. */
   rule: { height: StyleSheet.hairlineWidth, marginBottom: Space.md },
 });

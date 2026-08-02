@@ -1,26 +1,47 @@
-import { useLocalSearchParams } from 'expo-router';
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useLocalSearchParams } from "expo-router";
+import {
+    Suspense,
+    lazy,
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+} from "react";
+import {
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
-import { BackButton } from '@/components/ui/back-button';
-import { BigButton } from '@/components/ui/big-button';
-import { Micro } from '@/components/ui/card';
-import { CodeField } from '@/components/ui/code-field';
-import { FormError } from '@/components/ui/form-error';
-import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
-import { Motion, Radius, Space, Type, useAccent, useTheme } from '@/constants/theme';
-import { ApiError, type InvitePreview } from '@/features/auth/api';
-import { useAuth } from '@/features/auth/auth-context';
-import { invitesApi } from '@/features/workspaces/api';
-import { codeFromLink } from '@/features/workspaces/invite-link';
-import { CAN_SCAN } from '@/features/workspaces/can-scan';
+import { BackButton } from "@/components/ui/back-button";
+import { BigButton } from "@/components/ui/big-button";
+import { Micro } from "@/components/ui/card";
+import { CodeField } from "@/components/ui/code-field";
+import { FormError } from "@/components/ui/form-error";
+import { Icon3D, Icon3DSize, type Icon3DName } from "@/components/ui/icon3d";
+import {
+    Motion,
+    Radius,
+    Space,
+    Type,
+    useAccent,
+    useTheme,
+} from "@/constants/theme";
+import { ApiError, type InvitePreview } from "@/features/auth/api";
+import { useAuth } from "@/features/auth/auth-context";
+import { invitesApi } from "@/features/workspaces/api";
+import { CAN_SCAN } from "@/features/workspaces/can-scan";
+import { codeFromLink } from "@/features/workspaces/invite-link";
 
-import { useScreenPadding } from '@/hooks/use-screen-padding';
-import { goBackOrHome } from '@/features/nav/go-back';
+import { goBackOrHome } from "@/features/nav/go-back";
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
 /** Se carga al tocar "Escanear", no al montar la pantalla. Ver el comentario de abajo. */
-const QrScanner = lazy(() => import('@/features/workspaces/qr-scanner'));
+const QrScanner = lazy(() => import("@/features/workspaces/qr-scanner"));
 
 /** Lo que la palomita se queda antes de irse. El mismo numero que `new-task` y `new-workspace`. */
 const CONFIRM_MS = 700;
@@ -58,12 +79,12 @@ export default function JoinWorkspaceScreen() {
    * espacio en vez de en un campo vacio, que es justo la friccion que el enlace viene a quitar.
    */
   const link = useLocalSearchParams<{ code?: string }>();
-  const [code, setCode] = useState(() => codeFromLink(link.code ?? '') ?? '');
+  const [code, setCode] = useState(() => codeFromLink(link.code ?? "") ?? "");
   /** Ya se comprobo el codigo del enlace. Sin esto el efecto lo reintentaria en cada render. */
   const asked = useRef(false);
   /** El escaner esta abierto. */
   const [scanning, setScanning] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   /** Se pidio entrar y falta que aprueben. Cambia lo que dice la confirmacion. */
@@ -79,18 +100,23 @@ export default function JoinWorkspaceScreen() {
     return () => clearTimeout(timer);
   }, [done]);
 
-  const check = useCallback(async (typed: string) => {
-    if (!token) return;
-    setBusy(true);
-    setError('');
-    try {
-      setFound(await invitesApi.check(token, typed));
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'No pudimos comprobar ese código');
-    } finally {
-      setBusy(false);
-    }
-  }, [token]);
+  const check = useCallback(
+    async (typed: string) => {
+      if (!token) return;
+      setBusy(true);
+      setError("");
+      try {
+        setFound(await invitesApi.check(token, typed));
+      } catch (e) {
+        setError(
+          e instanceof ApiError ? e.message : "No pudimos comprobar ese código",
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [token],
+  );
 
   /** El del enlace se comprueba solo, una vez. Tocar la invitacion ya es la intencion. */
   useEffect(() => {
@@ -102,7 +128,7 @@ export default function JoinWorkspaceScreen() {
   const join = async () => {
     if (!token || !found) return;
     setBusy(true);
-    setError('');
+    setError("");
     try {
       const { workspace, joined } = await invitesApi.join(token, code);
       /**
@@ -116,21 +142,28 @@ export default function JoinWorkspaceScreen() {
       setPending(!joined);
       setDone(true);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'No pudimos entrar');
+      setError(e instanceof ApiError ? e.message : "No pudimos entrar");
       setBusy(false);
     }
   };
 
   // Despues de todos los hooks: al cerrar sesion el user se vuelve null.
-  if (!user) return null;
+  if (!user) return <ScreenGuard />;
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.screen}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.screen}
+      >
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingTop: Space.lg, paddingBottom: pad.bottom }]}
+          contentContainerStyle={[
+            styles.content,
+            { paddingTop: Space.lg, paddingBottom: pad.bottom },
+          ]}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+        >
           <BackButton close />
 
           <View style={styles.head}>
@@ -138,14 +171,22 @@ export default function JoinWorkspaceScreen() {
           </View>
 
           {found ? (
-            <Animated.View entering={FadeInDown.duration(Motion.enter)} style={styles.found}>
+            <Animated.View
+              entering={FadeInDown.duration(Motion.enter)}
+              style={styles.found}
+            >
               {/* La misma pieza que la vista previa de crear: unirse y crear se reconocen como
                   la misma familia. */}
               <View style={[styles.chip, { backgroundColor: spaceTint.soft }]}>
-                <Icon3D name={found.workspace.icon as Icon3DName} size={Icon3DSize.hero} />
+                <Icon3D
+                  name={found.workspace.icon as Icon3DName}
+                  size={Icon3DSize.hero}
+                />
               </View>
 
-              <Text style={[Type.title, styles.center, { color: t.text }]}>{found.workspace.name}</Text>
+              <Text style={[Type.title, styles.center, { color: t.text }]}>
+                {found.workspace.name}
+              </Text>
               <Text style={[Type.body, styles.center, { color: t.textMuted }]}>
                 {line(found)}
               </Text>
@@ -165,7 +206,9 @@ export default function JoinWorkspaceScreen() {
                 encuentre el espacio en su lista.
               */}
               {pending && (
-                <Text style={[Type.hint, styles.pending, { color: t.textMuted }]}>
+                <Text
+                  style={[Type.hint, styles.pending, { color: t.textMuted }]}
+                >
                   Le avisé a quien lo administra. Entras en cuanto diga que sí.
                 </Text>
               )}
@@ -174,13 +217,15 @@ export default function JoinWorkspaceScreen() {
                 variant="ghost"
                 onPress={() => {
                   setFound(null);
-                  setError('');
+                  setError("");
                 }}
               />
             </Animated.View>
           ) : (
             <>
-              <Text style={[Type.title, { color: t.text }]}>¿Cuál es el código?</Text>
+              <Text style={[Type.title, { color: t.text }]}>
+                ¿Cuál es el código?
+              </Text>
               <Text style={[Type.body, { color: t.textMuted }]}>
                 Son seis caracteres. Te lo pasa quien te invitó.
               </Text>
@@ -239,14 +284,14 @@ export default function JoinWorkspaceScreen() {
       */}
       {scanning && (
         <Suspense fallback={null}>
-        <QrScanner
-          onClose={() => setScanning(false)}
-          onFound={(scanned) => {
-            setScanning(false);
-            setCode(scanned);
-            void check(scanned);
-          }}
-        />
+          <QrScanner
+            onClose={() => setScanning(false)}
+            onFound={(scanned) => {
+              setScanning(false);
+              setCode(scanned);
+              void check(scanned);
+            }}
+          />
         </Suspense>
       )}
     </View>
@@ -258,24 +303,29 @@ export default function JoinWorkspaceScreen() {
  * quien pregunta todavia no es miembro.
  */
 const line = (found: InvitePreview) => {
-  const quien = found.invitedBy ? `${found.invitedBy.name} te invitó.` : 'Te invitaron.';
-  const cuantos = found.members === 1 ? 'Ahora mismo hay una persona.' : `Ahora mismo hay ${found.members}.`;
+  const quien = found.invitedBy
+    ? `${found.invitedBy.name} te invitó.`
+    : "Te invitaron.";
+  const cuantos =
+    found.members === 1
+      ? "Ahora mismo hay una persona."
+      : `Ahora mismo hay ${found.members}.`;
   return `${quien} ${cuantos}`;
 };
 
 const styles = StyleSheet.create({
-  pending: { textAlign: 'center' },
+  pending: { textAlign: "center" },
   screen: { flex: 1 },
   content: { paddingHorizontal: Space.xl, gap: Space.xl },
   head: { gap: Space.xs },
   found: { gap: Space.md },
   chip: {
-    alignSelf: 'center',
+    alignSelf: "center",
     width: 120,
     height: 120,
     borderRadius: Radius.xxl,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  center: { textAlign: 'center' },
+  center: { textAlign: "center" },
 });

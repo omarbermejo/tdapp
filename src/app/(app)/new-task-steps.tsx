@@ -1,40 +1,49 @@
-import { useMemo, useState } from 'react';
-import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
+import { useMemo, useState } from "react";
+import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, { FadeInDown, FadeOutUp } from "react-native-reanimated";
 
-import { BackButton } from '@/components/ui/back-button';
-import { BigButton } from '@/components/ui/big-button';
-import { BigField } from '@/components/ui/big-field';
-import { Micro } from '@/components/ui/card';
-import { Confetti } from '@/components/ui/confetti';
-import { FormError } from '@/components/ui/form-error';
-import { Icon3D, Icon3DSize } from '@/components/ui/icon3d';
-import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
-import { StepDots } from '@/components/ui/step-dots';
-import { Motion, RESHAPE, Radius, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
-import { ApiError } from '@/features/auth/api';
-import { useAuth } from '@/features/auth/auth-context';
-import { FOCUS_AREAS } from '@/features/auth/options';
-import { isoAt, localDate, tasksApi } from '@/features/tasks/api';
+import { BackButton } from "@/components/ui/back-button";
+import { BigButton } from "@/components/ui/big-button";
+import { BigField } from "@/components/ui/big-field";
+import { Micro } from "@/components/ui/card";
+import { Confetti } from "@/components/ui/confetti";
+import { FormError } from "@/components/ui/form-error";
+import { Icon3D, Icon3DSize } from "@/components/ui/icon3d";
+import { StatusVeil, useScrollVeil } from "@/components/ui/status-veil";
+import { StepDots } from "@/components/ui/step-dots";
 import {
-  TASK_ICONS,
-  TOTAL_STEPS,
-  areasFor,
-  canAdvance,
-  iconForArea,
-  type Draft,
-} from '@/features/tasks/task-wizard';
-import { useActiveSpaceId } from '@/features/workspaces/active-space';
-import { useWorkspaces } from '@/features/workspaces/use-workspaces';
-import { usePressScale } from '@/hooks/use-press-scale';
-import { useScreenPadding } from '@/hooks/use-screen-padding';
-import { goBackOrHome } from '@/features/nav/go-back';
+    Motion,
+    RESHAPE,
+    Radius,
+    Space,
+    Touch,
+    Type,
+    useAccent,
+    useTheme,
+} from "@/constants/theme";
+import { ApiError } from "@/features/auth/api";
+import { useAuth } from "@/features/auth/auth-context";
+import { FOCUS_AREAS } from "@/features/auth/options";
+import { goBackOrHome } from "@/features/nav/go-back";
+import { isoAt, localDate, tasksApi } from "@/features/tasks/api";
+import {
+    TASK_ICONS,
+    TOTAL_STEPS,
+    areasFor,
+    canAdvance,
+    iconForArea,
+    type Draft,
+} from "@/features/tasks/task-wizard";
+import { useActiveSpaceId } from "@/features/workspaces/active-space";
+import { useWorkspaces } from "@/features/workspaces/use-workspaces";
+import { usePressScale } from "@/hooks/use-press-scale";
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
 /** Lo que el confeti se queda antes de volver al inicio. Ver el mismo numero en `new-task`. */
 const CONFIRM_MS = 1100;
 
 /** Las horas que se ofrecen. Las mismas que el formulario corto, para no tener dos catalogos. */
-const HOURS = ['07', '09', '12', '15', '18', '20', '22', '23'];
+const HOURS = ["07", "09", "12", "15", "18", "20", "22", "23"];
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -57,15 +66,21 @@ const initialWhen = () => {
 };
 
 const dayLabel = (date: string) => {
-  const [y, m, d] = date.split('-').map(Number);
+  const [y, m, d] = date.split("-").map(Number);
   const at = new Date(y, m - 1, d);
   const today = new Date();
   const same = at.toDateString() === today.toDateString();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  if (same) return 'Hoy';
-  if (at.toDateString() === tomorrow.toDateString()) return 'Mañana';
-  return cap(at.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' }));
+  if (same) return "Hoy";
+  if (at.toDateString() === tomorrow.toDateString()) return "Mañana";
+  return cap(
+    at.toLocaleDateString("es-MX", {
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+    }),
+  );
 };
 
 /**
@@ -91,22 +106,22 @@ export default function NewTaskStepsScreen() {
   const spaceId = useActiveSpaceId();
   const [draft, setDraft] = useState<Draft>(() => ({
     icon: null,
-    title: '',
+    title: "",
     // El espacio activo, no null: con un espacio puesto, `useTasks` filtra por `workspaceId` y una
     // tarea suelta caeria fuera del filtro y no apareceria nunca. El paso 2 lo deja cambiar.
     workspaceId: spaceId ?? null,
-    focusArea: '',
+    focusArea: "",
     date: when.date,
     hour: when.hour,
   }));
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const tint = useAccent(user?.accentColor);
   const space = useMemo(
     () => workspaces?.find((w) => w.id === draft.workspaceId) ?? null,
-    [workspaces, draft.workspaceId]
+    [workspaces, draft.workspaceId],
   );
 
   /**
@@ -115,8 +130,13 @@ export default function NewTaskStepsScreen() {
    * cuando se llega al paso 2 los espacios ya estan, y el paso 3 solo lee lo que el 2 dejo elegido.
    */
   const areas = useMemo(
-    () => areasFor(space, user?.focusAreas ?? [], FOCUS_AREAS.map((a) => a.value)),
-    [space, user?.focusAreas]
+    () =>
+      areasFor(
+        space,
+        user?.focusAreas ?? [],
+        FOCUS_AREAS.map((a) => a.value),
+      ),
+    [space, user?.focusAreas],
   );
 
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
@@ -127,7 +147,7 @@ export default function NewTaskStepsScreen() {
   const create = async () => {
     if (!token || !draft.date) return;
     setSaving(true);
-    setError('');
+    setError("");
     try {
       await tasksApi.create(token, {
         title: draft.title.trim(),
@@ -143,14 +163,18 @@ export default function NewTaskStepsScreen() {
       // celebrar convierte la celebracion en un tramite.
       setTimeout(goBackOrHome, CONFIRM_MS);
     } catch (e) {
-      setError(e instanceof ApiError ? (Object.values(e.fields)[0] ?? e.message) : 'No pudimos crearla');
+      setError(
+        e instanceof ApiError
+          ? (Object.values(e.fields)[0] ?? e.message)
+          : "No pudimos crearla",
+      );
     } finally {
       setSaving(false);
     }
   };
 
   // El guard va DESPUES de todos los hooks: al cerrar sesion el user se vuelve null.
-  if (!user) return null;
+  if (!user) return <ScreenGuard />;
 
   const last = step === TOTAL_STEPS - 1;
 
@@ -158,13 +182,21 @@ export default function NewTaskStepsScreen() {
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
       <Animated.ScrollView
         {...veil.scrollProps}
-        contentContainerStyle={[styles.content, { paddingTop: Space.lg, paddingBottom: pad.bottom }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: Space.lg, paddingBottom: pad.bottom },
+        ]}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.head}>
           <BackButton onPress={back} />
           <View style={styles.dots}>
-            <StepDots total={TOTAL_STEPS} current={step} accent={user.accentColor} />
+            <StepDots
+              total={TOTAL_STEPS}
+              current={step}
+              accent={user.accentColor}
+            />
           </View>
         </View>
 
@@ -194,7 +226,9 @@ export default function NewTaskStepsScreen() {
                     name={name}
                     on={draft.icon === name}
                     tint={tint}
-                    onPress={() => set({ icon: draft.icon === name ? null : name })}
+                    onPress={() =>
+                      set({ icon: draft.icon === name ? null : name })
+                    }
                   />
                 ))}
               </View>
@@ -208,7 +242,7 @@ export default function NewTaskStepsScreen() {
                 detail="Solo tuyo"
                 on={draft.workspaceId === null}
                 tint={tint}
-                onPress={() => set({ workspaceId: null, focusArea: '' })}
+                onPress={() => set({ workspaceId: null, focusArea: "" })}
               />
               {(workspaces ?? []).map((w) => (
                 <Option
@@ -219,7 +253,7 @@ export default function NewTaskStepsScreen() {
                   tint={tint}
                   // Al cambiar de espacio se limpia la clasificacion: la del espacio anterior
                   // no tiene por que existir en el nuevo, y arrastrarla crearia una contradiccion.
-                  onPress={() => set({ workspaceId: w.id, focusArea: '' })}
+                  onPress={() => set({ workspaceId: w.id, focusArea: "" })}
                 />
               ))}
             </Step>
@@ -228,12 +262,17 @@ export default function NewTaskStepsScreen() {
           {step === 2 && (
             <Step
               ask="¿De qué es?"
-              hint={space ? `Lo hereda de ${space.name}.` : 'Para darle color en la lista.'}>
+              hint={
+                space
+                  ? `Lo hereda de ${space.name}.`
+                  : "Para darle color en la lista."
+              }
+            >
               <Option
                 label="Sin clasificar"
                 on={!draft.focusArea}
                 tint={tint}
-                onPress={() => set({ focusArea: '' })}
+                onPress={() => set({ focusArea: "" })}
               />
               {areas.map((value) => {
                 const option = FOCUS_AREAS.find((a) => a.value === value);
@@ -245,7 +284,12 @@ export default function NewTaskStepsScreen() {
                     on={draft.focusArea === value}
                     tint={tint}
                     // Elegir clasificacion sugiere su cara, pero solo si no elegiste una a mano.
-                    onPress={() => set({ focusArea: value, icon: draft.icon ?? iconForArea(value) })}
+                    onPress={() =>
+                      set({
+                        focusArea: value,
+                        icon: draft.icon ?? iconForArea(value),
+                      })
+                    }
                   />
                 );
               })}
@@ -276,7 +320,7 @@ export default function NewTaskStepsScreen() {
                 {HOURS.map((h) => (
                   <Chip
                     key={h}
-                    label={`${Number(h) % 12 || 12} ${Number(h) < 12 ? 'am' : 'pm'}`}
+                    label={`${Number(h) % 12 || 12} ${Number(h) < 12 ? "am" : "pm"}`}
                     on={draft.hour === h}
                     tint={tint}
                     onPress={() => set({ hour: h })}
@@ -286,14 +330,19 @@ export default function NewTaskStepsScreen() {
 
               {/* El resumen: lo ultimo que se ve antes de crear, con todo lo decidido junto. */}
               <View style={[styles.summary, { backgroundColor: t.sunken }]}>
-                {draft.icon && <Icon3D name={draft.icon} size={Icon3DSize.md} />}
+                {draft.icon && (
+                  <Icon3D name={draft.icon} size={Icon3DSize.md} />
+                )}
                 <View style={styles.flex}>
-                  <Text style={[Type.body, { color: t.text }]} numberOfLines={2}>
-                    {draft.title.trim() || 'Sin nombre'}
+                  <Text
+                    style={[Type.body, { color: t.text }]}
+                    numberOfLines={2}
+                  >
+                    {draft.title.trim() || "Sin nombre"}
                   </Text>
                   <Text style={[Type.hint, { color: t.textMuted }]}>
-                    {space?.name ?? 'Mi espacio'}
-                    {draft.date ? ` · ${dayLabel(draft.date)}` : ''}
+                    {space?.name ?? "Mi espacio"}
+                    {draft.date ? ` · ${dayLabel(draft.date)}` : ""}
                   </Text>
                 </View>
               </View>
@@ -304,7 +353,7 @@ export default function NewTaskStepsScreen() {
         <FormError message={error} />
 
         <BigButton
-          label={last ? 'Crear' : 'Seguir'}
+          label={last ? "Crear" : "Seguir"}
           accent={user.accentColor}
           loading={saving}
           success={done}
@@ -322,15 +371,26 @@ export default function NewTaskStepsScreen() {
 }
 
 /** Un paso: la pregunta grande, su pista, y lo que haya que elegir. */
-function Step({ ask, hint, children }: { ask: string; hint?: string; children: React.ReactNode }) {
+function Step({
+  ask,
+  hint,
+  children,
+}: {
+  ask: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   const t = useTheme();
   return (
     <Animated.View
       entering={FadeInDown.duration(Motion.enter)}
       exiting={FadeOutUp.duration(Motion.exit)}
-      style={styles.step}>
+      style={styles.step}
+    >
       <Text style={[Type.title, { color: t.text }]}>{ask}</Text>
-      {!!hint && <Text style={[Type.body, { color: t.textMuted }]}>{hint}</Text>}
+      {!!hint && (
+        <Text style={[Type.body, { color: t.textMuted }]}>{hint}</Text>
+      )}
       {children}
     </Animated.View>
   );
@@ -365,13 +425,22 @@ function Option({
         onPressOut={press.onPressOut}
         style={[
           styles.option,
-          { backgroundColor: on ? tint.soft : t.surface, borderColor: on ? tint.ink : t.line },
-        ]}>
+          {
+            backgroundColor: on ? tint.soft : t.surface,
+            borderColor: on ? tint.ink : t.line,
+          },
+        ]}
+      >
         {!!icon && <Icon3D name={icon as never} size={Icon3DSize.sm} />}
-        <Text style={[Type.body, styles.flex, { color: t.text }]} numberOfLines={1}>
+        <Text
+          style={[Type.body, styles.flex, { color: t.text }]}
+          numberOfLines={1}
+        >
           {label}
         </Text>
-        {!!detail && <Text style={[Type.hint, { color: t.textMuted }]}>{detail}</Text>}
+        {!!detail && (
+          <Text style={[Type.hint, { color: t.textMuted }]}>{detail}</Text>
+        )}
       </Pressable>
     </Animated.View>
   );
@@ -397,8 +466,12 @@ function Chip({
       onPress={onPress}
       style={[
         styles.chip,
-        { backgroundColor: on ? tint.soft : t.surface, borderColor: on ? tint.ink : t.line },
-      ]}>
+        {
+          backgroundColor: on ? tint.soft : t.surface,
+          borderColor: on ? tint.ink : t.line,
+        },
+      ]}
+    >
       <Text style={[Type.label, { color: t.text }]}>{label}</Text>
     </Pressable>
   );
@@ -430,8 +503,12 @@ function IconCell({
         onPressOut={press.onPressOut}
         style={[
           styles.iconCell,
-          { backgroundColor: on ? tint.soft : t.sunken, borderColor: on ? tint.ink : 'transparent' },
-        ]}>
+          {
+            backgroundColor: on ? tint.soft : t.sunken,
+            borderColor: on ? tint.ink : "transparent",
+          },
+        ]}
+      >
         <Icon3D name={name as never} size={Icon3DSize.sm} />
       </Pressable>
     </Animated.View>
@@ -443,24 +520,24 @@ const CELL = Touch.chip;
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { paddingHorizontal: Space.xl, gap: Space.xl },
-  head: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
+  head: { flexDirection: "row", alignItems: "center", gap: Space.lg },
   dots: { flex: 1 },
   stage: { gap: Space.lg },
   step: { gap: Space.md },
   flex: { flex: 1 },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  icons: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
+  row: { flexDirection: "row", flexWrap: "wrap", gap: Space.sm },
+  icons: { flexDirection: "row", flexWrap: "wrap", gap: Space.sm },
   iconCell: {
     width: CELL,
     height: CELL,
     borderRadius: Radius.md,
     borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   option: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Space.md,
     minHeight: Touch.button,
     paddingHorizontal: Space.lg,
@@ -469,14 +546,14 @@ const styles = StyleSheet.create({
   },
   chip: {
     minHeight: Touch.chip,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: Space.lg,
     borderRadius: Radius.pill,
     borderWidth: 2,
   },
   summary: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Space.md,
     padding: Space.lg,
     borderRadius: Radius.md,

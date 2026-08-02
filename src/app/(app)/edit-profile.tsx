@@ -1,16 +1,23 @@
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import {
+    KeyboardAvoidingView,
+    Platform,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import Animated from "react-native-reanimated";
 
-import { AccentPicker } from '@/components/ui/accent-picker';
-import { Card, Micro } from '@/components/ui/card';
-import { ScreenHeader } from '@/components/ui/screen-header';
-import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
-import { Space, Type, useTheme, type AccentName } from '@/constants/theme';
-import { useAuth } from '@/features/auth/auth-context';
-import { AvatarPicker } from '@/features/profile/avatar-picker';
-import { useAvatars } from '@/features/profile/use-avatars';
-import { useLocalToday } from '@/features/tasks/day';
-import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { AccentPicker } from "@/components/ui/accent-picker";
+import { Card, Micro } from "@/components/ui/card";
+import { ScreenGuard } from "@/components/ui/screen-guard";
+import { ScreenHeader } from "@/components/ui/screen-header";
+import { StatusVeil, useScrollVeil } from "@/components/ui/status-veil";
+import { Space, Type, useTheme, type AccentName } from "@/constants/theme";
+import { useAuth } from "@/features/auth/auth-context";
+import { AvatarPicker } from "@/features/profile/avatar-picker";
+import { useAvatars } from "@/features/profile/use-avatars";
+import { useLocalToday } from "@/features/tasks/day";
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
 /**
  * Cómo te ves: la cara y el color. Nada más.
@@ -42,7 +49,7 @@ export default function EditProfileScreen() {
   const pad = useScreenPadding(Space.breath);
 
   // El guard va DESPUES de los hooks: ver el mismo comentario en el perfil.
-  if (!user) return null;
+  if (!user) return <ScreenGuard />;
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
@@ -53,18 +60,23 @@ export default function EditProfileScreen() {
         porque `styles.veil` es absolute contra esta raiz y el KAV encogiendose por debajo no lo mueve.
       */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.screen}>
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.screen}
+      >
         <Animated.ScrollView
           {...veil.scrollProps}
-          contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
+          contentContainerStyle={[
+            styles.content,
+            { paddingTop: pad.top, paddingBottom: pad.bottom },
+          ]}
           /*
             El primer toque tiene que ELEGIR el color, no solo cerrar el teclado: sin esto, pasar de
             un hex tecleado a una muestra del catalogo cuesta dos toques.
           */
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+        >
           <ScreenHeader back title="Cómo te ves" />
 
           <Card>
@@ -79,7 +91,9 @@ export default function EditProfileScreen() {
             </Text>
             <AccentPicker
               value={user.accentColor}
-              onChange={(value: AccentName) => void updateProfile({ accentColor: value })}
+              onChange={(value: AccentName) =>
+                void updateProfile({ accentColor: value })
+              }
             />
           </Card>
         </Animated.ScrollView>

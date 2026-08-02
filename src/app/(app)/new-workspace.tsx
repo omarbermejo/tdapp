@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -7,19 +7,18 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
-import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
+} from "react-native";
+import Animated, { FadeInDown, FadeOutDown } from "react-native-reanimated";
 
-import { BackButton } from '@/components/ui/back-button';
-import { BigButton } from '@/components/ui/big-button';
-import { Micro } from '@/components/ui/card';
-import { AccentPicker } from '@/components/ui/accent-picker';
-import { Choice } from '@/components/ui/choice';
-import { FormError } from '@/components/ui/form-error';
-import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
-import { ProgressRing } from '@/components/ui/progress-ring';
-import { StepDots } from '@/components/ui/step-dots';
-import { IconChoice } from '@/features/workspaces/icon-choice';
+import { AccentPicker } from "@/components/ui/accent-picker";
+import { BackButton } from "@/components/ui/back-button";
+import { BigButton } from "@/components/ui/big-button";
+import { Micro } from "@/components/ui/card";
+import { Choice } from "@/components/ui/choice";
+import { FormError } from "@/components/ui/form-error";
+import { Icon3D, Icon3DSize, type Icon3DName } from "@/components/ui/icon3d";
+import { ProgressRing } from "@/components/ui/progress-ring";
+import { StepDots } from "@/components/ui/step-dots";
 import {
   Motion,
   RESHAPE,
@@ -30,24 +29,30 @@ import {
   useAccent,
   useTheme,
   type AccentName,
-} from '@/constants/theme';
-import { ApiError, type Workspace } from '@/features/auth/api';
-import { useAuth } from '@/features/auth/auth-context';
-import { WORKSPACE_TAGS } from '@/features/auth/options';
-import { workspacesApi } from '@/features/workspaces/api';
-import { InviteStep } from '@/features/workspaces/invite-step';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from "@/constants/theme";
+import { ApiError, type Workspace } from "@/features/auth/api";
+import { useAuth } from "@/features/auth/auth-context";
+import { WORKSPACE_TAGS } from "@/features/auth/options";
+import { workspacesApi } from "@/features/workspaces/api";
+import { IconChoice } from "@/features/workspaces/icon-choice";
+import { InviteStep } from "@/features/workspaces/invite-step";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useScreenPadding } from '@/hooks/use-screen-padding';
-import { goBackOrHome } from '@/features/nav/go-back';
-
+import { goBackOrHome } from "@/features/nav/go-back";
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
 /** Los cuatro pasos. El titulo es la pregunta, como en el onboarding. */
 const STEPS = [
-  { ask: '¿De qué es este espacio?', hint: 'Un nombre y una cara para reconocerlo.' },
-  { ask: 'Elige su color', hint: 'Es como lo vas a distinguir de un vistazo.' },
-  { ask: '¿Cómo lo clasificas?', hint: 'De aquí salen el icono y el color de sus tareas.' },
-  { ask: '¿Con quién?', hint: '' },
+  {
+    ask: "¿De qué es este espacio?",
+    hint: "Un nombre y una cara para reconocerlo.",
+  },
+  { ask: "Elige su color", hint: "Es como lo vas a distinguir de un vistazo." },
+  {
+    ask: "¿Cómo lo clasificas?",
+    hint: "De aquí salen el icono y el color de sus tareas.",
+  },
+  { ask: "¿Con quién?", hint: "" },
 ] as const;
 
 /**
@@ -83,11 +88,11 @@ export default function NewWorkspaceScreen() {
   const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState(0);
-  const [name, setName] = useState('');
-  const [icon, setIcon] = useState<Icon3DName>('work');
+  const [name, setName] = useState("");
+  const [icon, setIcon] = useState<Icon3DName>("work");
   // Arranca en el acento de la persona: es el color que ya eligio para la app.
-  const [color, setColor] = useState<AccentName>(user?.accentColor ?? 'olive');
-  const [tag, setTag] = useState<string>('');
+  const [color, setColor] = useState<AccentName>(user?.accentColor ?? "olive");
+  const [tag, setTag] = useState<string>("");
   /** Lo que devuelve el API al terminar el paso 3. Con esto el paso 4 ya puede invitar. */
   const [created, setCreated] = useState<Workspace | null>(null);
 
@@ -100,10 +105,10 @@ export default function NewWorkspaceScreen() {
   const picked = useAccent(color);
 
   const [fields, setFields] = useState<Record<string, string>>({});
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   /** Lo que falta para poder avanzar. Es del paso actual, no del guardado. */
-  const [nudge, setNudge] = useState('');
+  const [nudge, setNudge] = useState("");
 
   /**
    * Lo que hace falta para seguir. El boton NUNCA se apaga: si falta algo, el toque lo dice.
@@ -114,8 +119,8 @@ export default function NewWorkspaceScreen() {
   const ready = step === 0 ? name.trim().length > 0 : true;
 
   const advance = () => {
-    if (!ready) return setNudge('Ponle un nombre para seguir.');
-    setNudge('');
+    if (!ready) return setNudge("Ponle un nombre para seguir.");
+    setNudge("");
     if (step < 2) return setStep(step + 1);
     void create();
   };
@@ -131,7 +136,7 @@ export default function NewWorkspaceScreen() {
     const clean = name.trim();
     if (!token) return;
     setSaving(true);
-    setError('');
+    setError("");
     setFields({});
     try {
       const { workspace } = await workspacesApi.create(token, {
@@ -155,13 +160,15 @@ export default function NewWorkspaceScreen() {
     } catch (e) {
       if (e instanceof ApiError) {
         setFields(e.fields);
-        setError(e.fields.name ? '' : (Object.values(e.fields)[0] ?? e.message));
+        setError(
+          e.fields.name ? "" : (Object.values(e.fields)[0] ?? e.message),
+        );
         // Vuelve al paso que el API rechazo, como hace el onboarding.
         if (e.fields.name) setStep(0);
         if (e.fields.accent) setStep(1);
         if (e.fields.tag) setStep(2);
       } else {
-        setError('No pudimos crearlo');
+        setError("No pudimos crearlo");
       }
     } finally {
       setSaving(false);
@@ -170,17 +177,24 @@ export default function NewWorkspaceScreen() {
 
   // Despues de todos los hooks: al cerrar sesion el user se vuelve null y salir antes dejaria a
   // React con menos hooks que en el render anterior.
-  if (!user) return null;
+  if (!user) return <ScreenGuard />;
 
   const current = STEPS[step];
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.screen}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.screen}
+      >
         <View style={[styles.header, { paddingTop: pad.top }]}>
           {/* Flecha y no cruz: esto es un push. En el ultimo paso desaparece — el espacio YA existe y
               retroceder a elegir color prometeria deshacerlo; ahi la salida es el boton de "Listo". */}
-          {step < 3 && <BackButton onPress={() => (step === 0 ? goBackOrHome() : setStep(step - 1))} />}
+          {step < 3 && (
+            <BackButton
+              onPress={() => (step === 0 ? goBackOrHome() : setStep(step - 1))}
+            />
+          )}
           {/* `StepDots` reparte sus brotes con `space-between`, asi que necesita un ancho: sin el
               `flex: 1` de este envoltorio se encoge a la suma de los cuatro y el carril desaparece. */}
           <View style={styles.dots}>
@@ -197,13 +211,16 @@ export default function NewWorkspaceScreen() {
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: Space.lg }]}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+        >
           <Animated.View layout={RESHAPE} style={styles.block}>
             <View style={styles.ask}>
               <Micro>Nuevo espacio</Micro>
               <Text style={[Type.title, { color: t.text }]}>{current.ask}</Text>
               {!!current.hint && (
-                <Text style={[Type.body, { color: t.textMuted }]}>{current.hint}</Text>
+                <Text style={[Type.body, { color: t.textMuted }]}>
+                  {current.hint}
+                </Text>
               )}
             </View>
 
@@ -220,13 +237,21 @@ export default function NewWorkspaceScreen() {
                   card de verdad y esto es una maqueta. Y no se hunde a `t.sunken`: ese es justo el
                   color del riel vacio del anillo, que ahi dentro desapareceria.
                 */}
-                <View style={[styles.card, { backgroundColor: t.surface, borderColor: t.line }]}>
+                <View
+                  style={[
+                    styles.card,
+                    { backgroundColor: t.surface, borderColor: t.line },
+                  ]}
+                >
                   <View style={styles.cardHead}>
                     <ProgressRing done={0} total={0} accent={color} />
                     <Icon3D name={icon} size={Icon3DSize.md} />
                   </View>
-                  <Text style={[Type.section, { color: t.text }]} numberOfLines={1}>
-                    {name.trim() || 'Sin nombre'}
+                  <Text
+                    style={[Type.section, { color: t.text }]}
+                    numberOfLines={1}
+                  >
+                    {name.trim() || "Sin nombre"}
                   </Text>
                   {/*
                     El chip del estado, y aqui hace DOS trabajos.
@@ -237,7 +262,9 @@ export default function NewWorkspaceScreen() {
                     anillo, y elegir "Cobre" no cambiaba nada de lo que se esta mirando.
                   */}
                   <View style={[styles.chip, { backgroundColor: picked.soft }]}>
-                    <Text style={[Type.micro, styles.chipLabel, { color: t.text }]}>
+                    <Text
+                      style={[Type.micro, styles.chipLabel, { color: t.text }]}
+                    >
                       Sin tareas todavía
                     </Text>
                   </View>
@@ -246,13 +273,17 @@ export default function NewWorkspaceScreen() {
             )}
 
             {step === 0 && (
-              <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+              <Animated.View
+                entering={STEP_IN}
+                exiting={STEP_OUT}
+                style={styles.step}
+              >
                 {/* Sin caja ni etiqueta: es lo unico que el paso pide. */}
                 <TextInput
                   value={name}
                   onChangeText={(value) => {
                     setName(value);
-                    setNudge('');
+                    setNudge("");
                   }}
                   placeholder="La tesis, la mudanza…"
                   placeholderTextColor={t.textMuted}
@@ -268,15 +299,26 @@ export default function NewWorkspaceScreen() {
             )}
 
             {step === 1 && (
-              <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+              <Animated.View
+                entering={STEP_IN}
+                exiting={STEP_OUT}
+                style={styles.step}
+              >
                 {/* El mismo selector que el perfil y el onboarding: tres listas de los mismos once
                     colores se desincronizan a la primera. */}
-                <AccentPicker value={color} onChange={(value: AccentName) => setColor(value)} />
+                <AccentPicker
+                  value={color}
+                  onChange={(value: AccentName) => setColor(value)}
+                />
               </Animated.View>
             )}
 
             {step === 2 && (
-              <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+              <Animated.View
+                entering={STEP_IN}
+                exiting={STEP_OUT}
+                style={styles.step}
+              >
                 <Choice
                   options={WORKSPACE_TAGS}
                   value={tag}
@@ -305,11 +347,16 @@ export default function NewWorkspaceScreen() {
             styles.actions,
             // El inset del telefono vive AQUI, que es lo unico pegado al borde. `Space.md` encima
             // del hueco del sistema: pegado al indicador de inicio el boton se toca sin querer.
-            { paddingBottom: insets.bottom + Space.md, backgroundColor: t.canvas, borderTopColor: t.line },
-          ]}>
+            {
+              paddingBottom: insets.bottom + Space.md,
+              backgroundColor: t.canvas,
+              borderTopColor: t.line,
+            },
+          ]}
+        >
           {step < 3 ? (
             <BigButton
-              label={step === 2 ? 'Crear el espacio' : 'Seguir'}
+              label={step === 2 ? "Crear el espacio" : "Seguir"}
               loading={saving}
               onPress={advance}
               accent={color}
@@ -323,12 +370,11 @@ export default function NewWorkspaceScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Space.lg,
     paddingHorizontal: Space.xl,
     paddingBottom: Space.md,
@@ -353,7 +399,7 @@ const styles = StyleSheet.create({
    * aire de la card: la pregunta arriba, la maqueta flotando centrada en lo que quede, y lo que se
    * toca pegado al boton. En el paso de las diez clasificaciones no sobra nada y esto vale cero.
    */
-  preview: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  preview: { flex: 1, alignItems: "center", justifyContent: "center" },
   // La misma card del inicio, a media anchura: lo que se ve aqui es lo que va a salir alla.
   /**
    * Al 82% y con el relleno de una card de verdad.
@@ -363,11 +409,30 @@ const styles = StyleSheet.create({
    * ancho se lee como el objeto que va a existir y no como su miniatura, que es lo que una vista
    * previa tiene que hacer.
    */
-  card: { width: '82%', borderRadius: Radius.lg, borderWidth: 1, padding: Space.xl, gap: Space.lg },
-  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  card: {
+    width: "82%",
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: Space.xl,
+    gap: Space.lg,
+  },
+  cardHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   // El mismo chip de `workspace-card`: se mide por su texto, no por la card.
-  chip: { alignSelf: 'flex-start', borderRadius: Radius.pill, paddingHorizontal: Space.sm, paddingVertical: 2 },
+  chip: {
+    alignSelf: "flex-start",
+    borderRadius: Radius.pill,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 2,
+  },
   chipLabel: { letterSpacing: 0 },
   name: { minHeight: Touch.button, paddingTop: Space.sm },
-  actions: { paddingHorizontal: Space.xl, paddingTop: Space.md, borderTopWidth: 1 },
+  actions: {
+    paddingHorizontal: Space.xl,
+    paddingTop: Space.md,
+    borderTopWidth: 1,
+  },
 });

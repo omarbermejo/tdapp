@@ -1,22 +1,27 @@
-import { Fraunces_600SemiBold } from '@expo-google-fonts/fraunces/600SemiBold';
-import { Outfit_500Medium } from '@expo-google-fonts/outfit/500Medium';
-import { Outfit_600SemiBold } from '@expo-google-fonts/outfit/600SemiBold';
-import { Outfit_800ExtraBold } from '@expo-google-fonts/outfit/800ExtraBold';
-import { useFonts } from 'expo-font';
-import { Stack, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Fraunces_600SemiBold } from "@expo-google-fonts/fraunces/600SemiBold";
+import { Outfit_500Medium } from "@expo-google-fonts/outfit/500Medium";
+import { Outfit_600SemiBold } from "@expo-google-fonts/outfit/600SemiBold";
+import { Outfit_800ExtraBold } from "@expo-google-fonts/outfit/800ExtraBold";
+import { useFonts } from "expo-font";
+import { Stack, ThemeProvider } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
+import { useEffect, useState } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { Confetti } from '@/components/ui/confetti';
-import { hydratePreference } from '@/constants/scheme-store';
-import { AccentContext, useNavTheme, useScheme, useTheme } from '@/constants/theme';
-import { AuthProvider, useAuth } from '@/features/auth/auth-context';
-import { useReminders } from '@/features/notifications/use-reminders';
-import { Booting } from '@/features/cache/booting';
-import { warmup } from '@/features/cache/warmup';
-import { useWidgetSync } from '@/features/widgets/use-widget-sync';
+import { Confetti } from "@/components/ui/confetti";
+import { hydratePreference } from "@/constants/scheme-store";
+import {
+  AccentContext,
+  useNavTheme,
+  useScheme,
+  useTheme,
+} from "@/constants/theme";
+import { AuthProvider, useAuth } from "@/features/auth/auth-context";
+import { Booting } from "@/features/cache/booting";
+import { warmup } from "@/features/cache/warmup";
+import { useReminders } from "@/features/notifications/use-reminders";
+import { useWidgetSync } from "@/features/widgets/use-widget-sync";
 
 /**
  * El splash se queda hasta que la app tiene todo lo que necesita para pintar la primera pantalla de
@@ -43,12 +48,13 @@ const SLOW_MS = 2500;
 
 function RootNavigator() {
   const t = useTheme();
-  const { stage, token, user, loading, celebrating, stopCelebrating } = useAuth();
+  const { stage, token, user, loading, celebrating, stopCelebrating } =
+    useAuth();
   // El widget solo tiene sentido con la cuenta lista: antes no hay tareas que enseñar.
-  useWidgetSync(token, stage === 'ready');
+  useWidgetSync(token, stage === "ready");
   // La hora que prometió el onboarding, agendada de verdad. Mismo gate y mismo momento que el widget:
   // antes de 'ready' no hay perfil con hora ni tareas que avisar.
-  useReminders(token, user, stage === 'ready');
+  useReminders(token, user, stage === "ready");
   /**
    * Las fuentes de la app. Sin ellas la primera pantalla parpadea con otra tipografia.
    *
@@ -94,7 +100,7 @@ function RootNavigator() {
    * misma peticion en vez de abrir otra.
    */
   useEffect(() => {
-    if (token && stage === 'ready') warmup(token);
+    if (token && stage === "ready") warmup(token);
   }, [token, stage]);
 
   /**
@@ -111,7 +117,10 @@ function RootNavigator() {
   }, [ready]);
 
   useEffect(() => {
-    const id = setTimeout(() => void SplashScreen.hideAsync().catch(() => {}), SPLASH_CAP_MS);
+    const id = setTimeout(
+      () => void SplashScreen.hideAsync().catch(() => {}),
+      SPLASH_CAP_MS,
+    );
     return () => clearTimeout(id);
   }, []);
 
@@ -119,23 +128,33 @@ function RootNavigator() {
 
   /**
    * Los cuatro estados del alta son excluyentes, asi que solo hay una pantalla disponible a la
-   * vez y no hace falta anchor. El fade evita que pasar de un estado a otro se lea como un
-   * push desde el lado equivocado.
+   * vez. El fade evita que pasar de un estado a otro se lea como un push desde el lado equivocado.
+   *
+   * Un fallback a (auth) si no hay stage definido, para evitar pantallas en blanco durante
+   * transiciones rápidas de estado o cambios de sesión. `loading` también cuenta como un estado
+   * de transición que debe mostrar algo en vez de blanco.
    */
+  const activeStage = loading ? "guest" : stage || "guest";
+
   return (
     <>
       <Stack
-        screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: t.canvas } }}>
-        <Stack.Protected guard={stage === 'guest'}>
+        screenOptions={{
+          headerShown: false,
+          animation: "fade",
+          contentStyle: { backgroundColor: t.canvas },
+        }}
+      >
+        <Stack.Protected guard={activeStage === "guest"}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
-        <Stack.Protected guard={stage === 'verify'}>
+        <Stack.Protected guard={activeStage === "verify"}>
           <Stack.Screen name="verify" />
         </Stack.Protected>
-        <Stack.Protected guard={stage === 'onboarding'}>
+        <Stack.Protected guard={activeStage === "onboarding"}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
-        <Stack.Protected guard={stage === 'ready'}>
+        <Stack.Protected guard={activeStage === "ready"}>
           <Stack.Screen name="(app)" />
         </Stack.Protected>
       </Stack>
@@ -189,11 +208,10 @@ export default function RootLayout() {
     // En iOS RNGH parcha la root view y los gestos cuelan sin esto; en Android no: sin esta
     // raiz el swipe de las filas no recibe ni un evento.
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       <AuthProvider>
         <Tinted />
       </AuthProvider>
     </GestureHandlerRootView>
   );
 }
-
