@@ -43,7 +43,7 @@ const sinceLabel = (createdAt: string) => {
  * convierte en un detalle.
  *
  * Lo que ya no vive aqui: la cuenta, el tema, cerrar sesion y borrarse estan en Ajustes (el engrane),
- * y los campos del onboarding en Editar perfil (el lapiz). Esta pantalla es un retrato, no un panel
+ * y "Como te ves" (el lapiz) lleva la cara y el color. Esta pantalla es un retrato, no un panel
  * de control — y antes era las dos cosas a la vez.
  */
 export default function ProfileScreen() {
@@ -75,7 +75,7 @@ export default function ProfileScreen() {
             <>
               <HeaderAction
                 icon={UserPen}
-                label="Editar perfil"
+                label="Cómo te ves"
                 onPress={() => router.push('/edit-profile')}
               />
               <HeaderAction

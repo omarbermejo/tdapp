@@ -36,6 +36,28 @@ export type StreakWidgetProps = {
 const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) => {
   'widget';
 
+  /**
+   * Los props, con suelo. **Sin esto la baldosa sale EN BLANCO** en cuatro de las cinco familias:
+   * `p.week.map` lanza con `{}`, que es lo que pasa `placeholder(in:)` en la galeria y en todo
+   * arranque en frio. Ver el docstring largo en `today-widget`, que tiene el mismo bug y la misma
+   * causa raiz.
+   *
+   * La semana por defecto son siete ceros y NO un array vacio: el layout cuenta con siete columnas
+   * para no tener que saber en que dia vive quien mira.
+   */
+  const p: StreakWidgetProps = Object.assign(
+    {
+      days: 0,
+      best: 0,
+      week: [0, 0, 0, 0, 0, 0, 0],
+      labels: ['L', 'M', 'M', 'J', 'V', 'S', 'D'],
+      todayIndex: -1,
+      tint: '',
+      tintDark: '',
+    },
+    props
+  );
+
   const family = environment.widgetFamily;
   const rectangular = family === 'accessoryRectangular';
   const inline = family === 'accessoryInline';
@@ -50,14 +72,14 @@ const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) 
    * llega y solo existe pantalla de inicio a todo color.
    */
   const full = (environment.widgetRenderingMode ?? 'fullColor') === 'fullColor';
-  const ink = full ? (environment.colorScheme === 'dark' ? props.tintDark : props.tint) : undefined;
+  const ink = full ? (environment.colorScheme === 'dark' ? p.tintDark : p.tint) : undefined;
   const paint = ink ? [foregroundColor(ink)] : [];
 
 
   /** Pantalla siempre encendida: el sistema baja el brillo y pide apagar las formas macizas. */
   const dim = environment.isLuminanceReduced ? 0.55 : 1;
 
-  const label = props.days === 1 ? '1 día' : `${props.days} días`;
+  const label = p.days === 1 ? '1 día' : `${p.days} días`;
   const open = widgetURL('tdapp:///');
 
   if (inline) {
@@ -73,8 +95,8 @@ const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) 
    * mentira). Es el mismo criterio que el API usa para no romper la racha.
    */
   const dot = (index: number, size: number) => {
-    const closed = props.week[index] > 0;
-    const isToday = index === props.todayIndex;
+    const closed = p.week[index] > 0;
+    const isToday = index === p.todayIndex;
     return (
       <Circle
         key={index}
@@ -104,7 +126,7 @@ const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) 
         <Text modifiers={[font({ size: 12, weight: 'semibold' }), lineLimit(1)]}>
           {`RACHA · ${label}`}
         </Text>
-        <HStack spacing={4}>{props.week.map((_, i) => dot(i, 8))}</HStack>
+        <HStack spacing={4}>{p.week.map((_, i) => dot(i, 8))}</HStack>
       </VStack>
     );
   }
@@ -127,11 +149,11 @@ const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) 
         {label}
       </Text>
 
-      <HStack spacing={small ? 5 : 7}>{props.week.map((_, i) => dot(i, small ? 9 : 11))}</HStack>
+      <HStack spacing={small ? 5 : 7}>{p.week.map((_, i) => dot(i, small ? 9 : 11))}</HStack>
 
       {!small && (
         <HStack spacing={small ? 5 : 7}>
-          {props.labels.map((day, i) => (
+          {p.labels.map((day, i) => (
             <Text
               key={i}
               modifiers={[font({ size: 10, weight: 'medium' }), foregroundColor('secondary')]}>
@@ -144,7 +166,7 @@ const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) 
       <Text modifiers={[font({ size: 11 }), foregroundColor('secondary'), lineLimit(1)]}>
         {/* La mejor marca solo cuando ya la superaste o la estas persiguiendo: en una cuenta nueva un
             "tu mejor: 0" no dice nada. */}
-        {props.best > props.days ? `Tu mejor: ${props.best}` : props.days > 0 ? 'Es tu mejor racha' : 'Cierra algo hoy'}
+        {p.best > p.days ? `Tu mejor: ${p.best}` : p.days > 0 ? 'Es tu mejor racha' : 'Cierra algo hoy'}
       </Text>
     </VStack>
   );

@@ -25,6 +25,7 @@ import {
   iconForArea,
   type Draft,
 } from '@/features/tasks/task-wizard';
+import { useActiveSpaceId } from '@/features/workspaces/active-space';
 import { useWorkspaces } from '@/features/workspaces/use-workspaces';
 import { usePressScale } from '@/hooks/use-press-scale';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
@@ -33,7 +34,7 @@ import { useScreenPadding } from '@/hooks/use-screen-padding';
 const CONFIRM_MS = 1100;
 
 /** Las horas que se ofrecen. Las mismas que el formulario corto, para no tener dos catalogos. */
-const HOURS = ['07', '09', '12', '15', '18', '20', '22'];
+const HOURS = ['07', '09', '12', '15', '18', '20', '22', '23'];
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -42,6 +43,10 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
  *
  * Si ya no queda hora en punto hoy, arranca en mañana con la primera — es lo que evita que anotar a
  * las 22:00 con los defaults cree una tarea para HOY a las 07:00, ya vencida.
+ *
+ * `HOURS` llega hasta las 23 justo por esto: con el tope en 22, anotar a las 22:15 mandaba la tarea
+ * a MAÑANA, donde no sale en el inicio — y eso se leia como que no se habia guardado. Ahora el salto
+ * solo ocurre pasadas las 23:00, que es cuando mañana de verdad es la respuesta correcta.
  */
 const initialWhen = () => {
   const now = new Date();
@@ -83,10 +88,13 @@ export default function NewTaskStepsScreen() {
 
   const [step, setStep] = useState(0);
   const [when] = useState(initialWhen);
+  const spaceId = useActiveSpaceId();
   const [draft, setDraft] = useState<Draft>(() => ({
     icon: null,
     title: '',
-    workspaceId: null,
+    // El espacio activo, no null: con un espacio puesto, `useTasks` filtra por `workspaceId` y una
+    // tarea suelta caeria fuera del filtro y no apareceria nunca. El paso 2 lo deja cambiar.
+    workspaceId: spaceId ?? null,
     focusArea: '',
     date: when.date,
     hour: when.hour,

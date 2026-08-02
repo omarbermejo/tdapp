@@ -111,6 +111,12 @@ export function AccentPicker({
             autoCapitalize="none"
             autoCorrect={false}
             maxLength={6}
+            /*
+              Enfocarse solo es lo que trae el campo por encima del teclado: el auto-scroll nativo de
+              iOS lo dispara el FOCO, no el montaje. Y ademas es lo que se quiere — tocaste "Otro"
+              porque vas a teclear.
+            */
+            autoFocus
             keyboardType="ascii-capable"
             accessibilityLabel="Color en hexadecimal"
           />

@@ -6,6 +6,7 @@ import { useAuth } from '@/features/auth/auth-context';
 import { useActiveSpaceId } from '@/features/workspaces/active-space';
 
 import { tasksApi } from './api';
+import { useRevalidate } from '@/features/cache/use-revalidate';
 
 /**
  * `for` es el dia al que pertenece lo que hay guardado, y por eso vive DENTRO del estado.
@@ -141,6 +142,12 @@ export function useTasks(date: string) {
    */
   const mutate = useMemo(() => mutators(setState), []);
 
+  /**
+   * Y sin cambio de foco: una tarea creada desde otra pantalla caduca el dominio y esta lista
+   * la vuelve a pedir donde este.
+   */
+  useRevalidate('tasks', reload);
+
   return {
     tasks: fresh ? state.tasks : null,
     error: fresh ? state.error : '',
@@ -192,6 +199,12 @@ export function useWorkspaceTasks(workspaceId: number) {
 
   const fresh = state.for === key;
   const mutate = useMemo(() => mutators(setState), []);
+
+  /**
+   * Y sin cambio de foco: una tarea creada desde otra pantalla caduca el dominio y esta lista
+   * la vuelve a pedir donde este.
+   */
+  useRevalidate('tasks', reload);
 
   return {
     tasks: fresh ? state.tasks : null,
@@ -245,5 +258,11 @@ export function useBacklog(today: string) {
 
   const fresh = state.for === key;
   const mutate = useMemo(() => mutators(setState), []);
+  /**
+   * Y sin cambio de foco: una tarea creada desde otra pantalla caduca el dominio y esta lista
+   * la vuelve a pedir donde este.
+   */
+  useRevalidate('tasks', reload);
+
   return { tasks: fresh ? state.tasks : null, reload, ...mutate };
 }

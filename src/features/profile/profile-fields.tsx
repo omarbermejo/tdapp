@@ -8,12 +8,10 @@ import { Choice, type Option } from '@/components/ui/choice';
 import { DateField } from '@/components/ui/date-field';
 import { FormError } from '@/components/ui/form-error';
 import { Pill } from '@/components/ui/pill';
-import { AccentPicker } from '@/components/ui/accent-picker';
-import { Motion, Space, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import { Motion, Space, Type, useTheme } from '@/constants/theme';
 import { ApiError, type User } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import {
-  ACCENT_COLOR,
   FOCUS_AREAS,
   PEAK_ENERGY,
   REMINDER_HOUR,
@@ -21,7 +19,14 @@ import {
 } from '@/features/auth/options';
 
 /**
- * Los seis campos del onboarding, aquí para corregirlos.
+ * Lo que la app SABE de ti, aquí para corregirlo.
+ *
+ * Vivía en "Editar perfil" y se mudó a Ajustes, con el color quedándose atrás. El corte no es
+ * arbitrario: estos cuatro campos dicen cómo se COMPORTA la app —a qué hora te escribe, qué franja
+ * marca en tu día, cómo ordena tus tareas— y eso es un ajuste. El color dice cómo se VE, igual que
+ * la cara, y por eso los dos viven juntos en la otra pantalla. Además son la misma decisión física:
+ * el respaldo del avatar se pinta con `accent.soft`, así que elegir color repinta la rejilla de
+ * caras que tienes delante.
  *
  * El perfil decía "Lo que nos contaste al empezar" como si fuera piedra, cuando el API lleva desde el
  * primer día mergeando por campo. Cada dato es ahora una pastilla que dice su valor y abre su panel.
@@ -35,7 +40,7 @@ import {
  * hoja misma invita a hacer— y no se guardó nada. Un panel en línea no puede mentir porque no hay
  * borrador que descartar.
  */
-type Panel = 'aviso' | 'energia' | 'focos' | 'color' | 'naciste' | null;
+type Panel = 'aviso' | 'energia' | 'focos' | 'naciste' | null;
 
 /** Cuánto se queda la palomita antes de cerrar el panel. Lo justo para verla, no para esperarla. */
 const CONFIRM_MS = 700;
@@ -83,7 +88,6 @@ export function ProfileFields({ user }: { user: User }) {
   const t = useTheme();
   const { updateProfile } = useAuth();
   const accent = user.accentColor;
-  const tint = useAccent(accent);
 
   /** Cerrado al entrar: la tarjeta arranca en "esto es lo que sé" y nada más. */
   const [panel, setPanel] = useState<Panel>(null);
@@ -187,17 +191,6 @@ export function ProfileFields({ user }: { user: User }) {
           icon={iconOf(FOCUS_AREAS, user.focusAreas[0] ?? '')}
           onPress={() => open('focos')}
         />
-        <Pill
-          label="Color"
-          value={labelOf(ACCENT_COLOR, accent)}
-          active={panel === 'color'}
-          accent={accent}
-          bg="sunken"
-          // El único `solid` decorativo de la pantalla, y el que hace que la pastilla no necesite
-          // decir "Tu color": la muestra ya lo dice. Por eso esta no lleva icono — la muestra ES el icono.
-          dot={tint.solid}
-          onPress={() => open('color')}
-        />
         {/* La única sin marca: el catálogo de fechas no existe, y dibujarle un icono genérico de
             calendario sería el único de la tarjeta que no dice nada sobre su valor. */}
         <Pill
@@ -243,17 +236,6 @@ export function ProfileFields({ user }: { user: User }) {
             value={user.peakEnergy}
             onChange={(value: string) => save({ peakEnergy: value })}
             accent={accent}
-          />
-        </Animated.View>
-      )}
-
-      {panel === 'color' && (
-        <Animated.View entering={IN} style={styles.panel}>
-          {/* `AccentPicker` y no `Choice`: con once colores mas "Otro", una lista con el nombre al
-              lado seria seis filas diciendo dos veces lo mismo. Ver su docstring. */}
-          <AccentPicker
-            value={accent}
-            onChange={(value: AccentName) => save({ accentColor: value })}
           />
         </Animated.View>
       )}
