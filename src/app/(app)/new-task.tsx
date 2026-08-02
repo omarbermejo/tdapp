@@ -1,33 +1,40 @@
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import {
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    View,
+} from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
-import { BackButton } from '@/components/ui/back-button';
-import { BigButton } from '@/components/ui/big-button';
-import { BigField } from '@/components/ui/big-field';
-import { Micro } from '@/components/ui/card';
-import { Pill } from '@/components/ui/pill';
-import { Choice, type Option } from '@/components/ui/choice';
-import { DateField } from '@/components/ui/date-field';
-import { FormError } from '@/components/ui/form-error';
-import { TimeField } from '@/components/ui/time-field';
-import { Motion, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
-import { ApiError, type Task } from '@/features/auth/api';
-import { useAuth } from '@/features/auth/auth-context';
-import { FOCUS_AREAS } from '@/features/auth/options';
-import { isoAt, localDate, tasksApi } from '@/features/tasks/api';
-import { useActiveSpaceId } from '@/features/workspaces/active-space';
+import { BackButton } from "@/components/ui/back-button";
+import { BigButton } from "@/components/ui/big-button";
+import { BigField } from "@/components/ui/big-field";
+import { Micro } from "@/components/ui/card";
+import { Choice, type Option } from "@/components/ui/choice";
+import { DateField } from "@/components/ui/date-field";
+import { FormError } from "@/components/ui/form-error";
+import { Pill } from "@/components/ui/pill";
+import { TimeField } from "@/components/ui/time-field";
+import {
+    Motion,
+    Space,
+    Touch,
+    Type,
+    useAccent,
+    useTheme,
+} from "@/constants/theme";
+import { ApiError, type Task } from "@/features/auth/api";
+import { useAuth } from "@/features/auth/auth-context";
+import { FOCUS_AREAS } from "@/features/auth/options";
+import { isoAt, localDate, tasksApi } from "@/features/tasks/api";
+import { useActiveSpaceId } from "@/features/workspaces/active-space";
 
-import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
 /**
  * El unico camino para anotar. El titulo ES la pantalla.
@@ -52,25 +59,28 @@ import { useScreenPadding } from '@/hooks/use-screen-padding';
 type SizeOption = Option & { short: string };
 
 const SIZES: readonly SizeOption[] = [
-  { value: 'quick', label: 'Rápida · 5 min', short: '5 min' },
-  { value: 'medium', label: 'Media · 25 min', short: '25 min' },
-  { value: 'deep', label: 'Profunda · 50 min', short: '50 min' },
+  { value: "quick", label: "Rápida · 5 min", short: "5 min" },
+  { value: "medium", label: "Media · 25 min", short: "25 min" },
+  { value: "deep", label: "Profunda · 50 min", short: "50 min" },
 ];
 
 /** El foco es opcional, asi que la opcion de no tenerlo tiene que estar a la vista: un chip
  *  de seleccion unica no se puede desmarcar, y sin esto quedabas atrapado en el preseleccionado. */
-const FOCUS_OPTIONS: readonly Option[] = [...FOCUS_AREAS, { value: '', label: 'Sin foco' }];
+const FOCUS_OPTIONS: readonly Option[] = [
+  ...FOCUS_AREAS,
+  { value: "", label: "Sin foco" },
+];
 
 /** Horas en punto, como REMINDER_HOUR: dos toques contra tres ruedas de un picker. */
 const HOURS: readonly Option[] = [
-  { value: '7', label: '7 am' },
-  { value: '9', label: '9 am' },
-  { value: '11', label: '11 am' },
-  { value: '13', label: '1 pm' },
-  { value: '15', label: '3 pm' },
-  { value: '17', label: '5 pm' },
-  { value: '19', label: '7 pm' },
-  { value: '21', label: '9 pm' },
+  { value: "7", label: "7 am" },
+  { value: "9", label: "9 am" },
+  { value: "11", label: "11 am" },
+  { value: "13", label: "1 pm" },
+  { value: "15", label: "3 pm" },
+  { value: "17", label: "5 pm" },
+  { value: "19", label: "7 pm" },
+  { value: "21", label: "9 pm" },
 ];
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -83,12 +93,12 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
  * justo lo que no funciona con TDAH. Pero el techo duro estorbaba, asi que el DateField ya
  * acepta futuro (mode='future') y "Otro día" escribe el MISMO estado ISO 'YYYY-MM-DD'.
  */
-const OTHER = 'other';
+const OTHER = "other";
 /** El chip que revela el campo de hora exacta. */
-const OTHER_HOUR = 'other-hour';
+const OTHER_HOUR = "other-hour";
 
 /** Cual de los tres selectores esta abierto. Solo uno a la vez, y `null` es el estado normal. */
-type Panel = 'when' | 'size' | 'focus' | null;
+type Panel = "when" | "size" | "focus" | null;
 
 /**
  * Los chips y el hueco inicial salen de UNA sola lectura del reloj: con dos, cruzar la
@@ -106,7 +116,12 @@ const initialWhen = () => {
     at.setDate(at.getDate() + n);
     return {
       value: localDate(at),
-      label: n === 0 ? 'Hoy' : n === 1 ? 'Mañana' : cap(at.toLocaleDateString('es-MX', { weekday: 'long' })),
+      label:
+        n === 0
+          ? "Hoy"
+          : n === 1
+            ? "Mañana"
+            : cap(at.toLocaleDateString("es-MX", { weekday: "long" })),
     };
   });
 
@@ -121,12 +136,16 @@ const initialWhen = () => {
 
 /** '5 ago' para un dia fuera de los tres chips. Se construye con numeros para no cruzar zonas. */
 const parseLabel = (date: string) => {
-  const [y, m, d] = date.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("es-MX", {
+    day: "numeric",
+    month: "short",
+  });
 };
 
 /** '9 am' desde el valor del chip, para poder resumirlo en la pastilla. */
-const hourLabel = (value: string) => HOURS.find((h) => h.value === value)?.label ?? value;
+const hourLabel = (value: string) =>
+  HOURS.find((h) => h.value === value)?.label ?? value;
 
 /**
  * Lo que la palomita se queda en pantalla antes de irse al home. Suficiente para leerla como
@@ -168,10 +187,10 @@ export default function NewTaskScreen() {
    */
   const pad = useScreenPadding(Space.xxl);
 
-  const [title, setTitle] = useState('');
-  const [size, setSize] = useState<Task['size']>('medium');
+  const [title, setTitle] = useState("");
+  const [size, setSize] = useState<Task["size"]>("medium");
   // Lo que dijo que le importa al entrar: si eligio focos, el primero ya viene puesto.
-  const [focus, setFocus] = useState(() => user?.focusAreas[0] ?? '');
+  const [focus, setFocus] = useState(() => user?.focusAreas[0] ?? "");
   /**
    * El reloj se lee UNA vez, en el inicializador de useState, nunca en el cuerpo del render:
    * dos renders del mismo estado tienen que dar lo mismo.
@@ -192,13 +211,13 @@ export default function NewTaskScreen() {
   const [otherHour, setOtherHour] = useState(false);
   const [exactTime, setExactTime] = useState<string | null>(null);
   /** Minutos exactos como texto. Vacio = manda el tamaño, que es lo que el API guarda como null. */
-  const [exactMinutes, setExactMinutes] = useState('');
+  const [exactMinutes, setExactMinutes] = useState("");
 
   // Cerrado al entrar: la pantalla arranca en "escribe el titulo" y nada mas.
   const [panel, setPanel] = useState<Panel>(null);
 
   const [fields, setFields] = useState<Record<string, string>>({});
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   /** Ya quedo: el boton se queda en la palomita y la pantalla se va sola. */
   const [done, setDone] = useState(false);
@@ -219,7 +238,7 @@ export default function NewTaskScreen() {
       y con datos viejos — y el gesto de atras reabria ese. `dismissTo` es la API exacta para "vuelve
       a esa ruta de la pila", que es lo que `new-task-steps` ya consigue con `router.back()`.
     */
-    const timer = setTimeout(() => router.dismissTo('/'), CONFIRM_MS);
+    const timer = setTimeout(() => router.dismissTo("/"), CONFIRM_MS);
     return () => clearTimeout(timer);
   }, [done]);
 
@@ -227,21 +246,23 @@ export default function NewTaskScreen() {
   // la fecha corta. Sin dia valido todavia, lo dice en vez de mentir con un valor viejo.
   const dayLabel =
     when.days.find((d) => d.value === date)?.label ??
-    (date ? parseLabel(date) : 'Elige el día');
+    (date ? parseLabel(date) : "Elige el día");
 
   // La hora exacta, cuando es valida, manda sobre el chip. Sin ella el chip sigue siendo la hora.
-  const timeLabel = otherHour ? (exactTime ?? 'Elige la hora') : hourLabel(hour);
+  const timeLabel = otherHour
+    ? (exactTime ?? "Elige la hora")
+    : hourLabel(hour);
   // Los minutos escritos ganan al tamaño, igual que en el API.
   const durationLabel = exactMinutes
     ? `${exactMinutes} min`
-    : (SIZES.find((s) => s.value === size)?.short ?? '');
+    : (SIZES.find((s) => s.value === size)?.short ?? "");
   /**
    * Se juzga aqui y no solo en el API: el rango es el mismo (1-480) y esperar el viaje de red
    * para enterarte de que 500 no cabe es peor que decirlo mientras escribes.
    */
   const minutesProblem =
     exactMinutes && (Number(exactMinutes) < 1 || Number(exactMinutes) > 480)
-      ? 'Entre 1 y 480 minutos'
+      ? "Entre 1 y 480 minutos"
       : null;
 
   const pickDay = (value: string) => {
@@ -254,13 +275,15 @@ export default function NewTaskScreen() {
   const create = async () => {
     const clean = title.trim();
     if (!token) return;
-    if (!clean) return setFields({ title: 'Escribe qué quieres hacer' });
-    if (!date) return setFields({ dueAt: 'Escribe el día completo: DD/MM/AAAA' });
-    if (otherHour && !exactTime) return setFields({ dueAt: 'Escribe la hora completa: HH:MM' });
+    if (!clean) return setFields({ title: "Escribe qué quieres hacer" });
+    if (!date)
+      return setFields({ dueAt: "Escribe el día completo: DD/MM/AAAA" });
+    if (otherHour && !exactTime)
+      return setFields({ dueAt: "Escribe la hora completa: HH:MM" });
     if (minutesProblem) return setFields({ minutes: minutesProblem });
 
     setSaving(true);
-    setError('');
+    setError("");
     setFields({});
     try {
       await tasksApi.create(token, {
@@ -274,8 +297,8 @@ export default function NewTaskScreen() {
         dueAt: isoAt(
           date,
           ...((otherHour && exactTime
-            ? exactTime.split(':').map(Number)
-            : [Number(hour), 0]) as [number, number])
+            ? exactTime.split(":").map(Number)
+            : [Number(hour), 0]) as [number, number]),
         ),
       });
       // El teclado se va antes de la palomita: abierto tapa justo el boton que confirma.
@@ -287,9 +310,11 @@ export default function NewTaskScreen() {
         // El mensaje general del API es "Revisa los datos enviados": si el detalle ya se lee
         // bajo el titulo, repetirlo es ruido; si el fallo es de un campo sin hueco propio
         // (tamano, foco, fecha), ese texto es lo unico que explica por que no se creo.
-        setError(e.fields.title ? '' : (Object.values(e.fields)[0] ?? e.message));
+        setError(
+          e.fields.title ? "" : (Object.values(e.fields)[0] ?? e.message),
+        );
       } else {
-        setError('No pudimos crearla');
+        setError("No pudimos crearla");
       }
     } finally {
       setSaving(false);
@@ -298,19 +323,24 @@ export default function NewTaskScreen() {
 
   // Despues de todos los hooks: al cerrar sesion el user se vuelve null y salir antes dejaria
   // a React con menos hooks que en el render anterior.
-  if (!user) return null;
+  if (!user) return <ScreenGuard />;
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.screen}>
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.screen}
+      >
         {/* keyboardShouldPersistTaps: con el teclado abierto, tocar un chip lo elige en el
             primer toque en vez de gastarlo en cerrar el teclado. */}
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingTop: Space.lg, paddingBottom: pad.bottom }]}
+          contentContainerStyle={[
+            styles.content,
+            { paddingTop: Space.lg, paddingBottom: pad.bottom },
+          ]}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+        >
           {/* Cruz y no flecha: esto es una hoja, se cierra hacia abajo. */}
           <BackButton close />
 
@@ -349,31 +379,37 @@ export default function NewTaskScreen() {
             <Pill
               label="Cuándo"
               value={`${dayLabel} · ${timeLabel}`}
-              active={panel === 'when'}
+              active={panel === "when"}
               accent={accent}
-              onPress={() => setPanel(panel === 'when' ? null : 'when')}
+              onPress={() => setPanel(panel === "when" ? null : "when")}
             />
             <Pill
               label="Dura"
               value={durationLabel}
-              active={panel === 'size'}
+              active={panel === "size"}
               accent={accent}
-              onPress={() => setPanel(panel === 'size' ? null : 'size')}
+              onPress={() => setPanel(panel === "size" ? null : "size")}
             />
             <Pill
               label="Foco"
-              value={FOCUS_OPTIONS.find((f) => f.value === focus)?.label ?? 'Sin foco'}
-              active={panel === 'focus'}
+              value={
+                FOCUS_OPTIONS.find((f) => f.value === focus)?.label ??
+                "Sin foco"
+              }
+              active={panel === "focus"}
               accent={accent}
-              onPress={() => setPanel(panel === 'focus' ? null : 'focus')}
+              onPress={() => setPanel(panel === "focus" ? null : "focus")}
             />
           </View>
 
-          {panel === 'when' && (
-            <Animated.View entering={FadeInDown.duration(Motion.enter)} style={styles.panel}>
+          {panel === "when" && (
+            <Animated.View
+              entering={FadeInDown.duration(Motion.enter)}
+              style={styles.panel}
+            >
               <Choice
                 label="El día"
-                options={[...when.days, { value: OTHER, label: 'Otro día' }]}
+                options={[...when.days, { value: OTHER, label: "Otro día" }]}
                 value={date && !otherDay ? date : OTHER}
                 onChange={pickDay}
                 accent={accent}
@@ -390,13 +426,13 @@ export default function NewTaskScreen() {
               )}
               <Choice
                 label="La hora"
-                options={[...HOURS, { value: OTHER_HOUR, label: 'Otra hora' }]}
+                options={[...HOURS, { value: OTHER_HOUR, label: "Otra hora" }]}
                 value={otherHour ? OTHER_HOUR : hour}
                 onChange={(value: string) => {
                   // El chip de hora exacta arranca con la hora que ya estaba elegida: nunca se
                   // pierde lo que la persona habia decidido para pedirle que lo escriba otra vez.
                   if (value === OTHER_HOUR) {
-                    setExactTime(`${hour.padStart(2, '0')}:00`);
+                    setExactTime(`${hour.padStart(2, "0")}:00`);
                     return setOtherHour(true);
                   }
                   setOtherHour(false);
@@ -417,18 +453,21 @@ export default function NewTaskScreen() {
             </Animated.View>
           )}
 
-          {panel === 'size' && (
-            <Animated.View entering={FadeInDown.duration(Motion.enter)} style={styles.panel}>
+          {panel === "size" && (
+            <Animated.View
+              entering={FadeInDown.duration(Motion.enter)}
+              style={styles.panel}
+            >
               {/* El tamaño es lo que decide cuanto dura el cronometro, no una etiqueta. */}
               <Choice
                 label="Tamaño"
                 hint="Cuánto va a durar el cronómetro."
                 options={SIZES}
                 value={size}
-                onChange={(value: Task['size']) => {
+                onChange={(value: Task["size"]) => {
                   // Elegir un cajon borra los minutos escritos: si no, la pastilla diria una cosa
                   // y el chip marcado otra, y el API se quedaria con los minutos.
-                  setExactMinutes('');
+                  setExactMinutes("");
                   setSize(value);
                 }}
                 accent={accent}
@@ -441,8 +480,10 @@ export default function NewTaskScreen() {
               <BigField
                 label="O los minutos exactos"
                 value={exactMinutes}
-                onChangeText={(value) => setExactMinutes(value.replace(/\D/g, ''))}
-                placeholder={`${SIZES.find((s) => s.value === size)?.short ?? ''} si lo dejas vacío`}
+                onChangeText={(value) =>
+                  setExactMinutes(value.replace(/\D/g, ""))
+                }
+                placeholder={`${SIZES.find((s) => s.value === size)?.short ?? ""} si lo dejas vacío`}
                 keyboardType="number-pad"
                 maxLength={3}
                 error={minutesProblem ?? fields.minutes}
@@ -451,9 +492,18 @@ export default function NewTaskScreen() {
             </Animated.View>
           )}
 
-          {panel === 'focus' && (
-            <Animated.View entering={FadeInDown.duration(Motion.enter)} style={styles.panel}>
-              <Choice label="Foco" options={FOCUS_OPTIONS} value={focus} onChange={setFocus} accent={accent} />
+          {panel === "focus" && (
+            <Animated.View
+              entering={FadeInDown.duration(Motion.enter)}
+              style={styles.panel}
+            >
+              <Choice
+                label="Foco"
+                options={FOCUS_OPTIONS}
+                value={focus}
+                onChange={setFocus}
+                accent={accent}
+              />
             </Animated.View>
           )}
 
@@ -481,9 +531,13 @@ const styles = StyleSheet.create({
   },
   head: { gap: Space.xs },
   // minHeight y no height: el titulo crece a dos lineas sin empujar la pantalla de golpe.
-  title: { minHeight: Touch.button, paddingTop: Space.sm, textAlignVertical: 'top' },
+  title: {
+    minHeight: Touch.button,
+    paddingTop: Space.sm,
+    textAlignVertical: "top",
+  },
   rule: { height: 1 },
-  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
+  pills: { flexDirection: "row", flexWrap: "wrap", gap: Space.sm },
   // El dia y la hora son una sola decision: van mas juntos entre si que del resto.
   panel: { gap: Space.lg },
 });

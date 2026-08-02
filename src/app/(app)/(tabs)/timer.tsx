@@ -1,54 +1,60 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeOut,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withSequence,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+    FadeIn,
+    FadeInDown,
+    FadeOut,
+    useAnimatedStyle,
+    useReducedMotion,
+    useSharedValue,
+    withSequence,
+    withSpring,
+    withTiming,
+} from "react-native-reanimated";
 
-import { BigButton } from '@/components/ui/big-button';
-import { Card, Micro } from '@/components/ui/card';
-import { Choice, type Option } from '@/components/ui/choice';
-import { Confetti } from '@/components/ui/confetti';
-import { Bud } from '@/components/ui/stem';
+import { BigButton } from "@/components/ui/big-button";
+import { Card, Micro } from "@/components/ui/card";
+import { Choice, type Option } from "@/components/ui/choice";
+import { Confetti } from "@/components/ui/confetti";
+import { ScreenGuard } from "@/components/ui/screen-guard";
+import { SpacePill } from "@/components/ui/space-pill";
+import { StatusVeil, useScrollVeil } from "@/components/ui/status-veil";
+import { Bud } from "@/components/ui/stem";
 import {
-  Motion,
-  RESHAPE,
-  Space,
-  Type,
-  accentInks,
-  accentOnDark,
-  useAccent,
-  useTheme,
-  type AccentName,
-} from '@/constants/theme';
-import { ApiError } from '@/features/auth/api';
-import { useAuth } from '@/features/auth/auth-context';
-import { tasksApi } from '@/features/tasks/api';
-import { useLocalToday } from '@/features/tasks/day';
-import { SpacePill } from '@/components/ui/space-pill';
-import { accentForFocus, focusOf } from '@/features/tasks/focus-accent';
-import { useActiveSpace } from '@/features/workspaces/active-space';
-import { useTasks } from '@/features/tasks/use-tasks';
-import { armAlarm, disarmAlarm, forgetAlarm } from '@/features/timer/alarm';
-import { cheer, coolCheer, warmCheer } from '@/features/timer/cheer';
-import { DIAL, Dial, litTicks } from '@/features/timer/dial';
-import { DialPicker } from '@/features/timer/dial-picker';
-import { useFocusMode } from '@/features/timer/focus-mode';
-import { clearFocusWidget } from '@/features/widgets/sync-focus';
-import { adoptBlock, hideBlock, showBlock } from '@/features/timer/outside';
-import { ROUNDS, clock, usePomodoro, type Phase } from '@/features/timer/pomodoro';
-import { useScreenPadding } from '@/hooks/use-screen-padding';
-import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
+    Motion,
+    RESHAPE,
+    Space,
+    Type,
+    accentInks,
+    accentOnDark,
+    useAccent,
+    useTheme,
+    type AccentName,
+} from "@/constants/theme";
+import { ApiError } from "@/features/auth/api";
+import { useAuth } from "@/features/auth/auth-context";
+import { tasksApi } from "@/features/tasks/api";
+import { useLocalToday } from "@/features/tasks/day";
+import { accentForFocus, focusOf } from "@/features/tasks/focus-accent";
+import { useTasks } from "@/features/tasks/use-tasks";
+import { armAlarm, disarmAlarm, forgetAlarm } from "@/features/timer/alarm";
+import { cheer, coolCheer, warmCheer } from "@/features/timer/cheer";
+import { DIAL, Dial, litTicks } from "@/features/timer/dial";
+import { DialPicker } from "@/features/timer/dial-picker";
+import { useFocusMode } from "@/features/timer/focus-mode";
+import { adoptBlock, hideBlock, showBlock } from "@/features/timer/outside";
+import {
+    ROUNDS,
+    clock,
+    usePomodoro,
+    type Phase,
+} from "@/features/timer/pomodoro";
+import { clearFocusWidget } from "@/features/widgets/sync-focus";
+import { useActiveSpace } from "@/features/workspaces/active-space";
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
-import { TAB_DOCK } from './_layout';
+import { TAB_DOCK } from "./_layout";
 
 /**
  * El cronómetro pomodoro.
@@ -74,24 +80,24 @@ import { TAB_DOCK } from './_layout';
 /** Lo que cada bloque dice de sí mismo: la etiqueta de la carátula, la línea y el aviso del final. */
 const PHASES: Record<Phase, { micro: string; line: string; alarm: string }> = {
   focus: {
-    micro: 'Enfoque',
-    line: 'Una cosa. Cuando suene, paras.',
-    alarm: 'Bloque cerrado. Te toca descanso.',
+    micro: "Enfoque",
+    line: "Una cosa. Cuando suene, paras.",
+    alarm: "Bloque cerrado. Te toca descanso.",
   },
   short: {
-    micro: 'Descanso corto',
-    line: 'Levántate. No abras nada que engancha.',
-    alarm: 'Descanso listo. ¿Otro bloque?',
+    micro: "Descanso corto",
+    line: "Levántate. No abras nada que engancha.",
+    alarm: "Descanso listo. ¿Otro bloque?",
   },
   long: {
-    micro: 'Descanso largo',
-    line: 'Cerraste el ciclo. Este te lo ganaste.',
-    alarm: 'Descanso largo listo. Ciclo nuevo cuando quieras.',
+    micro: "Descanso largo",
+    line: "Cerraste el ciclo. Este te lo ganaste.",
+    alarm: "Descanso largo listo. Ciclo nuevo cuando quieras.",
   },
 };
 
 /** Sin tarea es una opción a la vista: un chip de selección única no se puede desmarcar. */
-const NONE = '';
+const NONE = "";
 
 /**
  * El latido de la lectura cuando cae un minuto. Muelle local y no un token, por la misma razón que
@@ -110,11 +116,12 @@ const CASCADE = Motion.step * 2;
  * El título de una tarea cabe en 120 caracteres y el chip no. Se recorta solo para la etiqueta: la
  * línea de debajo de la carátula sí lo dice entero, que es donde importa leerlo.
  */
-const chipLabel = (title: string) => (title.length > 26 ? `${title.slice(0, 25)}…` : title);
+const chipLabel = (title: string) =>
+  title.length > 26 ? `${title.slice(0, 25)}…` : title;
 
 /** 'termina 7:16' con el reloj del teléfono. Es lo que Android muestra en vez de una cuenta atrás. */
 const endsAtLabel = (at: number) =>
-  `termina ${new Date(at).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' })}`;
+  `termina ${new Date(at).toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit" })}`;
 
 export default function TimerScreen() {
   const { user, token } = useAuth();
@@ -164,7 +171,7 @@ export default function TimerScreen() {
    * API solo permite UN timer corriendo por usuario, así que si dejaste uno abierto en otro lado hay
    * que decirlo — el pomodoro local siguió corriendo igual.
    */
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState("");
   /** Sube uno por cada enfoque cerrado. Cambia la `key` del confeti, que así vuelve a llover. */
   const [party, setParty] = useState(0);
   /** La isla ya se reconcilió con lo recuperado. Sin esto se repetiría en cada render. */
@@ -174,11 +181,13 @@ export default function TimerScreen() {
    * depende del minuto, y un hook dentro de una rama reventaría al cambiar de estado la pantalla.
    */
   const beat = useSharedValue(1);
-  const beatStyle = useAnimatedStyle(() => ({ transform: [{ scale: beat.value }] }));
+  const beatStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: beat.value }],
+  }));
 
   const tasks = day.tasks ?? [];
   /** Solo las pendientes se ofrecen: enfocar una que ya cerraste no significa nada. */
-  const pending = tasks.filter((candidate) => candidate.status === 'pending');
+  const pending = tasks.filter((candidate) => candidate.status === "pending");
 
   /**
    * El cronómetro del servidor, que es lo que hace que el bloque exista fuera de esta pantalla.
@@ -188,16 +197,18 @@ export default function TimerScreen() {
    * Sin `useCallback`: con el React Compiler encendido la memoización la pone él, y escribirla a
    * mano aquí es justo lo que no puede preservar (la identidad depende de `task`).
    */
-  const serverTimer = async (id: number | null, action: 'start' | 'stop') => {
+  const serverTimer = async (id: number | null, action: "start" | "stop") => {
     if (!token || id === null) return;
     try {
       await tasksApi.timer(token, id, action);
-      setNote('');
+      setNote("");
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
-        setNote('Ya tenías un cronómetro corriendo en otra tarea. Este bloque no se le sumó.');
+        setNote(
+          "Ya tenías un cronómetro corriendo en otra tarea. Este bloque no se le sumó.",
+        );
       } else {
-        setNote('El bloque corre, pero no pudimos guardarlo en tu tarea.');
+        setNote("El bloque corre, pero no pudimos guardarlo en tu tarea.");
       }
     }
   };
@@ -225,17 +236,21 @@ export default function TimerScreen() {
      * saberlo. Lo que cambia es el peso: el cuarto enfoque cierra el ciclo entero y ahí suena la
      * versión larga.
      */
-    if (!silent) cheer(closed === 'focus' && done >= ROUNDS ? 'cycle' : 'block');
+    if (!silent)
+      cheer(closed === "focus" && done >= ROUNDS ? "cycle" : "block");
 
     // El confeti sí es solo del enfoque: acabar un descanso no es un logro que celebrar.
-    if (closed !== 'focus') return;
+    if (closed !== "focus") return;
     setParty((previous) => previous + 1);
-    serverTimer(task?.id ?? null, 'stop');
+    serverTimer(task?.id ?? null, "stop");
     // El bloque acabó: el `elapsedSeconds` de la tarea cambió y la lista de hoy ya no es cierta.
     day.reload();
   };
 
-  const pom = usePomodoro({ onFinish, initialMinutes: Number(link.min) || undefined });
+  const pom = usePomodoro({
+    onFinish,
+    initialMinutes: Number(link.min) || undefined,
+  });
 
   /**
    * Tres orígenes, en este orden: lo que se eligió AQUÍ, lo que trajo el enlace, y la tarea del bloque
@@ -250,7 +265,9 @@ export default function TimerScreen() {
    * cambió de día) todo lo de abajo se comporta como "sin tarea" por sí solo.
    */
   const taskId =
-    picked ?? link.task ?? (pom.restoredTaskId != null ? String(pom.restoredTaskId) : NONE);
+    picked ??
+    link.task ??
+    (pom.restoredTaskId != null ? String(pom.restoredTaskId) : NONE);
   /**
    * La enganchada se busca entre TODAS las de hoy y no solo entre las pendientes: si se marca hecha
    * desde el home a media carrera, hay que seguir pudiendo apagar su cronómetro en el servidor.
@@ -258,7 +275,8 @@ export default function TimerScreen() {
    * Si el id ya no existe (se borró, cambió de día) esto queda en `null` y todo lo de abajo se comporta
    * como "sin tarea" por sí solo. No hace falta un efecto que limpie el estado.
    */
-  const task = tasks.find((candidate) => String(candidate.id) === taskId) ?? null;
+  const task =
+    tasks.find((candidate) => String(candidate.id) === taskId) ?? null;
 
   /** Elegir tarea: se registra en el cronómetro para que viaje con el bloque al almacén. */
   const choose = (value: string) => {
@@ -281,7 +299,7 @@ export default function TimerScreen() {
    */
   const locked = pom.running || !pom.fresh;
   /** La carátula se gira solo sobre un enfoque intacto. Corriendo es un reloj, no un control. */
-  const editable = pom.fresh && pom.phase === 'focus';
+  const editable = pom.fresh && pom.phase === "focus";
 
   /**
    * La sesión de audio y los sonidos se preparan al entrar: crearlos en el momento del cero hace que
@@ -316,7 +334,12 @@ export default function TimerScreen() {
    */
   useEffect(() => {
     if (still || !pom.running) return;
-    beat.set(withSequence(withTiming(1.03, { duration: Motion.exit / 2 }), withSpring(1, BEAT)));
+    beat.set(
+      withSequence(
+        withTiming(1.03, { duration: Motion.exit / 2 }),
+        withSpring(1, BEAT),
+      ),
+    );
   }, [minute, still, pom.running, beat]);
 
   /**
@@ -333,7 +356,10 @@ export default function TimerScreen() {
    *
    * El hook va aquí arriba con los demás: debajo del guard de `user` sería un hook condicional.
    */
-  const accent: AccentName | undefined = pom.phase === 'focus' ? accentForFocus(task ? focusOf(task) : null, fallback) : 'clay';
+  const accent: AccentName | undefined =
+    pom.phase === "focus"
+      ? accentForFocus(task ? focusOf(task) : null, fallback)
+      : "clay";
   const tint = useAccent(accent);
 
   /**
@@ -345,8 +371,8 @@ export default function TimerScreen() {
    */
   const blockFor = (endsAt: number, pausedAt: number) => ({
     phase: PHASES[pom.phase].micro,
-    resting: pom.phase !== 'focus',
-    task: pom.phase === 'focus' ? (task?.title ?? '') : '',
+    resting: pom.phase !== "focus",
+    task: pom.phase === "focus" ? (task?.title ?? "") : "",
     startedAt: endsAt - pom.totalMs,
     endsAt,
     pausedAt,
@@ -366,7 +392,8 @@ export default function TimerScreen() {
     endsAtLabel: endsAtLabel(endsAt),
   });
 
-  const paint = (endsAt: number, pausedAt: number) => showBlock(blockFor(endsAt, pausedAt));
+  const paint = (endsAt: number, pausedAt: number) =>
+    showBlock(blockFor(endsAt, pausedAt));
 
   /**
    * Reconcilia la isla con el bloque recuperado, UNA sola vez por montaje.
@@ -386,7 +413,10 @@ export default function TimerScreen() {
       adoptBlock(null);
       // El widget no se borra, se queda invitando: es una baldosa fija en la pantalla de inicio y
       // dejarla en blanco sería peor que darle un uso. La Live Activity sí desaparece.
-      clearFocusWidget({ tint: accentInks(accent).light, tintDark: accentOnDark(accent) });
+      clearFocusWidget({
+        tint: accentInks(accent).light,
+        tintDark: accentOnDark(accent),
+      });
       return;
     }
 
@@ -409,10 +439,10 @@ export default function TimerScreen() {
     pom.attach(task?.id ?? null);
     forget();
     // Segundos y no ms: el trigger de intervalo de expo-notifications los pide en segundos.
-    armAlarm(Math.round(pom.leftMs / 1000), 'tdapp', PHASES[pom.phase].alarm);
+    armAlarm(Math.round(pom.leftMs / 1000), "tdapp", PHASES[pom.phase].alarm);
     paint(endsAt, 0);
     focus.setHidden(true);
-    if (pom.phase === 'focus') serverTimer(task?.id ?? null, 'start');
+    if (pom.phase === "focus") serverTimer(task?.id ?? null, "start");
   };
 
   const hold = () => {
@@ -425,7 +455,7 @@ export default function TimerScreen() {
     // Pausado se REPINTA en vez de quitarse: `pauseTime` clava el reloj y así queda claro que hay un
     // bloque a medias esperándote, en vez de que desaparezca como si no hubiera pasado nada.
     if (endsAt !== null) paint(endsAt, Date.now());
-    if (pom.phase === 'focus') serverTimer(task?.id ?? null, 'stop');
+    if (pom.phase === "focus") serverTimer(task?.id ?? null, "stop");
   };
 
   const leave = () => {
@@ -437,28 +467,32 @@ export default function TimerScreen() {
   const restart = () => {
     pom.reset();
     leave();
-    if (pom.phase === 'focus') serverTimer(task?.id ?? null, 'stop');
+    if (pom.phase === "focus") serverTimer(task?.id ?? null, "stop");
   };
 
   const jump = () => {
     pom.skip();
     leave();
-    if (pom.phase === 'focus') {
-      serverTimer(task?.id ?? null, 'stop');
+    if (pom.phase === "focus") {
+      serverTimer(task?.id ?? null, "stop");
       day.reload();
     }
   };
 
   // El guard va DESPUÉS de los hooks: al cerrar sesión el user se vuelve null, y salir antes dejaría
   // a React con menos hooks que en el render anterior.
-  if (!user) return null;
+  if (!user) return <ScreenGuard />;
 
   const phase = PHASES[pom.phase];
   /**
    * Girando, las marcas encendidas son los minutos ELEGIDOS; corriendo, los que QUEDAN. Es la misma
    * frase en los dos casos, y por eso una vuelta del dial son 60 minutos y hay 60 marcas.
    */
-  const lit = !pom.ready ? 0 : editable ? pom.focusMinutes : litTicks(pom.leftMs, pom.totalMs);
+  const lit = !pom.ready
+    ? 0
+    : editable
+      ? pom.focusMinutes
+      : litTicks(pom.leftMs, pom.totalMs);
   const closed = Math.min(pom.done, ROUNDS);
   /**
    * Un bloque a medias y quieto. Hasta ahora se veia IDENTICO a uno corriendo —mismas marcas al acento
@@ -473,17 +507,22 @@ export default function TimerScreen() {
 
   const options: readonly Option[] = [
     ...pending.map((p) => ({ value: String(p.id), label: chipLabel(p.title) })),
-    { value: NONE, label: 'Sin tarea' },
+    { value: NONE, label: "Sin tarea" },
   ];
 
   const face = (
     <View
       accessible={!editable}
       accessibilityRole="progressbar"
-      accessibilityLabel={`${phase.micro}${paused ? ', en pausa' : ''}, ${clock(pom.leftMs)} restantes`}
-      accessibilityValue={{ min: 0, max: pom.totalMs, now: pom.totalMs - pom.leftMs }}
+      accessibilityLabel={`${phase.micro}${paused ? ", en pausa" : ""}, ${clock(pom.leftMs)} restantes`}
+      accessibilityValue={{
+        min: 0,
+        max: pom.totalMs,
+        now: pom.totalMs - pom.leftMs,
+      }}
       // Pausada, la carátula entera se atenúa. Ver `paused`.
-      style={[styles.dialWrap, paused && styles.paused]}>
+      style={[styles.dialWrap, paused && styles.paused]}
+    >
       <Dial lit={lit} color={tint.solid} track={t.sunken} />
       {/* La lectura va ENCIMA y no dentro del dial: el aro está memoizado por `lit`, y meterle los
           dígitos como hijos lo repintaría cuatro veces por segundo con sus 60 vistas. */}
@@ -501,10 +540,11 @@ export default function TimerScreen() {
                 pulso grande la haría chocar contra las marcas — que se NOTE, no que salte. */}
             <Animated.Text
               entering={animate ? FadeIn.duration(Motion.enter) : undefined}
-              style={[Type.count, beatStyle, { color: t.text }]}>
+              style={[Type.count, beatStyle, { color: t.text }]}
+            >
               {clock(pom.leftMs)}
             </Animated.Text>
-            <Micro>{paused ? 'En pausa' : phase.micro}</Micro>
+            <Micro>{paused ? "En pausa" : phase.micro}</Micro>
           </>
         )}
       </View>
@@ -524,7 +564,8 @@ export default function TimerScreen() {
         onPress={pom.running ? focus.toggle : undefined}
         // Sin rol ni etiqueta: para un lector de pantalla esto no es un botón, es el fondo. La
         // navegación por accesibilidad no depende de la barra visible.
-        accessible={false}>
+        accessible={false}
+      >
         <Animated.ScrollView
           {...veil.scrollProps}
           contentContainerStyle={[
@@ -533,7 +574,8 @@ export default function TimerScreen() {
             focus.hidden && styles.focused,
             { paddingTop: pad.top, paddingBottom: pad.bottom },
           ]}
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+        >
           {/*
             Esta pantalla no tiene cabecera —su docstring dice que el dial ES la cabecera— asi que la
             pastilla va como primer hijo del scroll, sobre el dial. Se esconde en modo enfoque junto
@@ -547,7 +589,10 @@ export default function TimerScreen() {
 
           <Animated.View layout={RESHAPE} style={styles.stack}>
             {editable ? (
-              <DialPicker minutes={pom.focusMinutes} onChange={pom.setFocusMinutes}>
+              <DialPicker
+                minutes={pom.focusMinutes}
+                onChange={pom.setFocusMinutes}
+              >
                 {face}
               </DialPicker>
             ) : (
@@ -567,9 +612,14 @@ export default function TimerScreen() {
             {/* La línea dice CON QUÉ cuando hay tarea, y qué hacer con el bloque cuando no. El
                 título entero vive aquí; en el chip iba recortado. */}
             <Animated.Text
-              entering={animate ? FadeInDown.duration(Motion.enter).delay(CASCADE) : undefined}
+              entering={
+                animate
+                  ? FadeInDown.duration(Motion.enter).delay(CASCADE)
+                  : undefined
+              }
               style={[Type.body, styles.line, { color: t.textMuted }]}
-              numberOfLines={2}>
+              numberOfLines={2}
+            >
               {/*
                 La tarea gana al manual de instrucciones, y ese orden estaba invertido: `editable` se
                 comprobaba PRIMERO, así que sobre un enfoque intacto —que es justo cuando se llega con
@@ -577,29 +627,41 @@ export default function TimerScreen() {
                 ningún lado. Con la preselección invisible se podía arrancar un cronómetro de servidor
                 sobre una tarea que nadie vio elegir.
               */}
-              {pom.phase === 'focus' && task
+              {pom.phase === "focus" && task
                 ? task.title
                 : editable
-                  ? 'Gira la carátula para elegir cuánto.'
+                  ? "Gira la carátula para elegir cuánto."
                   : phase.line}
             </Animated.Text>
 
             {/* El ciclo con los mismos brotes que el resto de la app: uno por enfoque cerrado. */}
             <Animated.View
-              entering={animate ? FadeInDown.duration(Motion.enter).delay(CASCADE * 2) : undefined}
+              entering={
+                animate
+                  ? FadeInDown.duration(Motion.enter).delay(CASCADE * 2)
+                  : undefined
+              }
               accessible
               accessibilityLabel={`${closed} de ${ROUNDS} enfoques cerrados`}
-              style={styles.cycle}>
+              style={styles.cycle}
+            >
               {Array.from({ length: ROUNDS }, (_, i) => (
                 <Bud key={i} on={i < closed} accent={fallback} />
               ))}
             </Animated.View>
 
             <Animated.View
-              entering={animate ? FadeInDown.duration(Motion.enter).delay(CASCADE * 3) : undefined}
-              style={styles.actions}>
+              entering={
+                animate
+                  ? FadeInDown.duration(Motion.enter).delay(CASCADE * 3)
+                  : undefined
+              }
+              style={styles.actions}
+            >
               <BigButton
-                label={pom.running ? 'Pausar' : pom.fresh ? 'Empezar' : 'Reanudar'}
+                label={
+                  pom.running ? "Pausar" : pom.fresh ? "Empezar" : "Reanudar"
+                }
                 accent={fallback}
                 onPress={pom.running ? hold : begin}
               />
@@ -614,9 +676,9 @@ export default function TimerScreen() {
                 Con un descanso armado sí se ofrece, y ahí la etiqueta nombra al descanso: decir
                 "este bloque" de cinco minutos de pausa era la palabra equivocada.
               */}
-              {!(pom.fresh && pom.phase === 'focus') && (
+              {!(pom.fresh && pom.phase === "focus") && (
                 <BigButton
-                  label={pom.fresh ? 'Saltar el descanso' : 'Reiniciar'}
+                  label={pom.fresh ? "Saltar el descanso" : "Reiniciar"}
                   variant="ghost"
                   accent={fallback}
                   onPress={pom.fresh ? jump : restart}
@@ -634,12 +696,15 @@ export default function TimerScreen() {
             <Animated.View
               entering={animate ? FadeIn.duration(Motion.enter) : undefined}
               exiting={animate ? FadeOut.duration(Motion.exit) : undefined}
-              layout={RESHAPE}>
+              layout={RESHAPE}
+            >
               <Card>
                 {day.tasks === null && day.loading ? (
                   <>
                     <Micro>En qué</Micro>
-                    <Text style={[Type.body, { color: t.textMuted }]}>Trayendo tu día…</Text>
+                    <Text style={[Type.body, { color: t.textMuted }]}>
+                      Trayendo tu día…
+                    </Text>
                   </>
                 ) : day.tasks === null && day.error ? (
                   <>
@@ -673,9 +738,9 @@ export default function TimerScreen() {
                   <Choice
                     label="En qué"
                     hint={
-                      pom.phase === 'focus'
-                        ? 'Los minutos se le suman a esa tarea.'
-                        : 'Se le sumarán en el siguiente enfoque.'
+                      pom.phase === "focus"
+                        ? "Los minutos se le suman a esa tarea."
+                        : "Se le sumarán en el siguiente enfoque."
                     }
                     options={options}
                     value={taskId}
@@ -688,7 +753,10 @@ export default function TimerScreen() {
           )}
 
           {!!note && (
-            <Text style={[Type.hint, { color: t.danger }]} accessibilityLiveRegion="polite">
+            <Text
+              style={[Type.hint, { color: t.danger }]}
+              accessibilityLiveRegion="polite"
+            >
               {note}
             </Text>
           )}
@@ -713,28 +781,28 @@ const styles = StyleSheet.create({
   },
   // flexGrow para que el contenedor llene el scroll aunque el contenido sea corto: sin eso no hay
   // espacio sobrante que repartir y `center` no centraría nada.
-  focused: { flexGrow: 1, justifyContent: 'center' },
+  focused: { flexGrow: 1, justifyContent: "center" },
   // La carátula, su línea, el ciclo y los botones se mueven JUNTOS al centrarse. Sin este grupo,
   // cada uno animaría por su cuenta y el bloque se leería como cuatro cosas cayendo.
   // Centrada, como todo lo demas de esta pantalla.
-  spaceRow: { alignItems: 'center', paddingBottom: Space.md },
-  stack: { gap: Space.xl, alignItems: 'stretch' },
-  dialWrap: { width: DIAL, height: DIAL, alignSelf: 'center' },
+  spaceRow: { alignItems: "center", paddingBottom: Space.md },
+  stack: { gap: Space.xl, alignItems: "stretch" },
+  dialWrap: { width: DIAL, height: DIAL, alignSelf: "center" },
   // Ocupa el dial entero y centra: así los dígitos quedan en el centro geométrico del aro y no
   // bailan al pasar de 4 a 5 caracteres.
   /** La cara de la pausa. La misma cifra que la barra pausada de la Live Activity. */
   paused: { opacity: 0.45 },
   readout: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     width: DIAL,
     height: DIAL,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     gap: Space.xs,
   },
-  line: { textAlign: 'center' },
-  cycle: { flexDirection: 'row', justifyContent: 'center', gap: Space.md },
+  line: { textAlign: "center" },
+  cycle: { flexDirection: "row", justifyContent: "center", gap: Space.md },
   actions: { gap: Space.sm },
 });

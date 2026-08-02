@@ -1,45 +1,52 @@
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useState } from "react";
+import {
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import Animated, { FadeInDown, FadeOutDown } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AccentPicker } from '@/components/ui/accent-picker';
-import { BackButton } from '@/components/ui/back-button';
-import { BigButton } from '@/components/ui/big-button';
-import { BigField } from '@/components/ui/big-field';
-import { Micro } from '@/components/ui/card';
-import { Choice } from '@/components/ui/choice';
-import { DateField } from '@/components/ui/date-field';
-import { FormError } from '@/components/ui/form-error';
-import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
-import { ProgressRing } from '@/components/ui/progress-ring';
-import { StepDots } from '@/components/ui/step-dots';
+import { AccentPicker } from "@/components/ui/accent-picker";
+import { BackButton } from "@/components/ui/back-button";
+import { BigButton } from "@/components/ui/big-button";
+import { BigField } from "@/components/ui/big-field";
+import { Micro } from "@/components/ui/card";
+import { Choice } from "@/components/ui/choice";
+import { DateField } from "@/components/ui/date-field";
+import { FormError } from "@/components/ui/form-error";
+import { Icon3D, Icon3DSize, type Icon3DName } from "@/components/ui/icon3d";
+import { ProgressRing } from "@/components/ui/progress-ring";
+import { StepDots } from "@/components/ui/step-dots";
 import {
-  AccentContext,
-  Motion,
-  RESHAPE,
-  Radius,
-  Space,
-  Type,
-  useAccent,
-  useTheme,
-  type AccentName,
-} from '@/constants/theme';
-import { ApiError, type ProfileInput, type User } from '@/features/auth/api';
-import { useAuth } from '@/features/auth/auth-context';
+    AccentContext,
+    Motion,
+    RESHAPE,
+    Radius,
+    Space,
+    Type,
+    useAccent,
+    useTheme,
+    type AccentName,
+} from "@/constants/theme";
+import { ApiError, type ProfileInput, type User } from "@/features/auth/api";
+import { useAuth } from "@/features/auth/auth-context";
 import {
-  PEAK_ENERGY,
-  REMINDER_HOUR,
-  REMINDER_STYLE,
-  WORKSPACE_TAGS,
-} from '@/features/auth/options';
-import { askForNotifications } from '@/features/notifications/local';
-import { AvatarPicker } from '@/features/profile/avatar-picker';
-import { useAvatars } from '@/features/profile/use-avatars';
-import { useLocalToday } from '@/features/tasks/day';
-import { focusForTag, iconForTag } from '@/features/tasks/focus-accent';
-import { workspacesApi } from '@/features/workspaces/api';
-import { useScreenPadding } from '@/hooks/use-screen-padding';
+    PEAK_ENERGY,
+    REMINDER_HOUR,
+    REMINDER_STYLE,
+    WORKSPACE_TAGS,
+} from "@/features/auth/options";
+import { askForNotifications } from "@/features/notifications/local";
+import { AvatarPicker } from "@/features/profile/avatar-picker";
+import { useAvatars } from "@/features/profile/use-avatars";
+import { useLocalToday } from "@/features/tasks/day";
+import { focusForTag, iconForTag } from "@/features/tasks/focus-accent";
+import { workspacesApi } from "@/features/workspaces/api";
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
 /**
  * El alta, en ocho pasos.
@@ -63,7 +70,7 @@ import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 /** Lo que un paso necesita saber de sí mismo. `key` solo existe para volver al que falló. */
 type Step = {
-  key: keyof ProfileInput | 'avatar' | 'workspace' | 'alerts';
+  key: keyof ProfileInput | "avatar" | "workspace" | "alerts";
   ask: string;
   hint?: string;
   /** Se puede seguir sin contestar. Solo el espacio: los demás datos los usa la app. */
@@ -71,19 +78,35 @@ type Step = {
 };
 
 const STEPS: readonly Step[] = [
-  { key: 'avatar', ask: '¿Cuál es tu cara?', hint: 'La vas a ver en tu perfil y en la barra.' },
-  { key: 'accentColor', ask: 'Elige tu color', hint: 'Pinta la app entera, y también tu inicial.' },
-  { key: 'peakEnergy', ask: '¿Cuándo rindes mejor?', hint: 'Con eso ordeno tu día.' },
-  { key: 'reminderStyle', ask: '¿Cómo te recuerdo las cosas?' },
-  { key: 'reminderHour', ask: '¿A qué hora te escribo?' },
-  { key: 'birthDate', ask: '¿Cuándo naciste?' },
   {
-    key: 'workspace',
-    ask: '¿En qué vas a trabajar?',
-    hint: 'Tu primer espacio: la tesis, la mudanza, el trabajo. Puedes dejarlo para después.',
+    key: "avatar",
+    ask: "¿Cuál es tu cara?",
+    hint: "La vas a ver en tu perfil y en la barra.",
+  },
+  {
+    key: "accentColor",
+    ask: "Elige tu color",
+    hint: "Pinta la app entera, y también tu inicial.",
+  },
+  {
+    key: "peakEnergy",
+    ask: "¿Cuándo rindes mejor?",
+    hint: "Con eso ordeno tu día.",
+  },
+  { key: "reminderStyle", ask: "¿Cómo te recuerdo las cosas?" },
+  { key: "reminderHour", ask: "¿A qué hora te escribo?" },
+  { key: "birthDate", ask: "¿Cuándo naciste?" },
+  {
+    key: "workspace",
+    ask: "¿En qué vas a trabajar?",
+    hint: "Tu primer espacio: la tesis, la mudanza, el trabajo. Puedes dejarlo para después.",
     skippable: true,
   },
-  { key: 'alerts', ask: '¿Te aviso?', hint: 'Un empujón a la hora que elegiste. Nada más.' },
+  {
+    key: "alerts",
+    ask: "¿Te aviso?",
+    hint: "Un empujón a la hora que elegiste. Nada más.",
+  },
 ] as const;
 
 /**
@@ -118,13 +141,13 @@ export default function OnboardingScreen() {
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<ProfileInput>(() => profileOf(user!));
-  const [draft, setDraft] = useState<Draft>({ name: '', tag: '' });
+  const [draft, setDraft] = useState<Draft>({ name: "", tag: "" });
   /** Se omitió el espacio. Distinto de "no lo ha contestado todavía". */
   const [skipped, setSkipped] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
   /** Lo que falta para poder avanzar. Es del paso actual, no del guardado. */
-  const [nudge, setNudge] = useState('');
+  const [nudge, setNudge] = useState("");
   const [saving, setSaving] = useState(false);
 
   /**
@@ -139,8 +162,11 @@ export default function OnboardingScreen() {
   const current = STEPS[step];
   const last = step === STEPS.length - 1;
 
-  const answer = (key: keyof ProfileInput, value: ProfileInput[keyof ProfileInput]) => {
-    setNudge('');
+  const answer = (
+    key: keyof ProfileInput,
+    value: ProfileInput[keyof ProfileInput],
+  ) => {
+    setNudge("");
     setForm((f) => ({ ...f, [key]: value }));
   };
 
@@ -151,19 +177,22 @@ export default function OnboardingScreen() {
    * elección se puede corregir varias veces antes de estar bien, y avanzar al primer toque
    * convertiría un tanteo en un salto.
    */
-  const answerAndAdvance = (key: keyof ProfileInput, value: ProfileInput[keyof ProfileInput]) => {
+  const answerAndAdvance = (
+    key: keyof ProfileInput,
+    value: ProfileInput[keyof ProfileInput],
+  ) => {
     answer(key, value);
     setTimeout(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 320);
   };
 
   /** Si el paso actual da para seguir. La cara y el color siempre tienen valor, así que siempre. */
   const ready =
-    current.key === 'workspace'
-      ? skipped || (draft.name.trim().length > 0 && draft.tag !== '')
-      : current.key === 'birthDate'
-        // `!!` y no `!== null`: el perfil puede llegar del API SIN el campo, y `undefined !== null`
-        // es cierto — el guard dejaba pasar el paso con la fecha vacia y se guardaba sin ella.
-        ? !!form.birthDate
+    current.key === "workspace"
+      ? skipped || (draft.name.trim().length > 0 && draft.tag !== "")
+      : current.key === "birthDate"
+        ? // `!!` y no `!== null`: el perfil puede llegar del API SIN el campo, y `undefined !== null`
+          // es cierto — el guard dejaba pasar el paso con la fecha vacia y se guardaba sin ella.
+          !!form.birthDate
         : true;
 
   /**
@@ -178,7 +207,7 @@ export default function OnboardingScreen() {
    */
   const save = async (withAlerts: boolean) => {
     if (!token) return;
-    setError('');
+    setError("");
     setFields({});
     setSaving(true);
     try {
@@ -211,14 +240,14 @@ export default function OnboardingScreen() {
          * las tres primeras son del ESPACIO y no de la persona, así que se resuelven a mano contra su
          * paso antes de buscar en `STEPS`.
          */
-        const ofSpace = ['name', 'tag', 'icon'].some((k) => e.fields[k]);
+        const ofSpace = ["name", "tag", "icon"].some((k) => e.fields[k]);
         const failed = ofSpace
-          ? STEPS.findIndex((s) => s.key === 'workspace')
+          ? STEPS.findIndex((s) => s.key === "workspace")
           : STEPS.findIndex((s) => e.fields[s.key]);
         if (failed >= 0) setStep(failed);
-        setError(failed >= 0 ? '' : e.message);
+        setError(failed >= 0 ? "" : e.message);
       } else {
-        setError('Algo salió mal');
+        setError("Algo salió mal");
       }
     } finally {
       setSaving(false);
@@ -232,11 +261,16 @@ export default function OnboardingScreen() {
   const advance = () => {
     if (last) return void save(true);
     if (ready) {
-      setNudge('');
+      setNudge("");
       return setStep(step + 1);
     }
-    if (current.key === 'birthDate') return setNudge('Revisa la fecha para seguir.');
-    setNudge(draft.name.trim() ? 'Elige de qué va para seguir.' : 'Ponle un nombre para seguir.');
+    if (current.key === "birthDate")
+      return setNudge("Revisa la fecha para seguir.");
+    setNudge(
+      draft.name.trim()
+        ? "Elige de qué va para seguir."
+        : "Ponle un nombre para seguir.",
+    );
   };
 
   // Despues de todos los hooks: al cerrar sesion el user se vuelve null.
@@ -252,8 +286,9 @@ export default function OnboardingScreen() {
     <AccentContext value={form.accentColor}>
       <View style={[styles.screen, { backgroundColor: t.canvas }]}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.screen}>
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.screen}
+        >
           <View style={[styles.header, { paddingTop: pad.top }]}>
             {/*
               Retroceder, que es lo que el hilo de chat no dejaba hacer.
@@ -261,27 +296,43 @@ export default function OnboardingScreen() {
               correo: `signOut` devuelve al login, y el API deja reclamar un correo sin verificar
               registrándose otra vez.
             */}
-            <BackButton onPress={() => (step === 0 ? void signOut() : setStep(step - 1))} />
+            <BackButton
+              onPress={() => (step === 0 ? void signOut() : setStep(step - 1))}
+            />
             <View style={styles.dots}>
               <StepDots total={STEPS.length} current={step} />
             </View>
           </View>
 
           <ScrollView
-            contentContainerStyle={[styles.content, { paddingBottom: Space.lg }]}
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: Space.lg },
+            ]}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
+            showsVerticalScrollIndicator={false}
+          >
             <Animated.View layout={RESHAPE} style={styles.block}>
               <View style={styles.ask}>
-                <Micro>{last ? 'Ya casi' : `Paso ${step + 1} de ${STEPS.length}`}</Micro>
-                <Text style={[Type.title, { color: t.text }]}>{current.ask}</Text>
+                <Micro>
+                  {last ? "Ya casi" : `Paso ${step + 1} de ${STEPS.length}`}
+                </Micro>
+                <Text style={[Type.title, { color: t.text }]}>
+                  {current.ask}
+                </Text>
                 {!!current.hint && (
-                  <Text style={[Type.body, { color: t.textMuted }]}>{current.hint}</Text>
+                  <Text style={[Type.body, { color: t.textMuted }]}>
+                    {current.hint}
+                  </Text>
                 )}
               </View>
 
-              {current.key === 'avatar' && (
-                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+              {current.key === "avatar" && (
+                <Animated.View
+                  entering={STEP_IN}
+                  exiting={STEP_OUT}
+                  style={styles.step}
+                >
                   {/*
                     El vestidor entero, el mismo de "Cómo te ves". Guarda al toque con
                     `updateProfile`, así que la cara ya está puesta antes de terminar el alta — y por
@@ -291,58 +342,86 @@ export default function OnboardingScreen() {
                 </Animated.View>
               )}
 
-              {current.key === 'accentColor' && (
-                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+              {current.key === "accentColor" && (
+                <Animated.View
+                  entering={STEP_IN}
+                  exiting={STEP_OUT}
+                  style={styles.step}
+                >
                   <AccentPicker
                     value={form.accentColor}
-                    onChange={(value: AccentName) => answer('accentColor', value)}
+                    onChange={(value: AccentName) =>
+                      answer("accentColor", value)
+                    }
                   />
                 </Animated.View>
               )}
 
-              {current.key === 'peakEnergy' && (
-                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+              {current.key === "peakEnergy" && (
+                <Animated.View
+                  entering={STEP_IN}
+                  exiting={STEP_OUT}
+                  style={styles.step}
+                >
                   <Choice
                     options={PEAK_ENERGY}
                     value={form.peakEnergy}
-                    onChange={(v) => answerAndAdvance('peakEnergy', v)}
+                    onChange={(v) => answerAndAdvance("peakEnergy", v)}
                   />
                 </Animated.View>
               )}
 
-              {current.key === 'reminderStyle' && (
-                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+              {current.key === "reminderStyle" && (
+                <Animated.View
+                  entering={STEP_IN}
+                  exiting={STEP_OUT}
+                  style={styles.step}
+                >
                   <Choice
                     options={REMINDER_STYLE}
                     value={form.reminderStyle}
-                    onChange={(v) => answerAndAdvance('reminderStyle', v)}
+                    onChange={(v) => answerAndAdvance("reminderStyle", v)}
                   />
                 </Animated.View>
               )}
 
-              {current.key === 'reminderHour' && (
-                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+              {current.key === "reminderHour" && (
+                <Animated.View
+                  entering={STEP_IN}
+                  exiting={STEP_OUT}
+                  style={styles.step}
+                >
                   <Choice
                     options={REMINDER_HOUR}
                     value={String(form.reminderHour)}
-                    onChange={(v) => answerAndAdvance('reminderHour', Number(v))}
+                    onChange={(v) =>
+                      answerAndAdvance("reminderHour", Number(v))
+                    }
                   />
                 </Animated.View>
               )}
 
-              {current.key === 'birthDate' && (
-                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+              {current.key === "birthDate" && (
+                <Animated.View
+                  entering={STEP_IN}
+                  exiting={STEP_OUT}
+                  style={styles.step}
+                >
                   <DateField
                     label="Tu fecha"
                     value={form.birthDate}
-                    onChange={(value) => answer('birthDate', value)}
+                    onChange={(value) => answer("birthDate", value)}
                     error={fields.birthDate}
                   />
                 </Animated.View>
               )}
 
-              {current.key === 'workspace' && (
-                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+              {current.key === "workspace" && (
+                <Animated.View
+                  entering={STEP_IN}
+                  exiting={STEP_OUT}
+                  style={styles.step}
+                >
                   {/*
                     La vista previa es la CARD de verdad, igual que en `new-workspace`: enseña lo que
                     vas a obtener y se repinta al elegir. Omitido, se apaga en vez de desaparecer —
@@ -353,19 +432,39 @@ export default function OnboardingScreen() {
                       styles.card,
                       { backgroundColor: t.surface, borderColor: t.line },
                       skipped && styles.faded,
-                    ]}>
+                    ]}
+                  >
                     <View style={styles.cardHead}>
-                      <ProgressRing done={0} total={0} accent={form.accentColor} />
+                      <ProgressRing
+                        done={0}
+                        total={0}
+                        accent={form.accentColor}
+                      />
                       <Icon3D
-                        name={(draft.tag ? iconForTag(draft.tag) : 'work') as Icon3DName}
+                        name={
+                          (draft.tag
+                            ? iconForTag(draft.tag)
+                            : "work") as Icon3DName
+                        }
                         size={Icon3DSize.md}
                       />
                     </View>
-                    <Text style={[Type.section, { color: t.text }]} numberOfLines={1}>
-                      {draft.name.trim() || 'Sin nombre'}
+                    <Text
+                      style={[Type.section, { color: t.text }]}
+                      numberOfLines={1}
+                    >
+                      {draft.name.trim() || "Sin nombre"}
                     </Text>
-                    <View style={[styles.chip, { backgroundColor: picked.soft }]}>
-                      <Text style={[Type.micro, styles.chipLabel, { color: t.text }]}>
+                    <View
+                      style={[styles.chip, { backgroundColor: picked.soft }]}
+                    >
+                      <Text
+                        style={[
+                          Type.micro,
+                          styles.chipLabel,
+                          { color: t.text },
+                        ]}
+                      >
                         Sin tareas todavía
                       </Text>
                     </View>
@@ -376,7 +475,7 @@ export default function OnboardingScreen() {
                     value={draft.name}
                     onChangeText={(name) => {
                       setSkipped(false);
-                      setNudge('');
+                      setNudge("");
                       setDraft((d) => ({ ...d, name }));
                     }}
                     placeholder="La tesis, la mudanza…"
@@ -387,18 +486,22 @@ export default function OnboardingScreen() {
                     value={draft.tag}
                     onChange={(tag) => {
                       setSkipped(false);
-                      setNudge('');
+                      setNudge("");
                       setDraft((d) => ({ ...d, tag }));
                     }}
                   />
                 </Animated.View>
               )}
 
-              {current.key === 'alerts' && (
-                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+              {current.key === "alerts" && (
+                <Animated.View
+                  entering={STEP_IN}
+                  exiting={STEP_OUT}
+                  style={styles.step}
+                >
                   <Text style={[Type.body, { color: t.textMuted }]}>
-                    Los avisos son de este teléfono y no salen de aquí. Si dices que no, la app
-                    funciona igual — solo dejo de escribirte.
+                    Los avisos son de este teléfono y no salen de aquí. Si dices
+                    que no, la app funciona igual — solo dejo de escribirte.
                   </Text>
                 </Animated.View>
               )}
@@ -417,10 +520,12 @@ export default function OnboardingScreen() {
                 backgroundColor: t.canvas,
                 borderTopColor: t.line,
               },
-            ]}>
+            ]}
+          >
             <BigButton
-              label={last ? 'Sí, avísame' : 'Seguir'}
+              label={last ? "Sí, avísame" : "Seguir"}
               loading={saving}
+              disabled={saving}
               onPress={advance}
             />
 
@@ -434,13 +539,19 @@ export default function OnboardingScreen() {
                 variant="ghost"
                 onPress={() => {
                   setSkipped(true);
-                  setDraft({ name: '', tag: '' });
-                  setNudge('');
+                  setDraft({ name: "", tag: "" });
+                  setNudge("");
                   setStep(step + 1);
                 }}
               />
             )}
-            {last && <BigButton label="Ahora no" variant="ghost" onPress={() => void save(false)} />}
+            {last && (
+              <BigButton
+                label="Ahora no"
+                variant="ghost"
+                onPress={() => void save(false)}
+              />
+            )}
           </View>
         </KeyboardAvoidingView>
       </View>
@@ -451,8 +562,8 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Space.md,
     paddingHorizontal: Space.xl,
     paddingBottom: Space.md,
@@ -472,8 +583,17 @@ const styles = StyleSheet.create({
   },
   /** Omitido: sigue ahí, apagado. Desaparecer diría que ya no se puede volver. */
   faded: { opacity: 0.4 },
-  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  chip: { alignSelf: 'flex-start', borderRadius: Radius.pill, paddingHorizontal: Space.md, paddingVertical: 6 },
+  cardHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  chip: {
+    alignSelf: "flex-start",
+    borderRadius: Radius.pill,
+    paddingHorizontal: Space.md,
+    paddingVertical: 6,
+  },
   chipLabel: { letterSpacing: 0.4 },
 
   actions: {

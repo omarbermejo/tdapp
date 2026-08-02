@@ -1,40 +1,40 @@
-import { BlurView } from 'expo-blur';
-import { Image } from 'expo-image';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BlurView } from "expo-blur";
+import { Image } from "expo-image";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, {
-  interpolate,
-  useAnimatedScrollHandler,
-  useAnimatedStyle,
-  useSharedValue,
-} from 'react-native-reanimated';
+    interpolate,
+    useAnimatedScrollHandler,
+    useAnimatedStyle,
+    useSharedValue,
+} from "react-native-reanimated";
 
-import { BigButton } from '@/components/ui/big-button';
-import { Micro } from '@/components/ui/card';
+import { BigButton } from "@/components/ui/big-button";
+import { Micro } from "@/components/ui/card";
 import {
-  Radius,
-  Space,
-  Touch,
-  Type,
-  useAccent,
-  useScheme,
-  useTheme,
-  type Accent,
-} from '@/constants/theme';
-import type { Task } from '@/features/auth/api';
-import { useAuth } from '@/features/auth/auth-context';
-import { localDate } from '@/features/tasks/api';
-import { DayTimeline } from '@/features/tasks/day-timeline';
-import { useTasks } from '@/features/tasks/use-tasks';
-import { usePressScale } from '@/hooks/use-press-scale';
+    Radius,
+    Space,
+    Touch,
+    Type,
+    useAccent,
+    useScheme,
+    useTheme,
+    type Accent,
+} from "@/constants/theme";
+import type { Task } from "@/features/auth/api";
+import { useAuth } from "@/features/auth/auth-context";
+import { localDate } from "@/features/tasks/api";
+import { DayTimeline } from "@/features/tasks/day-timeline";
+import { useTasks } from "@/features/tasks/use-tasks";
+import { usePressScale } from "@/hooks/use-press-scale";
 
-import { SpacePill } from '@/components/ui/space-pill';
-import { useActiveSpace } from '@/features/workspaces/active-space';
-import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { SpacePill } from "@/components/ui/space-pill";
+import { useActiveSpace } from "@/features/workspaces/active-space";
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
-import { TAB_DOCK } from './_layout';
-import { useDock } from '@/features/nav/dock';
+import { useDock } from "@/features/nav/dock";
+import { TAB_DOCK } from "./_layout";
 
 /** Dos semanas hacia adelante. Mas que eso ya no es "que viene", es un archivo. */
 const DAYS = 14;
@@ -44,7 +44,7 @@ const DAYS = 14;
  * America corre el dia hacia atras; con el constructor de tres numeros no hay zona de por medio.
  */
 const parse = (date: string) => {
-  const [y, m, d] = date.split('-').map(Number);
+  const [y, m, d] = date.split("-").map(Number);
   return new Date(y, m - 1, d);
 };
 
@@ -56,7 +56,11 @@ const shift = (date: string, offset: number) => {
 };
 
 const long = (at: Date) =>
-  at.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+  at.toLocaleDateString("es-MX", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
 
 const upper = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
@@ -98,7 +102,7 @@ export default function CalendarScreen() {
   // La altura real de los controles: define cuanto aire necesita la lista para no nacer tapada.
   const [headHeight, setHeadHeight] = useState(0);
   const veil = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, VEIL_AT], [0, 1], 'clamp'),
+    opacity: interpolate(scrollY.value, [0, VEIL_AT], [0, 1], "clamp"),
   }));
 
   /**
@@ -107,7 +111,7 @@ export default function CalendarScreen() {
    * el dia de ayer; el updater devuelve el mismo valor cuando no cambio, asi que despues del
    * primer anclaje no provoca renders.
    */
-  const [today, setToday] = useState('');
+  const [today, setToday] = useState("");
   // Minutos desde medianoche. Vive aqui y no en el render por lo mismo: leer el reloj al
   // pintar es impuro, y ademas la marca tiene que moverse sola mientras la pantalla esta abierta.
   const [minutes, setMinutes] = useState(0);
@@ -145,16 +149,24 @@ export default function CalendarScreen() {
   // El aire va en el contenido, no en un SafeAreaView: ver `use-screen-padding`.
   const pad = useScreenPadding(TAB_DOCK);
 
-  const days = today ? Array.from({ length: DAYS }, (_, i) => shift(today, i)) : [];
+  const days = today
+    ? Array.from({ length: DAYS }, (_, i) => shift(today, i))
+    : [];
   const sorted = tasks ? [...tasks].sort(byTime) : [];
-  const tomorrow = today ? localDate(shift(today, 1)) : '';
+  const tomorrow = today ? localDate(shift(today, 1)) : "";
   // El `!selected` va primero: sin dia todavia, '' === '' diria "Hoy" bajo un titulo vacio.
-  const relative = !selected ? '' : selected === today ? 'Hoy' : selected === tomorrow ? 'Mañana' : '';
+  const relative = !selected
+    ? ""
+    : selected === today
+      ? "Hoy"
+      : selected === tomorrow
+        ? "Mañana"
+        : "";
   const isViewingToday = !!today && selected === today;
 
   // El guard va DESPUES de todos los hooks: al cerrar sesion el user se vuelve null y salir
   // antes dejaria a React con menos hooks que en el render anterior.
-  if (!user) return null;
+  if (!user) return <ScreenGuard />;
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
@@ -166,17 +178,20 @@ export default function CalendarScreen() {
           styles.content,
           { paddingTop: headHeight, paddingBottom: pad.bottom },
         ]}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+      >
         {loading && (
           <View style={styles.message}>
-            <Micro>{relative || 'Agenda'}</Micro>
-            <Text style={[Type.body, { color: t.textMuted }]}>Trayendo ese día…</Text>
+            <Micro>{relative || "Agenda"}</Micro>
+            <Text style={[Type.body, { color: t.textMuted }]}>
+              Trayendo ese día…
+            </Text>
           </View>
         )}
 
         {!loading && !!error && !tasks && (
           <View style={styles.message}>
-            <Micro>{relative || 'Agenda'}</Micro>
+            <Micro>{relative || "Agenda"}</Micro>
             <Text style={[Type.body, { color: t.textMuted }]}>{error}</Text>
             <BigButton
               label="Reintentar"
@@ -195,19 +210,21 @@ export default function CalendarScreen() {
           <View style={styles.message}>
             {/* La ilustracion hace que un dia vacio se sienta como espacio, no como falta. */}
             <Image
-              source={require('@/assets/stickers/bubble.svg')}
+              source={require("@/assets/stickers/bubble.svg")}
               style={styles.empty}
               contentFit="contain"
               accessible={false}
             />
-            <Text style={[Type.section, { color: t.text }]}>Nada agendado.</Text>
+            <Text style={[Type.section, { color: t.text }]}>
+              Nada agendado.
+            </Text>
             <Text style={[Type.body, { color: t.textMuted }]}>
               Un día en blanco no es un día perdido. Si algo va aquí, ponlo.
             </Text>
             <BigButton
               label="Agendar algo"
               accent={user.accentColor}
-              onPress={() => router.push('/new-task-steps')}
+              onPress={() => router.push("/new-task-steps")}
             />
           </View>
         )}
@@ -232,7 +249,9 @@ export default function CalendarScreen() {
 
         {/* Un fallo con la lista ya en pantalla no borra la pantalla: se avisa y se sigue leyendo. */}
         {!!error && !!tasks && (
-          <Text style={[Type.hint, styles.notice, { color: t.danger }]}>{error}</Text>
+          <Text style={[Type.hint, styles.notice, { color: t.danger }]}>
+            {error}
+          </Text>
         )}
       </Animated.ScrollView>
 
@@ -242,16 +261,20 @@ export default function CalendarScreen() {
       */}
       <View
         style={styles.controls}
-        onLayout={(e) => setHeadHeight(e.nativeEvent.layout.height)}>
+        onLayout={(e) => setHeadHeight(e.nativeEvent.layout.height)}
+      >
         {/*
           El velo va detras del contenido del encabezado y se revela con el scroll: el blur
           separa los controles de lo que corre por debajo, y el filo de abajo dice donde
           termina la barra ahora que ya no comparte fondo con la lista.
         */}
-        <Animated.View style={[StyleSheet.absoluteFill, veil]} pointerEvents="none">
+        <Animated.View
+          style={[StyleSheet.absoluteFill, veil]}
+          pointerEvents="none"
+        >
           <BlurView
             intensity={40}
-            tint={scheme === 'dark' ? 'dark' : 'light'}
+            tint={scheme === "dark" ? "dark" : "light"}
             style={StyleSheet.absoluteFill}
           />
           <View style={[styles.edge, { backgroundColor: t.line }]} />
@@ -262,11 +285,11 @@ export default function CalendarScreen() {
           {/* La pastilla comparte fila con el rotulo: esta cabecera flota con blur y una linea mas la
               haria crecer sobre la tira de dias. */}
           <View style={styles.headTop}>
-            <Micro>{relative || 'Que viene'}</Micro>
+            <Micro>{relative || "Que viene"}</Micro>
             <SpacePill space={space} />
           </View>
           <Text style={[Type.display, { color: t.text }]} numberOfLines={2}>
-            {selected ? upper(long(parse(selected))) : ''}
+            {selected ? upper(long(parse(selected))) : ""}
           </Text>
         </View>
 
@@ -274,7 +297,8 @@ export default function CalendarScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.strip}>
+          contentContainerStyle={styles.strip}
+        >
           {days.map((at) => {
             const day = localDate(at);
             return (
@@ -311,7 +335,9 @@ function Day({
   const t = useTheme();
   const press = usePressScale({ to: 0.94 });
   // es-MX devuelve 'lun.' con punto; en una tira de tres letras el punto es ruido.
-  const name = at.toLocaleDateString('es-MX', { weekday: 'short' }).replace('.', '');
+  const name = at
+    .toLocaleDateString("es-MX", { weekday: "short" })
+    .replace(".", "");
 
   return (
     <Animated.View style={press.style}>
@@ -324,17 +350,27 @@ function Day({
         onPressOut={press.onPressOut}
         style={[
           styles.cell,
-          { backgroundColor: on ? tint.soft : t.surface, borderColor: on ? tint.ink : t.line },
-        ]}>
-        <Text style={[Type.micro, { color: on ? t.text : t.textMuted }]}>{name}</Text>
-        <Text style={[Type.section, { color: t.text }]}>{String(at.getDate())}</Text>
+          {
+            backgroundColor: on ? tint.soft : t.surface,
+            borderColor: on ? tint.ink : t.line,
+          },
+        ]}
+      >
+        <Text style={[Type.micro, { color: on ? t.text : t.textMuted }]}>
+          {name}
+        </Text>
+        <Text style={[Type.section, { color: t.text }]}>
+          {String(at.getDate())}
+        </Text>
         {/*
           Hoy se marca con el punto y el dia elegido con el relleno: pueden no ser el mismo. El
           hueco se reserva siempre y solo se pinta el punto cuando toca, para que la celda de hoy
           no mida distinto que las demas.
         */}
         <View style={styles.slot}>
-          {isToday && <View style={[styles.mark, { backgroundColor: tint.ink }]} />}
+          {isToday && (
+            <View style={[styles.mark, { backgroundColor: tint.ink }]} />
+          )}
         </View>
       </Pressable>
     </Animated.View>
@@ -350,16 +386,27 @@ const VEIL_AT = 24;
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  controls: { position: 'absolute', top: 0, left: 0, right: 0 },
+  controls: { position: "absolute", top: 0, left: 0, right: 0 },
   // Un pelo, no un borde: separa la barra de la lista sin dibujar una caja.
-  edge: { position: 'absolute', bottom: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth },
+  edge: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: StyleSheet.hairlineWidth,
+  },
   // El paddingTop lo pone `useScreenPadding`: es el unico elemento pegado al borde de arriba.
   // Rotulo a la izquierda, espacio activo a la derecha. `space-between` y no un gap: la pastilla
   // mide lo que mide su nombre y tiene que quedarse pegada al borde.
-  headTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.sm },
+  headTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Space.sm,
+  },
   head: { paddingHorizontal: Space.xl, gap: Space.xs },
   strip: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: Space.sm,
     paddingHorizontal: Space.xl,
     paddingVertical: Space.lg,
@@ -369,7 +416,7 @@ const styles = StyleSheet.create({
     width: Touch.button,
     borderRadius: Radius.md,
     borderWidth: RAIL,
-    alignItems: 'center',
+    alignItems: "center",
     gap: Space.xs,
     paddingVertical: Space.md,
   },
@@ -383,5 +430,5 @@ const styles = StyleSheet.create({
   // El mismo aire interior que traia Card, para que el contenido no cambie de sitio.
   message: { gap: Space.md, paddingVertical: Space.md },
   notice: { paddingHorizontal: Space.xs },
-  empty: { width: '48%', aspectRatio: 1, alignSelf: 'center' },
+  empty: { width: "48%", aspectRatio: 1, alignSelf: "center" },
 });
