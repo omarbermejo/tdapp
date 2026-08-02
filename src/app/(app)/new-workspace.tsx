@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Animated, { FadeInDown, FadeOutDown, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 
 import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
@@ -21,7 +21,17 @@ import { FormError } from '@/components/ui/form-error';
 import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { StepDots } from '@/components/ui/step-dots';
-import { Motion, Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import {
+  Motion,
+  RESHAPE,
+  Radius,
+  Space,
+  Touch,
+  Type,
+  useAccent,
+  useTheme,
+  type AccentName,
+} from '@/constants/theme';
 import { ApiError, type Workspace } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { WORKSPACE_TAGS } from '@/features/auth/options';
@@ -77,7 +87,6 @@ const STEPS = [
  */
 const STEP_IN = FadeInDown.duration(Motion.enter);
 const STEP_OUT = FadeOutDown.duration(Motion.exit);
-const RESIZE = LinearTransition.duration(Motion.enter);
 
 /**
  * Crear un espacio de trabajo, en cuatro pasos.
@@ -216,7 +225,7 @@ export default function NewWorkspaceScreen() {
           contentContainerStyle={[styles.content, { paddingBottom: Space.lg }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <Animated.View layout={RESIZE} style={styles.block}>
+          <Animated.View layout={RESHAPE} style={styles.block}>
             <View style={styles.ask}>
               <Micro>Nuevo espacio</Micro>
               <Text style={[Type.title, { color: t.text }]}>{current.ask}</Text>

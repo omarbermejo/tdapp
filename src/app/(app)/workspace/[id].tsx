@@ -1,13 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 
 import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro, SectionHeader } from '@/components/ui/card';
 import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
 import { ProgressRing } from '@/components/ui/progress-ring';
-import { Motion, Space, Type, useAccent, useTheme } from '@/constants/theme';
+import { Motion, RESHAPE, Space, Type, useAccent, useTheme } from '@/constants/theme';
 import { FOCUS_AREAS } from '@/features/auth/options';
 import { WORKSPACE_HEAT } from '@/features/stats/grid';
 import { HeatMap } from '@/features/stats/heat-map';
@@ -19,7 +19,6 @@ import { useWorkspace } from '@/features/workspaces/use-workspace';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
 
-const ROW_LAYOUT = LinearTransition.springify().damping(22).stiffness(240);
 const ROW_EXIT = FadeOut.duration(Motion.exit);
 const rowEntering = (index: number) =>
   FadeInDown.delay(Math.min(index, 6) * Motion.step).duration(Motion.enter);
@@ -214,7 +213,7 @@ export default function WorkspaceScreen() {
               {[...pending, ...done].map((task, i) => (
                 <Animated.View
                   key={task.id}
-                  layout={ROW_LAYOUT}
+                  layout={RESHAPE}
                   entering={rowEntering(i)}
                   exiting={ROW_EXIT}>
                   <TaskRow task={task} accent={accent} mutate={list} showDay showTime={false} />

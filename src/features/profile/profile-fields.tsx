@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro } from '@/components/ui/card';
@@ -49,15 +49,15 @@ const MAX_FOCUS = 3;
  * salida cambie quedarán tres iguales y dos distintos, que es exactamente el tipo de incoherencia
  * que no se ve en el diff y sí en la pantalla.
  *
- * `FadeOutDown` y no `FadeOutUp`: `FadeInDown` nace 25pt abajo y sube, así que lo simétrico es que
- * se retire por donde vino. Con la salida hacia arriba el panel se iba CONTRA la pastilla que lo
- * abrió, o sea leyéndose como que subía a esconderse detrás de ella.
+ * **El `exiting` se fue, y no es un descuido.** Iba sincronizado con el `LinearTransition` de `Card`:
+ * la tarjeta encogía en 220ms mientras el panel se desvanecía en 160, así que el panel siempre estaba
+ * DENTRO de la caja. Al apagar el reacomodo (`RESHAPE`), la tarjeta encoge en un frame — y un panel
+ * que tardara 160ms en irse quedaría dibujado FUERA de ella, flotando sobre la sección siguiente,
+ * porque `Card` no recorta (`overflow: hidden` se comería sus sombras).
  *
- * Y antes no había `exiting` en absoluto: los paneles entraban con un fundido y desaparecían de
- * golpe. Media animación se nota más que ninguna.
+ * El `entering` se queda: eso aparece dentro de una caja que ya creció.
  */
 const IN = FadeInDown.duration(Motion.enter);
-const OUT = FadeOutDown.duration(Motion.exit);
 
 const labelOf = (options: readonly { value: string; label: string }[], value: string) =>
   options.find((option) => option.value === value)?.label ?? value;
@@ -215,7 +215,7 @@ export function ProfileFields({ user }: { user: User }) {
         botón "Guardar" solo añadiría un paso. La confirmación es la repintada de la app.
       */}
       {panel === 'aviso' && (
-        <Animated.View entering={IN} exiting={OUT} style={styles.panel}>
+        <Animated.View entering={IN} style={styles.panel}>
           <Choice
             label="Cómo te aviso"
             options={REMINDER_STYLE}
@@ -235,7 +235,7 @@ export function ProfileFields({ user }: { user: User }) {
       )}
 
       {panel === 'energia' && (
-        <Animated.View entering={IN} exiting={OUT} style={styles.panel}>
+        <Animated.View entering={IN} style={styles.panel}>
           <Choice
             label="Cuándo rindes mejor"
             hint="Marcamos esa franja en tu calendario."
@@ -248,7 +248,7 @@ export function ProfileFields({ user }: { user: User }) {
       )}
 
       {panel === 'color' && (
-        <Animated.View entering={IN} exiting={OUT} style={styles.panel}>
+        <Animated.View entering={IN} style={styles.panel}>
           {/* `AccentPicker` y no `Choice`: con once colores mas "Otro", una lista con el nombre al
               lado seria seis filas diciendo dos veces lo mismo. Ver su docstring. */}
           <AccentPicker
@@ -259,7 +259,7 @@ export function ProfileFields({ user }: { user: User }) {
       )}
 
       {panel === 'focos' && (
-        <Animated.View entering={IN} exiting={OUT} style={styles.panel}>
+        <Animated.View entering={IN} style={styles.panel}>
           <Choice
             label="Focos"
             hint={`Hasta ${MAX_FOCUS}. Menos focos, más resultados.`}
@@ -294,7 +294,7 @@ export function ProfileFields({ user }: { user: User }) {
       )}
 
       {panel === 'naciste' && (
-        <Animated.View entering={IN} exiting={OUT} style={styles.panel}>
+        <Animated.View entering={IN} style={styles.panel}>
           <DateField label="Día, mes y año" value={birth} onChange={setBirth} accent={accent} />
           <BigButton
             label="Guardar"

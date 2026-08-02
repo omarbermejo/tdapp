@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
-import Animated, { LinearTransition } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
 import {
-  Motion,
+  RESHAPE,
   Radius,
   Space,
   Type,
@@ -26,14 +26,13 @@ import {
  * tarjeta, y eso se lee como que la pantalla se sacudió. Reanimated respeta "reducir movimiento"
  * solo en las de layout, así que no hay guard que escribir.
  */
-const RESIZE = LinearTransition.duration(Motion.enter);
 
 /** Papel sobre papel: la tarjeta se levanta con luz y una sombra mínima, nunca con borde grueso. */
 export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   const t = useTheme();
   const shadow = useShadow();
   return (
-    <Animated.View layout={RESIZE} style={[styles.card, { backgroundColor: t.surface }, shadow, style]}>
+    <Animated.View layout={RESHAPE} style={[styles.card, { backgroundColor: t.surface }, shadow, style]}>
       {children}
     </Animated.View>
   );

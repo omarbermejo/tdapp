@@ -1,4 +1,5 @@
 import { api, bearer, request, type Task } from '@/features/auth/api';
+import { invalidate, type Domain } from '@/features/cache/store';
 import { refreshTaskAlerts } from '@/features/notifications/reminders';
 import { syncTodayWidget } from '@/features/widgets/sync-today';
 
@@ -76,8 +77,17 @@ export type TaskQuery = {
  * No espera al refresco (`void`): la pantalla no debe quedarse colgada de un widget, y si falla ya se
  * queja `syncTodayWidget` por su cuenta.
  */
-const andSync = async <T>(token: string, work: Promise<T>): Promise<T> => {
+const andSync = async <T>(token: string, work: Promise<T>, ...stale: Domain[]): Promise<T> => {
   const result = await work;
+  /**
+   * Primero la invalidacion, y sincrona: no pide nada —solo sube contadores— asi que cuanto antes
+   * lo sepa el hook que esta al frente, antes repinta. Los dos `void` de abajo son trabajo de red.
+   *
+   * Que dominios caduca cada mutacion lo decide su call site, y el criterio es: **se invalida lo que
+   * la pantalla no puede saber por si sola.** Las listas de tareas ya se parchean en el sitio
+   * (`mutate.patch`/`drop`), asi que `update` y `remove` NO invalidan `tasks`.
+   */
+  invalidate(...stale);
   void syncTodayWidget(token);
   /**
    * Y los avisos, aqui y no en cada pantalla, por el mismo argumento del comentario de arriba —
@@ -116,7 +126,13 @@ export const tasksApi = {
         method: 'POST',
         headers: bearer(token),
         body: JSON.stringify(input),
-      })
+      }),
+      // Una fila NUEVA no se puede parchear a ciegas: `patch()` ni escribe si no hay entrada, y los
+      // mutadores de `use-tasks` no tienen `add`. Sube el `total` del espacio y las `planned` del
+      // dia. NO la racha: anotar no es cerrar.
+      'tasks',
+      'workspaces',
+      'stats'
     ),
 
   list: (token: string, query: TaskQuery = {}) => {
@@ -136,11 +152,23 @@ export const tasksApi = {
         method: 'PATCH',
         headers: bearer(token),
         body: JSON.stringify(patch),
-      })
+      }),
+      // Cerrar o reabrir mueve la llama, el mapa, la tira y el anillo del espacio. La fila en si ya
+      // la parcheo quien la toco, asi que `tasks` sobra.
+      'workspaces',
+      'streak',
+      'stats'
     ),
 
   remove: (token: string, id: number) =>
-    andSync(token, request<void>(`/tasks/${id}`, { method: 'DELETE', headers: bearer(token) })),
+    andSync(
+      token,
+      request<void>(`/tasks/${id}`, { method: 'DELETE', headers: bearer(token) }),
+      // Lo mismo que `update` pero al reves: `drop` ya quito la fila de su lista.
+      'workspaces',
+      'streak',
+      'stats'
+    ),
 
   /**
    * Guarda el orden manual de un dia: la posicion de cada tarea es su indice en `ids`.
@@ -164,7 +192,12 @@ export const tasksApi = {
     return result;
   },
 
-  /** El API impone un solo timer corriendo por usuario: si ya hay otro, responde 409. */
+  /**
+   * El API impone un solo timer corriendo por usuario: si ya hay otro, responde 409.
+   *
+   * NO invalida nada: solo acumula minutos, no cierra tareas y no mueve anillos. Y es de las
+   * mutaciones mas repetidas, asi que tres GET por cada start y cada stop serian gratis para nadie.
+   */
   timer: (token: string, id: number, action: 'start' | 'stop') =>
     andSync(
       token,

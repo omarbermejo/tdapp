@@ -2,20 +2,19 @@ import { GlassContainer, GlassView, isLiquidGlassAvailable } from 'expo-glass-ef
 import * as Haptics from 'expo-haptics';
 import { Tabs, type BottomTabBarProps } from 'expo-router/js-tabs';
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  runOnJS,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withSpring,
-  type SharedValue,
 } from 'react-native-reanimated';
 
 import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
-import { Radius, Space, useAccent, useScheme, useShadow, useTheme } from '@/constants/theme';
+import { Radius, Space, Type, useAccent, useScheme, useShadow, useTheme } from '@/constants/theme';
+import type { User } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
+import { ProfileAvatar } from '@/features/profile/avatar';
 import { FocusModeProvider, useFocusMode } from '@/features/timer/focus-mode';
 import { usePressScale } from '@/hooks/use-press-scale';
 
@@ -51,7 +50,31 @@ const GLASS = detectGlass();
  * tactil crece un 36% (que en una barra que se toca a ciegas con el pulgar es justo donde se nota)
  * y el vidrio tiene superficie suficiente para que el desenfoque signifique algo.
  */
-const SLOT = 60;
+const SLOT_H = 60;
+
+/**
+ * El ancho de una pestaña APAGADA. 48 y no 60, y no es un recorte gratis: la activa se ensancha
+ * para caber su nombre, y el presupuesto sale de las otras tres.
+ *
+ * 48 sigue por encima de los 44 del HIG con cuatro puntos de margen, y el alto se queda en 60 — que
+ * es el eje por el que se falla al tocar a ciegas con el pulgar, porque el dedo rueda hacia arriba y
+ * hacia abajo antes que hacia los lados.
+ */
+const SLOT_OFF = 48;
+
+/**
+ * El ancho de la pestaña ACTIVA. Fijo, y esa es la decision: NO depende de lo larga que sea su
+ * etiqueta.
+ *
+ * Si dependiera, `BAR_W` dejaria de ser una constante de modulo — y el docstring de abajo explica
+ * por que eso no es negociable: un `GlassView` que nace sin medidas se queda plano para siempre. Con
+ * el ancho fijo la capsula mide siempre igual y el resaltado solo cambia de sitio.
+ *
+ * 128 deja 104 de contenido (menos `Space.md` a cada lado): glifo 32 + `Space.sm` + **64pt de
+ * etiqueta**. En Outfit Medium 15 eso son 'Hoy' (~27), 'Enfoque' (~56) y 'Perfil' (~35). 'Calendario'
+ * (~74) NO cabia, y por eso esa pestaña se llama ahora 'Agenda' — ver `TABS`.
+ */
+const SLOT_ON = 128;
 /** El aire entre huecos y contra el canto. Sube con el hueco: si no, la capsula queda apretada. */
 const GAP = Space.sm;
 /**
@@ -79,33 +102,32 @@ const GLYPH = Icon3DSize.md;
  */
 const GLYPH_OFF = 0.92;
 
-/** El paso del resaltado: el ancho de un hueco mas el gap. Fijo, asi no hay que medir nada. */
-const SLOT_STEP = SLOT + GAP;
+/**
+ * Cuanto se corre el resaltado por cada pestaña APAGADA que tiene a su izquierda.
+ *
+ * Antes era "el paso del resaltado" porque todos los huecos median lo mismo. Ahora solo el activo es
+ * ancho — y como el activo es siempre el ultimo de los que quedan a su izquierda, todo lo anterior a
+ * el es apagado: el desplazamiento acumulado sigue siendo `i * STEP` exacto, sin tabla ni medidas.
+ */
+const STEP = SLOT_OFF + GAP;
 
-/** Alto de la capsula: un hueco mas el padding arriba y abajo. Entra en `TAB_DOCK`. */
-const BAR_H = SLOT + GAP * 2;
+/** Alto de la capsula: el alto de un hueco mas el padding arriba y abajo. Entra en `TAB_DOCK`. */
+const BAR_H = SLOT_H + GAP * 2;
 
 /**
- * Ancho exacto de la capsula para n pestañas: n huecos, n-1 gaps y el padding de los lados.
+ * Ancho exacto de la capsula para n pestañas: n-1 huecos apagados, uno encendido, y n+1 gaps.
  *
  * Va explicito y no lo deduce el flujo porque el vidrio necesita tamaño en su PRIMER layout:
  * medido en el simulador, un `GlassView` en position absolute dentro de un contenedor que
- * todavia no tiene medidas se monta con marco cero y se queda sin efecto para siempre.
+ * todavia no tiene medidas se monta con marco cero y se queda sin efecto para siempre. Por eso
+ * tambien el hueco activo mide lo mismo sea cual sea su etiqueta: si el ancho de la capsula
+ * dependiera del texto, cambiaria al navegar y el vidrio tendria que remedirse en caliente.
  *
- * Con cuatro pestañas son 280pt. Cabe con aire en el telefono mas angosto que soporta la app (el
- * SE deja 327 entre los margenes del dock), asi que la capsula sigue sin tocar los cantos.
+ * Con cuatro pestañas: 3*48 + 128 + 5*8 = **312pt**. El telefono mas angosto que soporta la app (el
+ * SE, 375) deja 327 entre los margenes del dock, asi que sobran 7.5pt de aire a cada lado y la
+ * capsula sigue sin tocar los cantos. En un 16 Pro Max sobran 40 por lado.
  */
-const barWidth = (slots: number) => slots * SLOT + (slots + 1) * GAP;
-
-/**
- * El resaltado llega con inercia. Si solo apareciera no se leeria liquido.
- *
- * Por duracion y no por fisica, a proposito. `{damping: 18, stiffness: 220}` es ζ=0.61 y ωn=14.8:
- * ~435ms hasta asentarse con 11% de sobrepaso, o sea que en un salto de 68pt el resaltado se iba
- * 7pt de largo y volvia. Eso es lo que se sentia gelatina. Con ζ=0.85 el sobrepaso baja a 0.6% —
- * no se ve — y el numero de arriba ES lo que tarda, asi que se ajusta sin recalcular nada.
- */
-const SLIDE = { duration: 260, dampingRatio: 0.85 };
+const barWidth = (slots: number) => (slots - 1) * SLOT_OFF + SLOT_ON + (slots + 1) * GAP;
 
 /**
  * La salida y la entrada de la capsula en modo enfoque. Sin rebote: la barra se aparta, no se
@@ -116,34 +138,6 @@ const DOCK = { damping: 26, stiffness: 190 };
 
 /** Lo que baja la capsula al esconderse: su alto entero mas el aire, para que salga de cuadro. */
 const DOCK_AWAY = BAR_H + Space.xl;
-
-/**
- * Mueve el resaltado al hueco `to`.
- *
- * Fuera del componente para que sea la MISMA funcion en cada render: se llama desde un efecto y
- * desde un handler, y una closure nueva cada vez obligaria a envolverla para las dependencias.
- */
-const slideTo = (x: SharedValue<number>, to: number, reduced: boolean) => {
-  // Worklet y no funcion normal: la llaman el efecto de reconciliacion (hilo de JS) y el final del
-  // arrastre (hilo de UI). Un worklet vale para las dos, asi que el muelle se define UNA vez.
-  'worklet';
-  // .set() y no .value =: el compilador de React trata el shared value como inmutable y asignarle
-  // rompe el lint (es el error que arrastra use-press-scale).
-  x.set(reduced ? to * SLOT_STEP : withSpring(to * SLOT_STEP, SLIDE));
-};
-
-/**
- * Lo que el dedo tiene que recorrer para que el arrastre se active y la pestaña pierda su toque.
- *
- * 8pt y no los 10 de fabrica: los huecos miden 60 y estan pegados, asi que el viaje entre dos
- * centros es de 68 — con un umbral alto el resaltado no engancha al dedo hasta que ya casi ha
- * llegado al vecino, y el gesto se lee como un salto y no como un arrastre. Por debajo de 8 empieza
- * a comerse toques: el pulgar rueda un par de puntos al levantarse de un objetivo de 60.
- *
- * Solo se declara en X. Un deslizamiento vertical sobre la capsula no tiene que hacer nada, y
- * dejarlo sin acotar convertiria cualquier roce en diagonal en un cambio de seccion.
- */
-const GRAB = 8;
 
 /**
  * Distancia a la que dos piezas de vidrio empiezan a fundirse. Corta a proposito: el resaltado
@@ -161,6 +155,13 @@ type Tab = {
    * bundle y se dibuja igual en las tres plataformas.
    */
   icon: Icon3DName;
+  /**
+   * La cara de la persona en vez del glifo. Solo Perfil.
+   *
+   * Un flag y no `icon: Icon3DName | 'avatar'`: el icono se queda como respaldo REAL — una sesion a
+   * medio cargar todavia no tiene `user`, y `ProfileAvatar` necesita uno.
+   */
+  avatar?: true;
 };
 
 /**
@@ -172,8 +173,11 @@ const TABS: Tab[] = [
   { name: 'index', label: 'Hoy', icon: 'home-chrome' },
   // Segunda y no ultima: el cronometro es lo que se hace CON el dia, asi que va pegado al dia.
   { name: 'timer', label: 'Enfoque', icon: 'clock' },
-  { name: 'calendar', label: 'Calendario', icon: 'calendar' },
-  { name: 'profile', label: 'Perfil', icon: 'user' },
+  // 'Agenda' y no 'Calendario': una etiqueta de pestaña es un NOMBRE, no una descripcion, y
+  // 'Calendario' (~74pt) no cabe en los 64 del hueco activo. Ademas describe mejor lo que esa
+  // pantalla es: un planificador de dia y semana, no un mes con cuadritos. La ruta no cambia.
+  { name: 'calendar', label: 'Agenda', icon: 'calendar' },
+  { name: 'profile', label: 'Perfil', icon: 'user', avatar: true },
 ];
 
 /**
@@ -193,15 +197,20 @@ export const TAB_DOCK = BAR_H + Space.md + Space.xl;
 function TabSlot({
   tab,
   focused,
+  user,
   onPress,
 }: {
   tab: Tab;
   focused: boolean;
+  /** Para la pestaña con `avatar`. `null` mientras la sesion carga: ahi manda el icono. */
+  user: User | null;
   onPress: () => void;
 }) {
+  const t = useTheme();
   // 0.9 y no 0.86: es el mismo hundido que la celda de dia de la tira de semana, el otro objetivo
   // pequeño y redondo de la app. A 0.86 el glifo brincaba mas que cualquier otra cosa que se toca.
   const press = usePressScale({ to: 0.9, haptic: Haptics.ImpactFeedbackStyle.Light });
+  const glyph = focused ? GLYPH : GLYPH * GLYPH_OFF;
 
   return (
     <Pressable
@@ -211,23 +220,44 @@ function TabSlot({
       onPress={onPress}
       onPressIn={press.onPressIn}
       onPressOut={press.onPressOut}
-      style={styles.slot}>
+      style={[styles.slot, focused ? styles.slotOn : styles.slotOff]}>
       {/* El escalado va en el glifo y no en el Pressable: el area tactil se queda entera. */}
       <Animated.View style={press.style}>
-        {/* Un asset del bundle, no un simbolo del sistema: no hace falta `fallback`, asi que
-            tampoco hay una etiqueta de texto con su propia tipografia colandose en la barra. */}
-        <Icon3D name={tab.icon} size={focused ? GLYPH : GLYPH * GLYPH_OFF} />
+        {/*
+          La cara de la persona en su pestaña. `Avatar3DSize.sm` es 32, o sea exactamente `GLYPH`:
+          el memoji ocupa el mismo hueco que ocupaba el icono y la fila no se mueve.
+
+          Sin memoji, `ProfileAvatar` pinta la inicial sobre `accent.soft` — que es el MISMO color
+          que el resaltado, asi que activo desapareceria. Por eso ahi se le pasa `t.sunken`.
+        */}
+        {tab.avatar && user ? (
+          <ProfileAvatar user={user} size={glyph} bg={focused ? t.sunken : undefined} />
+        ) : (
+          /* Un asset del bundle, no un simbolo del sistema: no hace falta `fallback`, asi que
+             tampoco hay una etiqueta de texto con su propia tipografia colandose en la barra. */
+          <Icon3D name={tab.icon} size={glyph} />
+        )}
       </Animated.View>
+
+      {/*
+        El nombre, solo en la activa. Es la señal que sustituye al resaltado que viajaba: antes lo
+        que decia "estas aqui" era el movimiento, y sin movimiento hacia falta una palabra.
+
+        `numberOfLines` y `flexShrink` no son decorativos: el hueco es de ANCHO FIJO (ver `SLOT_ON`),
+        asi que con el texto del sistema al maximo la etiqueta tiene que ELIDIRSE en vez de empujar
+        la capsula. El tope de escala evita llegar a "Enfo…" en el ajuste por defecto.
+      */}
+      {focused && (
+        <Text
+          style={[Type.label, styles.tag, { color: t.text }]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.2}>
+          {tab.label}
+        </Text>
+      )}
     </Pressable>
   );
 }
-
-/**
- * El vidrio tiene que poder MOVERSE, y `Animated.View` alrededor lo sacaria del contenedor de
- * vidrio. `GlassView` reparte todas sus props sobre la vista nativa, incluida la ref (React 19),
- * asi que reanimated puede animarlo directo.
- */
-const AnimatedGlass = Animated.createAnimatedComponent(GlassView);
 
 /**
  * Capsula flotante de vidrio, no barra pegada al borde. SOLO navegacion: tres pestañas.
@@ -237,12 +267,21 @@ const AnimatedGlass = Animated.createAnimatedComponent(GlassView);
  * huecos la capsula ya no necesita el ancho completo, asi que va compacta y centrada.
  *
  * El resaltado de la pestaña activa es su PROPIA pieza de vidrio, no un relleno plano: dentro
- * de un `GlassContainer` las dos piezas se atraen, y al cambiar de pestaña el resaltado se
- * desliza con muelle en vez de aparecer. Eso es lo que se lee como liquid glass.
+ * de un `GlassContainer` las dos piezas se atraen, y eso es lo que se lee como liquid glass.
  *
- * Y se puede ARRASTRAR: el dedo agarra el resaltado y las secciones van cambiando al pasar por
- * cada hueco. Es el mismo control que el selector de modo de la camara de iOS — tocar sigue
- * funcionando igual, pero recorrer la barra deja de costar cuatro toques. Ver `drag`.
+ * **Ya no viaja, y el arrastre se fue con el.** El resaltado se deslizaba de pestaña en pestaña con
+ * un muelle de 260ms, y se podia agarrar con el dedo para recorrer la barra. Las dos cosas se
+ * quitaron a la vez, y no por capricho:
+ *
+ * - El deslizamiento era una animacion del propio elemento seleccionado cruzando por encima de los
+ *   que no lo estan. Es lo que se pidio quitar.
+ * - El arrastre no sobrevive sin el: era su unica respuesta continua —sin resaltado bajo el dedo, es
+ *   un deslizamiento a ciegas cuyo unico feedback es que la pantalla de abajo cambia tres veces— y
+ *   ademas su aritmetica muere con la geometria nueva. `onUpdate` hacia `Math.round(to / SLOT_STEP)`
+ *   porque todos los huecos median lo mismo; con la activa ensanchada los bordes se MUEVEN bajo el
+ *   dedo en cuanto cruzas el primero.
+ *
+ * Lo que dice "estas aqui" pasa a ser la ETIQUETA de la pestaña activa, que es una señal quieta.
  */
 function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
   const t = useTheme();
@@ -265,109 +304,6 @@ function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
   const index = visible.findIndex((tab) => tab.name === current);
 
   const size = { width: barWidth(visible.length), height: BAR_H };
-  // Arranca donde toca (un deep link a Perfil no entra deslizandose desde Hoy) y de ahi anima.
-  const x = useSharedValue(Math.max(index, 0) * SLOT_STEP);
-  const slide = useAnimatedStyle(() => ({ transform: [{ translateX: x.get() }] }));
-
-  /*
-    Mientras el dedo manda, la reconciliacion se calla.
-
-    Un shared value que se escribe SOLO desde el hilo de JS (`runOnJS(setDragging)`), no desde el
-    worklet. Asi la escritura y la lectura del efecto pasan en el mismo hilo y son sincronas: la
-    copia de JS de un shared value se actualiza al llamar `.set()`, mientras que lo escrito desde el
-    hilo de UI llega despues y el efecto lo leeria todavia en false.
-
-    Y no estado: esto no pinta nada, y un re-render de la barra entera en mitad de un arrastre es
-    justo el trabajo que el gesto no puede permitirse.
-  */
-  const dragging = useSharedValue(false);
-  const setDragging = (on: boolean) => {
-    dragging.set(on);
-  };
-
-  /*
-    Reconciliacion, no la animacion principal: el toque ya movio el resaltado (ver abajo). Esto
-    cubre lo que NO pasa por el toque — un deep link, el gesto de atras, un navigate desde otra
-    pantalla. Cuando el toque se adelanto, el muelle ya apunta aqui y esto no se ve.
-
-    Y se salta durante el arrastre: cada hueco que cruza el dedo navega, y sin este seguro esa
-    navegacion devolveria el resaltado al centro del hueco a mitad del gesto. O sea que el resaltado
-    se despegaria del dedo justo cuando el dedo es quien lo lleva.
-  */
-  useEffect(() => {
-    if (index < 0 || dragging.get()) return;
-    slideTo(x, index, reduced);
-  }, [index, x, reduced, dragging]);
-
-  /** El hueco bajo el dedo. -1 cuando no hay arrastre, que es como `onFinalize` distingue un toque. */
-  const hover = useSharedValue(-1);
-  /** Tope del recorrido: del primer hueco al ultimo. Con una sola pestaña no hay a donde ir. */
-  const range = Math.max(visible.length - 1, 0) * SLOT_STEP;
-
-  /**
-   * Salta a la pestaña `to`. Corre en el hilo de JS, llamada desde el gesto.
-   *
-   * NO emite `tabPress`: un arrastre no es un toque. El evento es cancelable y existe para que una
-   * pantalla pueda interceptar el toque en su propia pestaña (volver arriba del scroll, por
-   * ejemplo); dispararlo tres veces mientras el dedo cruza la barra convertiria un gesto de
-   * navegacion en tres efectos secundarios que nadie pidio.
-   *
-   * Tampoco comprueba si ya estamos ahi: `hover` solo cambia al cruzar de hueco, asi que esto no se
-   * llama dos veces seguidas con el mismo destino, y navegar a la ruta activa es un no-op.
-   */
-  const jump = (to: number) => {
-    const tab = visible[to];
-    const route = tab && state.routes.find((r) => r.name === tab.name);
-    if (!route) return;
-    // El de seleccion y no un impacto: es el mismo tic que da el dial del cronometro al pasar de
-    // minuto. Un golpe de los de tocar, repetido tres veces en medio segundo, se siente a martillo.
-    Haptics.selectionAsync().catch(() => {});
-    navigation.navigate(route.name);
-  };
-
-  /**
-   * El arrastre. El resaltado sigue al dedo punto por punto y la seccion cambia al cruzar cada hueco.
-   *
-   * Va colgado de la FILA, que es la unica capa de la capsula que recibe toques (el vidrio de abajo
-   * los deja pasar a proposito, para estirarse). Como la fila es `box-none`, el gesto solo arranca
-   * si el dedo baja SOBRE una pestaña — no en los 8pt de aire entre dos. Es la unica forma de
-   * quedarse con el estirado del vidrio, y en la mano no se nota: nadie apunta al hueco.
-   */
-  const drag = Gesture.Pan()
-    .activeOffsetX([-GRAB, GRAB])
-    .onStart(() => {
-      runOnJS(setDragging)(true);
-      hover.set(index);
-    })
-    .onUpdate((e) => {
-      /*
-        `e.x` llega relativo a la fila, que TIENE el padding. El centro del hueco i esta en
-        GAP + i*SLOT_STEP + SLOT/2, y el resaltado nace en `left: GAP`: despejando, para que su
-        centro caiga bajo el dedo hay que desplazarlo esto. Acotado a los extremos, que es lo que
-        hace que pasarse de largo no arrastre el resaltado fuera de la capsula.
-      */
-      const to = Math.min(Math.max(e.x - GAP - SLOT / 2, 0), range);
-      x.set(to);
-
-      const next = Math.round(to / SLOT_STEP);
-      if (next === hover.get()) return;
-      hover.set(next);
-      runOnJS(jump)(next);
-    })
-    /*
-      `onFinalize` y no `onEnd`: tambien corre si el gesto se cancela (una llamada entrante, el
-      sistema robando el toque), y ahi el resaltado tiene que asentarse igual en vez de quedarse
-      clavado a medio camino entre dos huecos.
-    */
-    .onFinalize(() => {
-      runOnJS(setDragging)(false);
-      const to = hover.get();
-      // -1 es un toque que nunca llego a arrastrar: su `onPress` ya movio el resaltado y pisarlo
-      // aqui lo mandaria al hueco del arrastre ANTERIOR.
-      if (to < 0) return;
-      hover.set(-1);
-      slideTo(x, to, reduced);
-    });
 
   /**
    * Modo enfoque. Se anima `transform` y `opacity` y NUNCA se desmonta la capsula: un `GlassView`
@@ -432,50 +368,51 @@ function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
           ]}
         />
 
-        <AnimatedGlass
+        <GlassView
           glassEffectStyle="clear"
           tintColor={accent.soft}
           colorScheme={scheme}
           // Decorativo y transparente al toque: el de la pestaña lo captura ella, y el de los
           // huecos tiene que llegar hasta la capsula para que se estire.
           pointerEvents="none"
-          style={[styles.highlight, slide, !GLASS && { backgroundColor: accent.soft }]}
+          style={[
+            styles.highlight,
+            /*
+              Posicion aritmetica, sin shared value: `i * STEP` porque todos los huecos a la
+              IZQUIERDA del activo son apagados y miden lo mismo. El vidrio nace con `width` y
+              `height` explicitos y solo cambia `transform`, asi que nunca se queda sin medidas —
+              que es la trampa del `isMounted` de GlassView.swift.
+            */
+            { transform: [{ translateX: index * STEP }] },
+            !GLASS && { backgroundColor: accent.soft },
+          ]}
         />
 
-        <GestureDetector gesture={drag}>
-          {/* box-none: los glifos capturan su toque y los huecos caen al vidrio, que asi se estira. */}
-          <View style={styles.row} pointerEvents="box-none">
-            {visible.map((tab, i) => {
-              const route = state.routes.find((r) => r.name === tab.name);
-              if (!route) return null;
+        {/* box-none: los glifos capturan su toque y los huecos caen al vidrio, que asi se estira. */}
+        <View style={styles.row} pointerEvents="box-none">
+          {visible.map((tab) => {
+            const route = state.routes.find((r) => r.name === tab.name);
+            if (!route) return null;
 
-              return (
-                <TabSlot
-                  key={tab.name}
-                  tab={tab}
-                  focused={tab.name === current}
-                  onPress={() => {
-                    const event = navigation.emit({
-                      type: 'tabPress',
-                      target: route.key,
-                      canPreventDefault: true,
-                    });
-                    if (tab.name === current || event.defaultPrevented) return;
-                    /*
-                      El resaltado arranca ANTES de navegar, y de ahi sale la mitad de la respuesta.
-                      El efecto de arriba corre despues de que el navegador confirme la ruta nueva, y
-                      entrar por primera vez a una pestaña monta su pantalla bloqueando el hilo de JS
-                      justo en medio: el muelle empezaba tarde y se veia el resaltado quieto bajo el
-                      dedo. Arrancado aqui ya vive en el hilo de UI y corre aunque JS este ocupado.
-                    */
-                    slideTo(x, i, reduced);
-                    navigation.navigate(route.name);
-                  }}
-                />
-              );
-            })}
-          </View>
-        </GestureDetector>
+            return (
+              <TabSlot
+                key={tab.name}
+                tab={tab}
+                focused={tab.name === current}
+                user={user}
+                onPress={() => {
+                  const event = navigation.emit({
+                    type: 'tabPress',
+                    target: route.key,
+                    canPreventDefault: true,
+                  });
+                  if (tab.name === current || event.defaultPrevented) return;
+                  navigation.navigate(route.name);
+                }}
+              />
+            );
+          })}
+        </View>
       </GlassContainer>
     </Animated.View>
   );
@@ -522,20 +459,27 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   slot: {
-    width: SLOT,
-    height: SLOT,
-    borderRadius: Radius.pill,
+    height: SLOT_H,
+    // En fila para que el glifo y la etiqueta compartan linea. Con la pestaña apagada solo hay
+    // glifo, asi que `center` lo deja centrado igual que antes.
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Space.sm,
+    borderRadius: Radius.pill,
   },
-  // Absoluto sobre el primer hueco; de ahi lo mueve el muelle. Los huecos son de ancho fijo,
-  // asi que la posicion es aritmetica y no hace falta medir con onLayout.
+  slotOff: { width: SLOT_OFF },
+  slotOn: { width: SLOT_ON, paddingHorizontal: Space.md },
+  /** `flexShrink` y no `flex: 1`: la etiqueta cede ancho si hace falta, pero no lo reclama. */
+  tag: { flexShrink: 1 },
+  // Absoluto sobre el primer hueco; de ahi lo corre `translateX`. Mide como el hueco ENCENDIDO,
+  // que es el unico sobre el que se pinta, y su ancho nunca cambia.
   highlight: {
     position: 'absolute',
     top: GAP,
     left: GAP,
-    width: SLOT,
-    height: SLOT,
+    width: SLOT_ON,
+    height: SLOT_H,
     borderRadius: Radius.pill,
   },
 });

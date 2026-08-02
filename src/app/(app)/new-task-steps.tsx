@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, FadeOutUp, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 
 import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
@@ -12,7 +12,7 @@ import { FormError } from '@/components/ui/form-error';
 import { Icon3D, Icon3DSize } from '@/components/ui/icon3d';
 import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
 import { StepDots } from '@/components/ui/step-dots';
-import { Motion, Radius, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
+import { Motion, RESHAPE, Radius, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
 import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { FOCUS_AREAS } from '@/features/auth/options';
@@ -164,7 +164,7 @@ export default function NewTaskStepsScreen() {
           `layout` para que el bloque de abajo suba y baje sin saltar cuando cambia de alto entre
           pasos. Lineal y no muelle: un rebote empuja el boton de continuar bajo el pulgar.
         */}
-        <Animated.View layout={LinearTransition.duration(Motion.enter)} style={styles.stage}>
+        <Animated.View layout={RESHAPE} style={styles.stage}>
           {step === 0 && (
             <Step ask="¿Qué hay que hacer?" hint="Ponle nombre y una cara.">
               <BigField

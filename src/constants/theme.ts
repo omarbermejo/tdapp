@@ -576,6 +576,23 @@ export const Motion = {
 } as const;
 
 /**
+ * El reacomodo del layout, APAGADO.
+ *
+ * Era `LinearTransition` en `Card` y en otras nueve piezas: al abrir un panel la caja crecia en
+ * 220ms y todo lo que venia despues bajaba con ella. Sobre el papel es lo elegante; en la mano es
+ * que la pantalla se ARRASTRA debajo del dedo justo cuando acabas de tocar algo, y el contenido que
+ * querias leer llega tarde. La decision es que la caja cambie de tamaño en el mismo frame del toque.
+ *
+ * Va como constante y no borrando el prop en once sitios por dos razones: se vuelve a encender en
+ * una linea, y mientras este apagada nadie puede reintroducir la mitad del patron sin verla aqui.
+ *
+ * Lo que NO se apago, porque no es esto: el rebote del chip al elegir (`choice.tsx`) y el circulo
+ * que viaja en la tira de la semana (`week-strip.tsx`). Ninguno de los dos es una animacion de
+ * layout — son la respuesta al toque, y esa se queda.
+ */
+export const RESHAPE = undefined;
+
+/**
  * Cuatro roles, tres familias.
  *
  * `Serif` (Fraunces SemiBold) le pone CARA AL DÍA, y a nada más. Es el único lugar donde entra una

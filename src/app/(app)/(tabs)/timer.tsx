@@ -5,7 +5,6 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeOut,
-  LinearTransition,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -21,6 +20,7 @@ import { Confetti } from '@/components/ui/confetti';
 import { Bud } from '@/components/ui/stem';
 import {
   Motion,
+  RESHAPE,
   Space,
   Type,
   accentInks,
@@ -545,7 +545,7 @@ export default function TimerScreen() {
             </View>
           )}
 
-          <Animated.View layout={animate ? LinearTransition : undefined} style={styles.stack}>
+          <Animated.View layout={RESHAPE} style={styles.stack}>
             {editable ? (
               <DialPicker minutes={pom.focusMinutes} onChange={pom.setFocusMinutes}>
                 {face}
@@ -634,7 +634,7 @@ export default function TimerScreen() {
             <Animated.View
               entering={animate ? FadeIn.duration(Motion.enter) : undefined}
               exiting={animate ? FadeOut.duration(Motion.exit) : undefined}
-              layout={animate ? LinearTransition : undefined}>
+              layout={RESHAPE}>
               <Card>
                 {day.tasks === null && day.loading ? (
                   <>
