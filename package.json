@@ -60,7 +60,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "check:widgets": "node scripts/check-widget-layout.js",
+    "check:widgets": "node scripts/check-widget-layout.js && node scripts/check-widget-tiles.js",
     "build:icons3d": "node scripts/build-icons3d.mjs",
     "build:avatars": "node scripts/build-avatars.mjs"
   },
