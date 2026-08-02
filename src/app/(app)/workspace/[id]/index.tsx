@@ -1,8 +1,10 @@
-import { useLocalSearchParams } from 'expo-router';
+import Settings from 'lucide-react-native/icons/settings';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 
 import { BackButton } from '@/components/ui/back-button';
+import { HeaderAction } from '@/components/ui/screen-header';
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro, SectionHeader } from '@/components/ui/card';
 import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
@@ -16,7 +18,6 @@ import { useLocalToday } from '@/features/tasks/day';
 import { TaskRow } from '@/features/tasks/task-row';
 import { useWorkspaceTasks } from '@/features/tasks/use-tasks';
 import { useWorkspace } from '@/features/workspaces/use-workspace';
-import { SpaceActions } from '@/features/workspaces/space-actions';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
 import { goBackOrHome } from '@/features/nav/go-back';
@@ -91,7 +92,21 @@ export default function WorkspaceScreen() {
         contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
         showsVerticalScrollIndicator={false}>
         {/* Flecha y no cruz: esto es un push, se vuelve atras. */}
-        <BackButton />
+        {/*
+          La cabecera: volver y configurar. El engrane solo si lo administras — `SpaceActions`
+          devolvia null para un miembro, pero un boton que abre una pantalla vacia es peor que no
+          estar. Aqui la condicion se ve, y ahi es donde tiene que verse.
+        */}
+        <View style={styles.topBar}>
+          <BackButton />
+          {space.workspace?.isOwner && (
+            <HeaderAction
+              label="Configurar el espacio"
+              icon={Settings}
+              onPress={() => router.push(`/workspace/${workspaceId}/settings`)}
+            />
+          )}
+        </View>
 
         {space.missing ? (
           /*
@@ -222,12 +237,6 @@ export default function WorkspaceScreen() {
                 </Animated.View>
               ))}
             </View>
-            {/*
-              Lo que se puede HACER con el espacio, al final y solo si lo administras: invitar,
-              corregirlo y borrarlo. Va despues de los datos por la misma razon que "Salir" va al
-              final de Ajustes — primero lo que vienes a mirar, luego lo que puedes cambiar.
-            */}
-            {space.workspace && <SpaceActions workspace={space.workspace} />}
           </>
         )}
       </Animated.ScrollView>
@@ -247,6 +256,8 @@ const line = (total: number, done: number) => {
 };
 
 const styles = StyleSheet.create({
+  /** Volver a la izquierda y el engrane a la derecha, como en el perfil. */
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   screen: { flex: 1 },
   content: { paddingHorizontal: Space.xl, gap: Space.xl },
   // El icono y el nombre son UNA cosa: respiran por dentro, no con el gap de la pantalla.

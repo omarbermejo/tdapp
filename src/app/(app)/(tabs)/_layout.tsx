@@ -465,18 +465,19 @@ export default function AppLayout() {
            *    momento, asi que lo que entra es el canvas vacio. Con el corte no se notaba; con una
            *    transicion se ve entrar la nada.
            *
-           * `lazy: false` monta las cuatro al arrancar y mata el blanco. El coste es real: arrancar
-           * monta cuatro pantallas en vez de una. Se paga una vez, en el momento en que la app ya
-           * esta esperando a la red de todos modos.
+           * **`lazy: false` se probo y se retiro.** Montar las cuatro al arrancar mataba el blanco de
+           * la primera visita, pero trajo uno peor: con `'shift'` dejaba las escenas FUERA DE SITIO
+           * —la agenda en blanco permanente con la barra encima— y con `'fade'` seguia apareciendo
+           * en blanco al volver al grupo con `replace`. Dos fallos distintos con la misma causa: en
+           * esta version del navegador, precargar las escenas y animarlas no se llevan bien.
            *
-           * **Y por eso la transicion es `'fade'` y no `'shift'`.** Se probo `'shift'` primero — las
-           * cuatro pestañas son hermanas en un orden fijo, asi que un desplazamiento hacia el lado
-           * del que vienes cuenta mejor la relacion que un fundido. Pero `'shift'` con `lazy: false`
-           * DEJA LAS ESCENAS FUERA DE SITIO: verificado en el simulador, la agenda se quedaba en
-           * blanco de forma permanente con la barra encima. Entre las dos, quitar el blanco importa
-           * mas que contar el orden, y el orden ya lo cuenta el resaltado de la capsula.
+           * Asi que se queda perezoso. El coste es el que ya habia: la PRIMERA vez que tocas una
+           * pestaña se ve un instante de canvas mientras se monta. Es una vez por arranque y por
+           * pestaña, contra una pantalla que se queda vacia y no vuelve. No es un empate.
+           *
+           * `'fade'` y no `'shift'` por lo mismo: aunque ya no hay precarga, el fundido es el que se
+           * verifico estable en el simulador. El orden de las pestañas lo cuenta el resaltado.
            */
-          lazy: false,
           animation: 'fade',
           transitionSpec: {
             animation: 'spring',

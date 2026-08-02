@@ -57,7 +57,18 @@ export default function SpacesScreen() {
 
   const close = () => goBackOrHome();
 
-  /** Entrar a un espacio: se activa y se cierra. La repintada de la pantalla de atras ES el acuse. */
+  /**
+   * Entrar a un espacio: se activa, se cierra la hoja, y se ABRE su pantalla.
+   *
+   * Antes solo se activaba y la repintada de la pantalla de atras era todo el acuse. Con dos
+   * espacios eso bastaba; con varios no: elegir uno y quedarte en el inicio deja el trabajo de
+   * "¿y como va este?" a un segundo viaje que casi nadie hace. Elegir un espacio ES entrar en el.
+   *
+   * El modo general (`null`) NO abre nada: no hay pantalla de "todo", el inicio ya lo es.
+   *
+   * `push` despues de cerrar y no en su lugar: la hoja tiene que irse de la pila o el gesto de
+   * atras desde el detalle la reabriria en vez de volver al inicio.
+   */
   const enter = (space: Workspace | null) => {
     void setActiveSpace(
       space && {
@@ -69,6 +80,7 @@ export default function SpacesScreen() {
       }
     );
     close();
+    if (space) router.push(`/workspace/${space.id}`);
   };
 
   if (!user) return null;
