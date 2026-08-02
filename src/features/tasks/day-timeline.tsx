@@ -347,7 +347,18 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   hour: { width: HOUR_W, textAlign: 'right' },
   railSlot: { width: GUTTER * 2, alignItems: 'center', alignSelf: 'stretch' },
-  segment: { width: RAIL, flex: 1, borderRadius: Radius.pill, marginVertical: Space.xs },
+  /**
+   * El aire de la fila vive AQUI, en el margen del riel, y no en un `gap` del contenedor.
+   *
+   * Es lo que deja que dos tareas de la misma hora se peguen —`segmentAbove` y `segmentBelow` lo
+   * quitan por ese lado— mientras dos horas distintas se separan. Un `gap` uniforme del padre las
+   * separaria a todas por igual y el riel volveria a partirse en guiones.
+   *
+   * Sube de `xs` a `sm`: con cuatro puntos las tarjetas casi se tocaban y un dia con diez cosas se
+   * leia como un muro. Ocho por lado son dieciseis entre tarjeta y tarjeta, que es donde una lista
+   * larga deja de verse saturada sin que quepan menos cosas en pantalla de las que caben.
+   */
+  segment: { width: RAIL, flex: 1, borderRadius: Radius.pill, marginVertical: Space.sm },
   /** Continua el de arriba: sin aire y sin redondear por ese lado. */
   segmentAbove: { marginTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 },
   /** Sigue hacia el de abajo: igual por el otro extremo. */

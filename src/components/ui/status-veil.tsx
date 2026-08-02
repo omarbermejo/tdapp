@@ -12,6 +12,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useScheme } from "@/constants/theme";
+import { useDock } from '@/features/nav/dock';
 
 /** A cuantos px de scroll el velo ya esta del todo. Corto: tiene que responder al primer gesto. */
 const VEIL_AT = 24;
@@ -154,9 +155,19 @@ export function StatusVeil({ scrollY }: { scrollY: SharedValue<number> }) {
  */
 export function useScrollVeil() {
   const scrollY = useSharedValue(0);
+  /**
+   * Y de paso aparta la capsula de pestañas al bajar.
+   *
+   * Va DENTRO de este hook y no en cada pantalla porque el handler ya existe y ya corre en el hilo
+   * de UI: meterlo aqui hace que esconder la barra al scroll salga gratis en las nueve pantallas que
+   * usan el velo, sin que ninguna tenga que acordarse. Fuera del grupo con pestañas `useDock`
+   * devuelve un no-op, asi que llamarlo desde ajustes o desde el alta no cuesta nada.
+   */
+  const dock = useDock();
 
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.set(e.contentOffset.y);
+    dock.onScroll(e.contentOffset.y);
   });
 
   return { scrollY, scrollProps: { onScroll, scrollEventThrottle: 16 } };

@@ -15,6 +15,7 @@ import { Radius, Space, Type, useAccent, useScheme, useShadow, useTheme } from '
 import type { User } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { ProfileAvatar } from '@/features/profile/avatar';
+import { DockProvider, useDock } from '@/features/nav/dock';
 import { FocusModeProvider, useFocusMode } from '@/features/timer/focus-mode';
 import { usePressScale } from '@/hooks/use-press-scale';
 
@@ -317,17 +318,39 @@ function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
    */
   const away = useSharedValue(0);
   const gone = hidden && current === 'timer';
-  const dock = useAnimatedStyle(() => ({
-    transform: [{ translateY: away.get() * DOCK_AWAY }],
-    // No baja de 0.0 a 1.0 en linea con el desplazamiento: se apaga antes de llegar abajo para que
-    // no se vea cruzar el borde de la pantalla.
-    opacity: 1 - away.get(),
-  }));
+  /**
+   * Dos razones distintas para apartarse, y ganan por separado.
+   *
+   * `away` es el modo enfoque: un estado que dura lo que dure el bloque. `scroll.away` es el gesto:
+   * dura lo que dure el dedo. Se combinan con `max` en vez de sumarse o pisarse — si estan las dos,
+   * la barra ya esta fuera y no puede irse dos veces; y al soltar una, la otra la sigue reteniendo.
+   */
+  const scroll = useDock();
+  const dock = useAnimatedStyle(() => {
+    const out = Math.max(away.get(), scroll.away.get());
+    return {
+      transform: [{ translateY: out * DOCK_AWAY }],
+      // No baja de 0.0 a 1.0 en linea con el desplazamiento: se apaga antes de llegar abajo para que
+      // no se vea cruzar el borde de la pantalla.
+      opacity: 1 - out,
+    };
+  });
 
   useEffect(() => {
     const to = gone ? 1 : 0;
     away.set(reduced ? to : withSpring(to, DOCK));
   }, [gone, away, reduced]);
+
+  /**
+   * Cambiar de pestaña devuelve la barra.
+   *
+   * Sin esto, esconderla bajando en el inicio y saltar al calendario por un deep link te dejaria en
+   * una pantalla sin navegacion visible hasta que se te ocurriera subir. El gesto es de la lista que
+   * estabas mirando, no del navegador.
+   */
+  useEffect(() => {
+    scroll.reveal();
+  }, [current, scroll]);
 
   // El guard va DESPUES de los hooks: en una ruta sin pestaña la barra no se pinta.
   if (index < 0) return null;
@@ -425,33 +448,43 @@ export default function AppLayout() {
   // quedar dentro del alcance del contexto para poder apartarse.
   return (
     <FocusModeProvider>
+      <DockProvider>
       <Tabs
         tabBar={(props) => <FloatingTabs {...props} />}
         screenOptions={{
           headerShown: false,
           sceneStyle: { backgroundColor: t.canvas },
           /**
-           * Cambiar de pestaña deja de ser un CORTE.
+           * Cambiar de pestaña deja de ser un CORTE, y deja de entrar en blanco.
            *
-           * El default de este navegador es `'none'`: la pantalla nueva aparece de golpe, sin nada
-           * que diga de donde vino. Era la unica transicion que le faltaba a la app — la pila ya
-           * empuja y las hojas ya suben.
+           * Eran dos problemas y tienen una sola respuesta conjunta:
            *
-           * `'shift'` y no `'fade'`: las cuatro pestañas son HERMANAS y estan en un orden fijo, asi
-           * que la relacion entre ellas es de POSICION. Un desplazamiento corto hacia el lado del
-           * que vienes lo cuenta; un fundido diria "otra cosa" y perderia el orden. Es ademas el
-           * mismo idioma que la capsula, donde el resaltado esta a la izquierda o a la derecha.
+           * 1. El default de este navegador es `animation: 'none'`. Era la unica transicion que le
+           *    faltaba a la app — la pila ya empuja y las hojas ya suben.
+           * 2. Y es perezoso: la primera vez que tocas una pestaña, su pantalla se monta EN ESE
+           *    momento, asi que lo que entra es el canvas vacio. Con el corte no se notaba; con una
+           *    transicion se ve entrar la nada.
            *
-           * Con muelle y sin sobrepaso: `damping: 26` es el mismo de `DOCK`. Una pantalla que se
-           * pasa de largo y vuelve se lee como que se cargo mal, no como que llego.
+           * `lazy: false` monta las cuatro al arrancar y mata el blanco. El coste es real: arrancar
+           * monta cuatro pantallas en vez de una. Se paga una vez, en el momento en que la app ya
+           * esta esperando a la red de todos modos.
+           *
+           * **Y por eso la transicion es `'fade'` y no `'shift'`.** Se probo `'shift'` primero — las
+           * cuatro pestañas son hermanas en un orden fijo, asi que un desplazamiento hacia el lado
+           * del que vienes cuenta mejor la relacion que un fundido. Pero `'shift'` con `lazy: false`
+           * DEJA LAS ESCENAS FUERA DE SITIO: verificado en el simulador, la agenda se quedaba en
+           * blanco de forma permanente con la barra encima. Entre las dos, quitar el blanco importa
+           * mas que contar el orden, y el orden ya lo cuenta el resaltado de la capsula.
            */
-          animation: 'shift',
+          lazy: false,
+          animation: 'fade',
           transitionSpec: {
             animation: 'spring',
             config: { damping: 26, stiffness: 220, mass: 0.9 },
           },
         }}
       />
+      </DockProvider>
     </FocusModeProvider>
   );
 }
