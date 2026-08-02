@@ -11,7 +11,7 @@ import { BUD, Bud } from './stem';
 export function StepDots({
   total,
   current,
-  accent = 'olive',
+  accent,
 }: {
   total: number;
   current: number;

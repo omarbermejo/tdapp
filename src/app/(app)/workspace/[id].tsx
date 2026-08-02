@@ -151,7 +151,7 @@ export default function WorkspaceScreen() {
                 }
               />
               {/* El MISMO mapa del inicio, acotado a este espacio por su hook. */}
-              <HeatMap stats={stats} today={today} accent={accent ?? 'olive'} spec={WORKSPACE_HEAT} />
+              <HeatMap stats={stats} today={today} accent={accent} spec={WORKSPACE_HEAT} />
             </View>
 
             {byFocus.length > 0 && (

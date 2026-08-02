@@ -134,7 +134,7 @@ export function HeatMap({
 }: {
   stats: ReturnType<typeof useStats>;
   today: string;
-  accent: AccentName;
+  accent?: AccentName;
   spec?: HeatSpec;
 }) {
   const t = useTheme();

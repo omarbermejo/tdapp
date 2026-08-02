@@ -238,7 +238,7 @@ export function TaskRow({
   // El tinte sale de la familia del foco, no del acento del usuario: asi un dia entero de
   // trabajo se lee verde de un vistazo. Sin foco cae en el acento del usuario, y sin acento
   // en el mismo default que `useAccent`.
-  const tint = useAccent(accentForFocus(focusOf(task), accent ?? 'olive'));
+  const tint = useAccent(accentForFocus(focusOf(task), accent));
   const { token } = useAuth();
   const swipe = useRef<SwipeableMethods | null>(null);
   /**

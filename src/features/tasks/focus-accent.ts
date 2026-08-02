@@ -48,13 +48,20 @@ export const focusOf = (task: {
 }): string | null => task.focusArea ?? task.workspaceTag ?? null;
 
 /**
- * El acento de una tarea. Sin foco cae en el del usuario: una tarea recien anotada no tiene
- * area todavia y no por eso debe verse gris entre las demas.
+ * El acento de una tarea. Sin foco devuelve `undefined`, y eso es justo lo que hace falta:
+ * `useAccent(undefined)` cae en el acento HEREDADO — el del espacio si estas dentro de uno, y si no
+ * el de la persona.
+ *
+ * Antes el fallback era obligatorio y los tres llamantes escribian `?? 'olive'`, asi que una tarea
+ * recien anotada se veia oliva aunque hubieras elegido otro color.
+ *
+ * `FAMILY` NO se toca: una tarea CON foco sigue pintada por su area, que es lo que deja leer el dia
+ * de un vistazo. Lo que cambia es solo el hueco que dejaba sin cubrir.
  */
 export const accentForFocus = (
   focusArea: string | null | undefined,
-  fallback: AccentName
-): AccentName => (focusArea && FAMILY[focusArea]) || fallback;
+  fallback?: AccentName
+): AccentName | undefined => (focusArea && FAMILY[focusArea]) || fallback;
 
 /**
  * La cara de una clasificacion.

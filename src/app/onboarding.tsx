@@ -10,7 +10,16 @@ import { Choice, type Option } from '@/components/ui/choice';
 import { DateField } from '@/components/ui/date-field';
 import { FormError } from '@/components/ui/form-error';
 import { StepDots } from '@/components/ui/step-dots';
-import { Motion, Radius, Space, Type, useAccent, useShadow, useTheme } from '@/constants/theme';
+import {
+  AccentContext,
+  Motion,
+  Radius,
+  Space,
+  Type,
+  useAccent,
+  useShadow,
+  useTheme,
+} from '@/constants/theme';
 import { ApiError, type ProfileInput, type User } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import {
@@ -216,6 +225,15 @@ export default function OnboardingScreen() {
   if (!user) return null;
 
   return (
+    /**
+     * El color se prueba EN VIVO, antes de guardarse.
+     *
+     * El acento del contexto sale de la sesion, y aqui la sesion todavia no tiene el color elegido:
+     * `finishOnboarding` corre al final. Adelantando el borrador local, tocar una muestra repinta la
+     * pantalla entera —el hilo, los puntos de paso, el boton— que es la unica confirmacion que ese
+     * paso puede dar. Los `accent={accentName}` de dentro se quedan: son explicitos y ganan igual.
+     */
+    <AccentContext value={form.accentColor}>
     <SafeAreaView style={[styles.screen, { backgroundColor: t.canvas }]}>
       <View style={styles.header}>
         <StepDots total={TOTAL} current={step} accent={accentName} />
@@ -337,6 +355,7 @@ export default function OnboardingScreen() {
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+    </AccentContext>
   );
 }
 

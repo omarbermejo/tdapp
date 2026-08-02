@@ -12,7 +12,7 @@ export const BUD = 12;
 const STEM_LEFT = BUD / 2 - 1;
 
 /** El circulo del brote: hueco mientras falte, macizo cuando ya florecio. */
-export function Bud({ on, accent = 'olive' }: { on?: boolean; accent?: AccentName }) {
+export function Bud({ on, accent }: { on?: boolean; accent?: AccentName }) {
   const t = useTheme();
   // useAccent y no ACCENTS[accent]: el acento puede venir de la base con un nombre viejo,
   // y un color que no existe no debe tumbar la pantalla.
@@ -40,7 +40,7 @@ export function Bud({ on, accent = 'olive' }: { on?: boolean; accent?: AccentNam
 export function Stem({
   children,
   filled,
-  accent = 'olive',
+  accent,
 }: {
   children: ReactNode;
   filled: boolean[];

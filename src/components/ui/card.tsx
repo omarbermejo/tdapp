@@ -54,7 +54,7 @@ export function SectionHeader({ title, hint }: { title: string; hint?: string })
 }
 
 /** Chip de categoría: tinte suave del acento y texto en tinta oscura para que se lea siempre. */
-export function Tag({ label, accent = 'olive' }: { label: string; accent?: AccentName }) {
+export function Tag({ label, accent }: { label: string; accent?: AccentName }) {
   const t = useTheme();
   const tint = useAccent(accent);
   return (

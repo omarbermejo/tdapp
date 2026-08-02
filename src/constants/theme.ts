@@ -1,6 +1,6 @@
 // expo-router lleva react-navigation dentro y reexporta su tipo de tema.
 import type { Theme as NavigationTheme } from 'expo-router';
-import { useSyncExternalStore } from 'react';
+import { createContext, use, useSyncExternalStore } from 'react';
 import { useColorScheme, type TextStyle } from 'react-native';
 
 import { deriveRamp, isHex, normalizeHex } from './color';
@@ -387,9 +387,32 @@ export function useTheme(): Tokens {
   return TOKENS[useScheme()];
 }
 
-/** Tolera acentos viejos o vacíos guardados en la base: nunca deja la UI sin color. */
+/**
+ * El acento POR DEFECTO de todo lo que no pide uno: el que la persona eligió en su perfil.
+ *
+ * Es la mitad que le faltaba a `useAccent`. La función siempre fue pura —(nombre, esquema)— así que
+ * cada componente tenía que recibir el color por prop, y CUARENTA sitios se olvidaron y cayeron en
+ * el `'olive'` de la firma. El color elegido no llegaba ni al botón sólido.
+ *
+ * Es un string y no un objeto a propósito: la identidad del valor de contexto es la del acento, así
+ * que un render del proveedor que no cambie el color no repinta a ningún consumidor.
+ *
+ * Vive aquí y no en `features/auth` porque quien lo LEE es `useAccent`; quien lo escribe (la sesión)
+ * es cosa del layout raíz. React 19 permite usar el contexto como proveedor directo, que es el mismo
+ * patrón que ya usa `AuthContext`.
+ */
+export const AccentContext = createContext<string | null>(null);
+
+/**
+ * Tolera acentos viejos o vacíos guardados en la base: nunca deja la UI sin color.
+ *
+ * Sin argumento devuelve el de la SESIÓN. Con `||` y no `??`: un string vacío guardado en la base
+ * tiene que caer al del contexto igual que `undefined` — `resolve` ya tolera lo desconocido, pero
+ * `''` no puede GANARLE al contexto.
+ */
 export function useAccent(name?: string | null): Accent {
-  return resolve(useScheme(), name);
+  const inherited = use(AccentContext);
+  return resolve(useScheme(), name || inherited);
 }
 
 /**
@@ -468,14 +491,21 @@ const SHADOWS = {
   },
 } as const;
 
-/** Para que el navegador (fondos de transición, gestos) use el mismo papel que la app. */
-export function useNavTheme(): NavigationTheme {
+/**
+ * Para que el navegador (fondos de transición, gestos) use el mismo papel y el mismo acento.
+ *
+ * El acento entra POR PARÁMETRO y no con `useAccent()`, aunque parezca el camino obvio: quien llama
+ * a este hook es el MISMO componente que provee `AccentContext`, y un componente no puede consumir
+ * su propio proveedor. Antes esto ni se planteaba porque `primary` estaba cableado a olive — y lo
+ * estaba porque `ThemeProvider` envolvía a `AuthProvider`, así que aquí no había sesión que leer.
+ */
+export function useNavTheme(accent?: string | null): NavigationTheme {
   const scheme = useScheme();
   const t = TOKENS[scheme];
   return {
     dark: scheme === 'dark',
     colors: {
-      primary: ACCENTS[scheme].olive.solid,
+      primary: resolve(scheme, accent).solid,
       background: t.canvas,
       card: t.surface,
       text: t.text,
