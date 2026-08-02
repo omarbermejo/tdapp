@@ -3,6 +3,7 @@ import type { Theme as NavigationTheme } from 'expo-router';
 import { useSyncExternalStore } from 'react';
 import { useColorScheme, type TextStyle } from 'react-native';
 
+import { deriveRamp, isHex, normalizeHex } from './color';
 import { getPreference, subscribe } from './scheme-store';
 
 /**
@@ -246,9 +247,21 @@ const TOKENS: Record<Scheme, Tokens> = {
  *   sobre blanco pero no se leen; en oscuro pasa al revés y hay que subir la rampa.
  */
 export type Accent = { solid: string; soft: string; ink: string };
-export type AccentName = 'forest' | 'olive' | 'leaf' | 'clay' | 'copper';
 
-const ACCENTS: Record<Scheme, Record<AccentName, Accent>> = {
+/** Los cinco de la marca. Sus tres pasos estan escritos a mano y MEDIDOS: ver los docstrings. */
+export type BrandName = 'forest' | 'olive' | 'leaf' | 'clay' | 'copper';
+
+/**
+ * Todo lo que se puede pedir como acento.
+ *
+ * Tres familias y una sola puerta de entrada (`resolve`): los cinco de la marca, los seis derivados de
+ * un color base, y el hex que teclea la persona en "Otro". Los dos ultimos comparten exactamente el
+ * mismo derivador, asi que un color propio no es un caso especial — es el caso general con el nombre
+ * puesto por quien lo eligio.
+ */
+export type AccentName = BrandName | ExtraName | `#${string}`;
+
+const ACCENTS: Record<Scheme, Record<BrandName, Accent>> = {
   light: {
     forest: { solid: Palette.blackForest[500], soft: Palette.blackForest[900], ink: Palette.blackForest[500] },
     olive: { solid: Palette.oliveLeaf[500], soft: Palette.oliveLeaf[900], ink: Palette.oliveLeaf[400] },
@@ -275,8 +288,80 @@ const ACCENTS: Record<Scheme, Record<AccentName, Accent>> = {
   },
 };
 
-/** Nombres del catálogo, para pintar el selector de color sin depender del esquema. */
-export const ACCENT_NAMES = Object.keys(ACCENTS.light) as AccentName[];
+/**
+ * Los colores que NO son de la marca, cada uno con un solo color base.
+ *
+ * Se escriben con un hex y no con una rampa de nueve pasos porque no hacen falta: `deriveRamp` saca
+ * los tres pasos del base y garantiza que `ink` pase AA, que es la unica propiedad que los cinco de
+ * arriba consiguen a mano. Escribirlos como rampas seria inventarse cincuenta y cuatro hex que nadie
+ * ha medido, y encima dejaria dos mecanismos distintos para el mismo concepto.
+ *
+ * Los tonos estan apagados a proposito. La paleta de la app es tierra —oliva, bosque, barro, cobre— y
+ * un rosa o un lila a plena saturacion al lado de eso no se lee como "otro color de la misma familia",
+ * se lee como un error. Todos rondan el 40-50% de saturacion.
+ */
+const EXTRAS = {
+  rose: '#c17f86',
+  lilac: '#9b8ec4',
+  plum: '#7d5a6e',
+  sky: '#6f92a8',
+  teal: '#4e8c81',
+  amber: '#c9962f',
+} as const;
+
+export type ExtraName = keyof typeof EXTRAS;
+
+/** El papel sobre el que se mide el contraste de un acento derivado, por esquema. */
+const SURFACE_OF: Record<Scheme, string> = {
+  light: Palette.paper[0],
+  dark: Palette.carbon[900],
+};
+
+/**
+ * Las rampas derivadas, cacheadas por `esquema:color`.
+ *
+ * `deriveRamp` recorre hasta cincuenta pasos de luminosidad midiendo contraste en cada uno, y esto se
+ * llama desde `useAccent`, o sea en CADA render de cada fila, cada chip y cada anillo. Sin la cache,
+ * una lista de treinta tareas haria mil quinientas conversiones de color por frame.
+ *
+ * Un `Map` de modulo y no un `useMemo`: el resultado no depende del componente ni del ciclo de vida de
+ * React —es una funcion pura de (color, esquema)— y compartirlo entre todos los consumidores es justo
+ * lo que lo hace barato. Crece como mucho a dos entradas por color que la persona haya usado.
+ */
+const derived = new Map<string, Accent>();
+
+/**
+ * De un nombre a sus tres pasos. La UNICA puerta: `useAccent`, `accentOnDark` y `accentInks` entran
+ * todas por aqui, y por eso admitir un color nuevo no obliga a tocar ni uno de sus consumidores.
+ *
+ * Lo desconocido cae en `olive` y no revienta, igual que antes. Es tolerancia a propósito: el acento
+ * viaja por la red y puede llegar de una version de la app que tenga colores que esta no conoce.
+ */
+function resolve(scheme: Scheme, name?: string | null): Accent {
+  const brand = ACCENTS[scheme][name as BrandName];
+  if (brand) return brand;
+
+  const base = (name && EXTRAS[name as ExtraName]) || (isHex(name) ? normalizeHex(name!) : null);
+  if (!base) return ACCENTS[scheme].olive;
+
+  const key = `${scheme}:${base}`;
+  const hit = derived.get(key);
+  if (hit) return hit;
+
+  const ramp = deriveRamp(base, SURFACE_OF[scheme]);
+  derived.set(key, ramp);
+  return ramp;
+}
+
+/**
+ * Nombres del catálogo, para pintar el selector de color sin depender del esquema.
+ *
+ * Los de la marca primero: son los que la app usa por defecto y los que llevan mas tiempo medidos.
+ */
+export const ACCENT_NAMES = [
+  ...(Object.keys(ACCENTS.light) as BrandName[]),
+  ...(Object.keys(EXTRAS) as ExtraName[]),
+];
 
 /**
  * El esquema en el que se pinta la app.
@@ -304,8 +389,7 @@ export function useTheme(): Tokens {
 
 /** Tolera acentos viejos o vacíos guardados en la base: nunca deja la UI sin color. */
 export function useAccent(name?: string | null): Accent {
-  const accents = ACCENTS[useScheme()];
-  return accents[name as AccentName] ?? accents.olive;
+  return resolve(useScheme(), name);
 }
 
 /**
@@ -321,7 +405,7 @@ export function useAccent(name?: string | null): Accent {
  * 4.5:1 ni en negro (fue lo que hizo que 'Enfoque' se viera apagado y 'Descanso' no).
  */
 export function accentOnDark(name?: string | null): string {
-  return (ACCENTS.dark[name as AccentName] ?? ACCENTS.dark.olive).ink;
+  return resolve('dark', name).ink;
 }
 
 /**
@@ -336,11 +420,7 @@ export function accentOnDark(name?: string | null): string {
  * todo monocromo y un color propio se ignora o se ve sucio.)
  */
 export function accentInks(name?: string | null): { light: string; dark: string } {
-  const key = name as AccentName;
-  return {
-    light: (ACCENTS.light[key] ?? ACCENTS.light.olive).ink,
-    dark: (ACCENTS.dark[key] ?? ACCENTS.dark.olive).ink,
-  };
+  return { light: resolve('light', name).ink, dark: resolve('dark', name).ink };
 }
 
 /**

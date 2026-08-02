@@ -8,6 +8,7 @@ import { Choice, type Option } from '@/components/ui/choice';
 import { DateField } from '@/components/ui/date-field';
 import { FormError } from '@/components/ui/form-error';
 import { Pill } from '@/components/ui/pill';
+import { AccentPicker } from '@/components/ui/accent-picker';
 import { Motion, Space, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import { ApiError, type User } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
@@ -248,11 +249,11 @@ export function ProfileFields({ user }: { user: User }) {
 
       {panel === 'color' && (
         <Animated.View entering={IN} exiting={OUT} style={styles.panel}>
-          <Choice
-            options={ACCENT_COLOR}
+          {/* `AccentPicker` y no `Choice`: con once colores mas "Otro", una lista con el nombre al
+              lado seria seis filas diciendo dos veces lo mismo. Ver su docstring. */}
+          <AccentPicker
             value={accent}
             onChange={(value: AccentName) => save({ accentColor: value })}
-            accent={accent}
           />
         </Animated.View>
       )}

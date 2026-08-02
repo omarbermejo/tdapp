@@ -15,6 +15,7 @@ import Animated, { FadeInDown, FadeOutDown, LinearTransition } from 'react-nativ
 import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
 import { Micro } from '@/components/ui/card';
+import { AccentPicker } from '@/components/ui/accent-picker';
 import { Choice } from '@/components/ui/choice';
 import { FormError } from '@/components/ui/form-error';
 import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
@@ -23,18 +24,22 @@ import { StepDots } from '@/components/ui/step-dots';
 import { Motion, Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import { ApiError, type Workspace } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
-import { ACCENT_COLOR, WORKSPACE_TAGS } from '@/features/auth/options';
+import { WORKSPACE_TAGS } from '@/features/auth/options';
 import { workspacesApi } from '@/features/workspaces/api';
 import { InviteStep } from '@/features/workspaces/invite-step';
 import { usePressScale } from '@/hooks/use-press-scale';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 /**
  * Los iconos que se ofrecen, en el orden en que alguien busca un proyecto.
  *
  * Un subconjunto de los 18 horneados y no todos: `check` y `clock` son objetos de la app (una tarea
- * hecha, un temporizador), no cosas de las que alguien tenga un proyecto. Doce entran en cuatro filas
- * de tres sin scroll, que es lo que hace que elegir sea un vistazo y no una lista.
+ * hecha, un temporizador), no cosas de las que alguien tenga un proyecto. Doce caben en DOS filas de
+ * seis sin scroll, que es lo que hace que elegir sea un vistazo y no una lista. Las seis columnas no
+ * se declaran: cada hueco mide `Touch.chip` y el `flexWrap` reparte lo que quepa, asi que en un
+ * telefono estrecho pasan a tres filas de cinco solas.
  *
  * El catalogo REAL vive en el API (`GET /workspaces/catalogs`) y valida los 18; esto es la seleccion
  * que se pinta. Si algun dia hace falta ofrecerlos todos, se pide ahi y se pinta sin desplegar la app.
@@ -88,7 +93,12 @@ const RESIZE = LinearTransition.duration(Motion.enter);
 export default function NewWorkspaceScreen() {
   const { user, token, setActiveSpace } = useAuth();
   const t = useTheme();
-  const pad = useScreenPadding(Space.xxl);
+  /**
+   * El inset se pide crudo y no por `useScreenPadding`: ese hook suma el aire de una PANTALLA que
+   * scrollea hasta el borde, y aqui lo que toca el borde es la barra de accion fija. Arriba si vale.
+   */
+  const pad = useScreenPadding(0);
+  const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
@@ -196,8 +206,14 @@ export default function NewWorkspaceScreen() {
           </View>
         </View>
 
+        {/*
+          El relleno de abajo del scroll es `Space.lg` pelado y NO el inset del telefono: ese es cosa
+          de la zona de accion, que es lo unico pegado al borde. Reservarlo tambien aqui sumaba
+          sesenta y seis puntos de hueco DENTRO del scroll, encima de una barra que ya ocupaba ese
+          sitio — el vacio que empujaba el boton contra el canto de la pantalla.
+        */}
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: pad.bottom }]}
+          contentContainerStyle={[styles.content, { paddingBottom: Space.lg }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <Animated.View layout={RESIZE} style={styles.block}>
@@ -271,14 +287,9 @@ export default function NewWorkspaceScreen() {
 
             {step === 1 && (
               <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
-                {/* Las etiquetas de color ya existen en `options.ts` y las comparte con el onboarding:
-                    dos listas de los mismos cinco colores se desincronizan a la primera. */}
-                <Choice
-                  options={ACCENT_COLOR}
-                  value={color}
-                  onChange={(value: AccentName) => setColor(value)}
-                  accent={color}
-                />
+                {/* El mismo selector que el perfil y el onboarding: tres listas de los mismos once
+                    colores se desincronizan a la primera. */}
+                <AccentPicker value={color} onChange={(value: AccentName) => setColor(value)} />
               </Animated.View>
             )}
 
@@ -307,7 +318,13 @@ export default function NewWorkspaceScreen() {
         </ScrollView>
 
         {/* La zona de accion es FIJA abajo, como en el onboarding: el boton no se va con el scroll. */}
-        <View style={[styles.actions, { backgroundColor: t.canvas, borderTopColor: t.line }]}>
+        <View
+          style={[
+            styles.actions,
+            // El inset del telefono vive AQUI, que es lo unico pegado al borde. `Space.md` encima
+            // del hueco del sistema: pegado al indicador de inicio el boton se toca sin querer.
+            { paddingBottom: insets.bottom + Space.md, backgroundColor: t.canvas, borderTopColor: t.line },
+          ]}>
           {step < 3 ? (
             <BigButton
               label={step === 2 ? 'Crear el espacio' : 'Seguir'}
@@ -396,13 +413,36 @@ const styles = StyleSheet.create({
     paddingBottom: Space.md,
   },
   dots: { flex: 1 },
-  content: { paddingHorizontal: Space.xl, paddingTop: Space.md },
-  block: { gap: Space.xl },
+  /**
+   * `flexGrow: 1` es lo que deja que el contenido REPARTA el alto de la pantalla en vez de apilarse
+   * arriba. Sin el, el contenedor del scroll mide lo que miden sus hijos y `slack` no tendria nada que
+   * absorber. Cuando el contenido si desborda —el paso de las clasificaciones— no hace nada.
+   */
+  content: { paddingHorizontal: Space.xl, paddingTop: Space.md, flexGrow: 1 },
+  block: { gap: Space.xl, flex: 1 },
   ask: { gap: Space.xs },
   step: { gap: Space.lg },
-  preview: { alignItems: 'center' },
+  /**
+   * La vista previa se COME el hueco que sobra, y ese es todo el reparto vertical de la pantalla.
+   *
+   * La zona de accion esta fija abajo y los tres primeros pasos son cortos, asi que sobraban unos
+   * ciento setenta puntos. Apilados arriba dejaban el vacio ENTRE la rejilla de iconos y el boton, con
+   * los controles a media pantalla y lejos del pulgar; metidos en un separador suelto, el vacio se
+   * mudaba al centro y la card se quedaba huerfana. Con `flex: 1` aqui, la holgura se convierte en el
+   * aire de la card: la pregunta arriba, la maqueta flotando centrada en lo que quede, y lo que se
+   * toca pegado al boton. En el paso de las diez clasificaciones no sobra nada y esto vale cero.
+   */
+  preview: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // La misma card del inicio, a media anchura: lo que se ve aqui es lo que va a salir alla.
-  card: { width: '62%', borderRadius: Radius.lg, borderWidth: 1, padding: Space.lg, gap: Space.md },
+  /**
+   * Al 82% y con el relleno de una card de verdad.
+   *
+   * Estuvo al 62% cuando compartia pantalla con el hueco muerto de abajo; ahora que la holgura es
+   * suya (ver `preview`), encogerse ademas la dejaba pequeña en medio de un espacio grande. A este
+   * ancho se lee como el objeto que va a existir y no como su miniatura, que es lo que una vista
+   * previa tiene que hacer.
+   */
+  card: { width: '82%', borderRadius: Radius.lg, borderWidth: 1, padding: Space.xl, gap: Space.lg },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   // El mismo chip de `workspace-card`: se mide por su texto, no por la card.
   chip: { alignSelf: 'flex-start', borderRadius: Radius.pill, paddingHorizontal: Space.sm, paddingVertical: 2 },

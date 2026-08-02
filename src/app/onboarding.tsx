@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } fr
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AccentPicker } from '@/components/ui/accent-picker';
 import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
 import { Choice, type Option } from '@/components/ui/choice';
@@ -278,7 +279,16 @@ export default function OnboardingScreen() {
             </>
           )}
 
-          {current?.kind === 'single' && (
+          {/* El color tiene su propio selector: once muestras y "Otro" no caben en una lista con
+              etiqueta. Los demas pasos de una sola respuesta siguen con `Choice`. */}
+          {current?.kind === 'single' && current.key === 'accentColor' && (
+            <AccentPicker
+              value={accentName}
+              onChange={(v) => answerAndAdvance('accentColor', v)}
+            />
+          )}
+
+          {current?.kind === 'single' && current.key !== 'accentColor' && (
             <Choice
               options={current.options!}
               value={String(form[current.key as keyof ProfileInput])}

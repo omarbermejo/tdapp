@@ -9,6 +9,7 @@ import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
 import { Space, Type, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
 import { DeleteAccount } from '@/features/profile/delete-account';
+import { OwnedSpaces } from '@/features/workspaces/owned-spaces';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 /** Por que importa: una cuenta de Google o Apple no tiene contraseña con la que entrar. */
@@ -80,6 +81,12 @@ export default function SettingsScreen() {
           </Text>
           <DeleteAccount user={user} />
         </Card>
+
+        {/*
+          Los espacios que administras, para poder borrarlos. Se pinta sola o no se pinta: devuelve
+          `null` si no eres dueño de ninguno.
+        */}
+        <OwnedSpaces />
 
         <BigButton label="Cerrar sesión" variant="ghost" accent="copper" onPress={signOut} />
       </Animated.ScrollView>

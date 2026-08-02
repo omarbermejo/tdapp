@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 
 import { useTheme } from '@/constants/theme';
+import { ActivityProvider } from '@/features/activity/activity-context';
 
 /**
  * La pila de la sesión. Dentro viven las pestañas y, ENCIMA de ellas, lo que se abre y se cierra.
@@ -20,7 +21,13 @@ import { useTheme } from '@/constants/theme';
 export default function AppLayout() {
   const t = useTheme();
 
+  /*
+    Las novedades envuelven la sesion entera y no solo su pantalla: el globo de la campana vive en el
+    inicio y la lista en otra ruta, y los dos tienen que ver lo mismo. Aqui dentro tambien va a
+    colgar el socket, que necesita un unico punto al que empujar.
+  */
   return (
+    <ActivityProvider>
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.canvas } }}>
       <Stack.Screen name="(tabs)" />
       {/*
@@ -96,6 +103,15 @@ export default function AppLayout() {
 
       {/* Unirse con un codigo. Hoja como `new-task`: es un paréntesis, no un destino. */}
       <Stack.Screen name="join-workspace" options={{ presentation: 'modal' }} />
+
+      {/*
+        Las novedades. Push de tarjeta como ajustes y editar perfil: es un destino con scroll largo,
+        no un parentesis de tres segundos, y el arrastre-para-cerrar de una hoja pelearia con la
+        lista. La capsula de pestañas no se pinta aqui sin hacer nada — solo existe dentro del
+        navegador de `(tabs)`, y esta pantalla se monta encima en el Stack padre.
+      */}
+      <Stack.Screen name="notifications" />
     </Stack>
+    </ActivityProvider>
   );
 }

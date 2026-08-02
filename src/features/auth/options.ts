@@ -104,6 +104,13 @@ export const REMINDER_HOUR: readonly Option[] = [
  * El color no lleva icono: la muestra ES la opcion que se esta eligiendo.
  * `swatch` guarda el NOMBRE del acento y no el hex, porque el hex depende del esquema
  * y este modulo se evalua una sola vez al cargar.
+ *
+ * Los CINCO PRIMEROS son los de la marca, con sus tres pasos escritos y medidos a mano en `theme.ts`.
+ * Los seis siguientes salen de un solo color base que `deriveRamp` convierte en rampa — el mismo
+ * camino que recorre un color propio, asi que "Otro" no es un caso especial sino el caso general.
+ *
+ * Los tonos nuevos estan apagados a proposito: la paleta es tierra, y un rosa saturado al lado del
+ * oliva y el barro no se lee como otro color de la familia sino como un error.
  */
 export const ACCENT_COLOR: readonly Option[] = [
   { value: 'forest', label: 'Bosque', swatch: 'forest' },
@@ -111,4 +118,10 @@ export const ACCENT_COLOR: readonly Option[] = [
   { value: 'leaf', label: 'Hoja', swatch: 'leaf' },
   { value: 'clay', label: 'Barro', swatch: 'clay' },
   { value: 'copper', label: 'Cobre', swatch: 'copper' },
+  { value: 'rose', label: 'Rosa', swatch: 'rose' },
+  { value: 'lilac', label: 'Lila', swatch: 'lilac' },
+  { value: 'plum', label: 'Ciruela', swatch: 'plum' },
+  { value: 'sky', label: 'Cielo', swatch: 'sky' },
+  { value: 'teal', label: 'Jade', swatch: 'teal' },
+  { value: 'amber', label: 'Ámbar', swatch: 'amber' },
 ];

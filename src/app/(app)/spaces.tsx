@@ -91,13 +91,21 @@ export default function SpacesScreen() {
       <Animated.View
         entering={FadeInDown.duration(Motion.enter)}
         exiting={ROW_OUT}
-        style={[styles.sheet, { backgroundColor: t.surface, paddingBottom: pad.bottom }, shadow]}>
+        style={[styles.sheet, { backgroundColor: t.surface }, shadow]}>
         {/* El asa: dice "esto se arrastra" sin escribirlo. */}
         <View style={[styles.grabber, { backgroundColor: t.line }]} />
 
         <Text style={[Type.section, styles.title, { color: t.text }]}>¿En qué estás?</Text>
 
-        <ScrollView showsVerticalScrollIndicator={false} style={styles.list}>
+        {/*
+          El aire de abajo va en el CONTENIDO del scroll y no en la hoja: puesto en la hoja, con la
+          lista llena se comia el sitio de la ultima fila en vez de dejarla pasar por encima del
+          indicador de inicio.
+        */}
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: pad.bottom }}
+          showsVerticalScrollIndicator={false}
+          style={styles.list}>
           <SpaceRow
             icon={ALL_ICON}
             name="Todo"
@@ -262,7 +270,18 @@ const styles = StyleSheet.create({
   },
   grabber: { alignSelf: 'center', width: GRABBER, height: 4, borderRadius: Radius.pill },
   title: { paddingHorizontal: Space.sm, paddingTop: Space.md, paddingBottom: Space.sm },
-  list: { flexGrow: 0 },
+  /**
+   * `flexShrink: 1` NO es redundante, y su ausencia era un bug de verdad.
+   *
+   * En React Native el `flexShrink` por defecto es 0, asi que este `ScrollView` se medía a la altura
+   * ENTERA de su contenido y se pasaba del `maxHeight: 80%` de la hoja. La hoja lo recortaba con su
+   * borde redondeado, y como el scroll creia que cabia entero tampoco se podia desplazar: con ocho
+   * espacios, "Unirme con un código" quedaba cortado y fuera de alcance.
+   *
+   * `flexGrow: 0` se queda: sin el, con dos espacios la lista estiraria la hoja hasta el 80% y dejaria
+   * un hueco vacio debajo de las filas.
+   */
+  list: { flexGrow: 0, flexShrink: 1 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

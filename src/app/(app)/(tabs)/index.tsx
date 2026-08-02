@@ -23,6 +23,7 @@ import { useActiveSpace } from '@/features/workspaces/active-space';
 import { SpaceMembers } from '@/features/workspaces/space-members';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
+import { NotificationBell } from '@/features/activity/notification-bell';
 
 import { TAB_DOCK } from './_layout';
 
@@ -190,9 +191,21 @@ export default function HomeScreen() {
           {/*
             Arriba a la derecha: la racha es lo primero que alguien abre la app a comprobar, y el "+"
             es lo que mas veces toca. Van juntos en la esquina del pulgar.
+
+            DOS FILAS y no tres piezas en columna ni en fila. En columna serian 156pt de alto contra
+            los 100 de ahora, y empujarian a los miembros del espacio rompiendo la unidad de tres
+            lineas del saludo. En fila robarian ~150pt de ancho al `flex: 1` del titulo, y `Type.day`
+            es serif de una sola linea: "Miercoles" empieza a truncarse en pantallas de 393pt.
+
+            Asi son 100pt exactos, el alto de hoy sin mover un punto. Y separa lo que hay que separar:
+            arriba lo que se COMPRUEBA (como vas, que paso) y abajo lo unico que CREA — que es lo que
+            deja al "+" como el unico relleno solido de la pantalla.
           */}
           <View style={styles.tools}>
-            <StreakFlame streak={streak.streak} accent={user.accentColor} />
+            <View style={styles.status}>
+              <StreakFlame streak={streak.streak} accent={user.accentColor} />
+              <NotificationBell accent={space?.accent ?? user.accentColor} />
+            </View>
             <PlusButton accent={space?.accent ?? user.accentColor} onPress={() => router.push('/new-task')} />
           </View>
         </View>
@@ -260,6 +273,7 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: Space.md },
   // La racha y el "+", en columna: los dos miden 44 y apilados caben sin robarle ancho al saludo.
   tools: { alignItems: 'flex-end', gap: Space.md },
+  status: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   // El encabezado respira por dentro y no con el `gap` del scroll: las tres lineas son UNA cosa.
   greeting: { flex: 1, gap: Space.xs },
 });

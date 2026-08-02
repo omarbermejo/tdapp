@@ -141,6 +141,12 @@ export type Workspace = {
   tag?: string | null;
   total: number;
   done: number;
+  /**
+   * Si lo ADMINISTRAS. La lista trae tambien los espacios a los que te invitaron, y solo el dueño
+   * puede renombrar, invitar o borrar — sin esto, la app ofreceria acciones que el API contesta con
+   * un 404. Opcional como el resto: una version del API sin el campo se comporta como "no eres".
+   */
+  isOwner?: boolean;
 };
 
 /**
@@ -229,6 +235,35 @@ export type Stats = {
  * perfil. Mismas llaves que `Today.counts`.
  */
 export type TaskCounts = { counts: { total: number; pending: number; done: number } };
+
+/** Las seis cosas que le pueden pasar a una tarea y que merecen contarse. */
+export type EventKind = 'created' | 'completed' | 'reopened' | 'moved' | 'edited' | 'deleted';
+
+/**
+ * Una novedad de una tarea.
+ *
+ * `taskTitle` y `workspaceId` son el estado EN EL MOMENTO del evento, no el de ahora: por eso una
+ * novedad de borrado sigue teniendo algo que pintar cuando la tarea ya no existe. Y por lo mismo
+ * `taskId` puede apuntar a una tarea que ya no esta — tocar la fila puede dar 404 y hay que
+ * tratarlo, no evitarlo con una consulta previa.
+ *
+ * `actor` viene en null si esa cuenta se borro: el hecho de que la tarea se cerro sigue siendo
+ * cierto aunque ya no se sepa de quien fue.
+ */
+export type ActivityEvent = {
+  id: number;
+  kind: EventKind;
+  taskId: number | null;
+  taskTitle: string;
+  workspaceId: number | null;
+  meta: { changed?: string[]; from?: number | null; to?: number | null } | null;
+  actor: { id: number; name: string | null } | null;
+  createdAt: string;
+  read: boolean;
+};
+
+/** Una pagina del feed. `next` es el cursor de la siguiente, o null si ya no hay mas. */
+export type ActivityPage = { events: ActivityEvent[]; unread: number; next: number | null };
 
 /**
  * Un logro y las tres caras que abre.
@@ -356,6 +391,32 @@ export const api = {
 
   taskCounts: (token: string) =>
     request<TaskCounts>('/me/tasks/summary', { headers: bearer(token) }),
+
+  /**
+   * Las novedades. `before` pagina hacia atras; `since` trae el hueco que te perdiste.
+   *
+   * Son excluyentes: uno mira al pasado y el otro al presente. `since` es lo que usa el cliente al
+   * reconectar el socket, y es la razon de que la pantalla funcione igual con el socket caido.
+   */
+  events: (token: string, opts: { before?: number; since?: number; limit?: number } = {}) => {
+    const query = Object.entries(opts)
+      .filter(([, v]) => v != null)
+      .map(([k, v]) => `${k}=${v}`)
+      .join('&');
+    return request<ActivityPage>(`/me/events${query ? `?${query}` : ''}`, { headers: bearer(token) });
+  },
+
+  /** Solo el numero del globo: el inicio lo pide en cada foco y no necesita ni una fila. */
+  unread: (token: string) =>
+    request<{ unread: number }>('/me/events/unread', { headers: bearer(token) }),
+
+  /** Sin `id`, marca todas. Devuelve el contador ya recalculado. */
+  readEvents: (token: string, id?: number) =>
+    request<{ unread: number }>('/me/events/read', {
+      method: 'POST',
+      headers: bearer(token),
+      body: JSON.stringify(id == null ? {} : { id }),
+    }),
 
   /** `date` por lo mismo que en la racha: la mejor marca se mide en dias locales del telefono. */
   avatars: (token: string, date?: string) =>
