@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 
@@ -19,6 +19,7 @@ import { useWorkspace } from '@/features/workspaces/use-workspace';
 import { SpaceActions } from '@/features/workspaces/space-actions';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
+import { goBackOrHome } from '@/features/nav/go-back';
 
 const ROW_EXIT = FadeOut.duration(Motion.exit);
 const rowEntering = (index: number) =>
@@ -102,7 +103,7 @@ export default function WorkspaceScreen() {
             <Text style={[Type.body, { color: t.textMuted }]}>
               Se borró, y sus tareas siguen donde estaban. No se perdió nada.
             </Text>
-            <BigButton label="Volver" variant="outline" onPress={() => router.back()} />
+            <BigButton label="Volver" variant="outline" onPress={goBackOrHome} />
           </View>
         ) : (
           <>

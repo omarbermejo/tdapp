@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -19,6 +18,7 @@ import type { Icon3DName } from '@/components/ui/icon3d';
 import { workspacesApi } from './api';
 import { IconChoice } from './icon-choice';
 import { InviteStep } from './invite-step';
+import { goBackOrHome } from '@/features/nav/go-back';
 
 /** Cuál de los cuatro campos está abierto. Uno a la vez, como en el perfil. */
 type Panel = 'nombre' | 'cara' | 'clasificacion' | null;
@@ -105,7 +105,7 @@ export function SpaceActions({ workspace }: { workspace: Workspace }) {
               // Si era el activo, se vuelve al modo general antes de salir: navegar hacia atrás a un
               // inicio que todavía apunta a un espacio borrado pinta una pastilla fantasma.
               await setActiveSpace(null);
-              router.back();
+              goBackOrHome();
             } catch (e) {
               setProblem(e instanceof ApiError ? e.message : 'No se pudo borrar');
             } finally {

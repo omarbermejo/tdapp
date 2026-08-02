@@ -21,6 +21,7 @@ import { useActiveSpace } from '@/features/workspaces/active-space';
 import { useWorkspaces } from '@/features/workspaces/use-workspaces';
 import { usePressScale } from '@/hooks/use-press-scale';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { goBackOrHome } from '@/features/nav/go-back';
 
 /** Las filas salen escalonadas, como el panel del "+". Tope a 6: una lista larga no puede tardar. */
 const rowIn = (index: number) =>
@@ -54,7 +55,7 @@ export default function SpacesScreen() {
   const shadow = useShadow('floating');
   const pad = useScreenPadding(Space.xxl);
 
-  const close = () => router.back();
+  const close = () => goBackOrHome();
 
   /** Entrar a un espacio: se activa y se cierra. La repintada de la pantalla de atras ES el acuse. */
   const enter = (space: Workspace | null) => {

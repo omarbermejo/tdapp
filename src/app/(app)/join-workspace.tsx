@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -17,6 +17,7 @@ import { codeFromLink } from '@/features/workspaces/invite-link';
 import { CAN_SCAN } from '@/features/workspaces/can-scan';
 
 import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { goBackOrHome } from '@/features/nav/go-back';
 
 /** Se carga al tocar "Escanear", no al montar la pantalla. Ver el comentario de abajo. */
 const QrScanner = lazy(() => import('@/features/workspaces/qr-scanner'));
@@ -74,7 +75,7 @@ export default function JoinWorkspaceScreen() {
    */
   useEffect(() => {
     if (!done) return;
-    const timer = setTimeout(() => router.back(), CONFIRM_MS);
+    const timer = setTimeout(goBackOrHome, CONFIRM_MS);
     return () => clearTimeout(timer);
   }, [done]);
 

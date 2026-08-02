@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -40,6 +39,7 @@ import { InviteStep } from '@/features/workspaces/invite-step';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { goBackOrHome } from '@/features/nav/go-back';
 
 
 /** Los cuatro pasos. El titulo es la pregunta, como en el onboarding. */
@@ -180,7 +180,7 @@ export default function NewWorkspaceScreen() {
         <View style={[styles.header, { paddingTop: pad.top }]}>
           {/* Flecha y no cruz: esto es un push. En el ultimo paso desaparece — el espacio YA existe y
               retroceder a elegir color prometeria deshacerlo; ahi la salida es el boton de "Listo". */}
-          {step < 3 && <BackButton onPress={() => (step === 0 ? router.back() : setStep(step - 1))} />}
+          {step < 3 && <BackButton onPress={() => (step === 0 ? goBackOrHome() : setStep(step - 1))} />}
           {/* `StepDots` reparte sus brotes con `space-between`, asi que necesita un ancho: sin el
               `flex: 1` de este envoltorio se encoge a la suma de los cuatro y el carril desaparece. */}
           <View style={styles.dots}>
@@ -315,7 +315,7 @@ export default function NewWorkspaceScreen() {
               accent={color}
             />
           ) : (
-            <BigButton label="Listo" onPress={() => router.back()} accent={color} />
+            <BigButton label="Listo" onPress={goBackOrHome} accent={color} />
           )}
         </View>
       </KeyboardAvoidingView>

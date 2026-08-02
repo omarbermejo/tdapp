@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
@@ -29,6 +28,7 @@ import { useActiveSpaceId } from '@/features/workspaces/active-space';
 import { useWorkspaces } from '@/features/workspaces/use-workspaces';
 import { usePressScale } from '@/hooks/use-press-scale';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { goBackOrHome } from '@/features/nav/go-back';
 
 /** Lo que el confeti se queda antes de volver al inicio. Ver el mismo numero en `new-task`. */
 const CONFIRM_MS = 1100;
@@ -121,7 +121,7 @@ export default function NewTaskStepsScreen() {
 
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
 
-  const back = () => (step === 0 ? router.back() : setStep((s) => s - 1));
+  const back = () => (step === 0 ? goBackOrHome() : setStep((s) => s - 1));
   const next = () => setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1));
 
   const create = async () => {
@@ -141,7 +141,7 @@ export default function NewTaskStepsScreen() {
       setDone(true);
       // El confeti se queda un momento y luego vuelve solo: hacerte tocar "listo" despues de
       // celebrar convierte la celebracion en un tramite.
-      setTimeout(() => router.back(), CONFIRM_MS);
+      setTimeout(goBackOrHome, CONFIRM_MS);
     } catch (e) {
       setError(e instanceof ApiError ? (Object.values(e.fields)[0] ?? e.message) : 'No pudimos crearla');
     } finally {
