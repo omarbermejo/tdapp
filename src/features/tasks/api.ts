@@ -43,6 +43,10 @@ export type NewTask = {
   minutes?: number | null;
   status?: Task['status'];
   focusArea?: string | null;
+  /** El slug de `assets/icons3d/` elegido a mano. null lo deja derivarse de la clasificacion. */
+  icon?: string | null;
+  /** El espacio de trabajo al que pertenece. null la deja suelta, sin borrarla. */
+  workspaceId?: number | null;
   /** ISO con zona; usa localIso() o isoAt(). null lo desagenda. */
   dueAt?: string | null;
 };
@@ -51,6 +55,8 @@ export type TaskQuery = {
   date?: string;
   status?: Task['status'];
   focusArea?: string;
+  /** Todas las de un espacio, de cualquier dia y sin fecha incluidas. Es su pantalla de detalle. */
+  workspaceId?: number;
   /**
    * Una fecha, y trae lo que quedo ATRAS de ella: vencido o sin agendar nunca. Los dos casos en un
    * solo filtro porque son la misma pantalla — ver `listByUser` en el API.
@@ -135,6 +141,28 @@ export const tasksApi = {
 
   remove: (token: string, id: number) =>
     andSync(token, request<void>(`/tasks/${id}`, { method: 'DELETE', headers: bearer(token) })),
+
+  /**
+   * Guarda el orden manual de un dia: la posicion de cada tarea es su indice en `ids`.
+   *
+   * Manda la lista COMPLETA del dia y no la que se movio. Si solo fuera una, las demas se quedarian
+   * sin posicion y el ORDER BY del API las mandaria juntas al final — o sea que mover una cosa
+   * reordenaria el dia entero sin pedirlo.
+   *
+   * **NO pasa por `andSync`**, y es la unica mutacion que no lo hace. De los dos efectos que dispara,
+   * solo uno aplica: el widget pinta la lista del dia en el orden del servidor, asi que hay que
+   * refrescarlo. `refreshTaskAlerts` no — reordenar no mueve ninguna hora, y reagendar todos los
+   * avisos por un arrastre es trabajo puro de mas en el gesto mas repetible de la lista.
+   */
+  order: async (token: string, ids: number[]) => {
+    const result = await request<{ tasks: Task[] }>('/tasks/order', {
+      method: 'PATCH',
+      headers: bearer(token),
+      body: JSON.stringify({ ids }),
+    });
+    void syncTodayWidget(token);
+    return result;
+  },
 
   /** El API impone un solo timer corriendo por usuario: si ya hay otro, responde 409. */
   timer: (token: string, id: number, action: 'start' | 'stop') =>

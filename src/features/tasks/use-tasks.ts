@@ -1,8 +1,9 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { ApiError, type Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
+import { useActiveSpaceId } from '@/features/workspaces/active-space';
 
 import { tasksApi } from './api';
 
@@ -12,6 +13,67 @@ import { tasksApi } from './api';
  * (cuando la pantalla todavia no sabe que dia es hoy) sale como "cargando" y no como "vacio".
  */
 type State = { for: string | null; tasks: Task[] | null; error: string };
+
+/**
+ * Lo que una fila necesita para cambiar la lista: pintar YA, quitar YA, y traer la verdad.
+ *
+ * Va como UN tipo y no como tres props porque `day-timeline` lo enhebra por tres niveles: con
+ * `reload`, `patch` y `drop` sueltos serian nueve props de paso. Y los dos hooks de abajo lo
+ * cumplen estructuralmente, asi que una pantalla puede pasar su hook entero sin desestructurar.
+ */
+export type TaskMutations = {
+  /** Aplica el cambio en el estado local y devuelve la funcion que lo deshace. */
+  patch: (task: Task, changes: Partial<Task>) => () => void;
+  /** Quita la fila del estado local. Si el servidor rechaza, se restaura con `reload`. */
+  drop: (task: Task) => void;
+  /**
+   * Cambia el orden de la lista local y devuelve el deshacer.
+   *
+   * Recibe las DOS listas ya calculadas y no un par (id, indice): es la misma regla que obliga a
+   * `patch` a recibir la tarea entera. Estos mutadores corren dentro de updaters de `setState`, que
+   * React puede ejecutar dos veces, asi que no pueden leer el estado ni calcular nada dentro.
+   */
+  reorder: (next: Task[], previous: Task[]) => () => void;
+  reload: () => Promise<void> | void;
+};
+
+/**
+ * Reemplaza o quita una tarea del estado. PURA, y eso es el requisito: la usan updaters de
+ * `setState`, que React puede ejecutar dos veces — un efecto o una captura ahi dentro se
+ * duplicaria. Es la misma regla que obliga al espejo sincrono de `usePomodoro`.
+ */
+const replace = (s: State, id: number, next: Task | null): State => {
+  if (!s.tasks) return s;
+  return {
+    ...s,
+    tasks: next ? s.tasks.map((t) => (t.id === id ? next : t)) : s.tasks.filter((t) => t.id !== id),
+  };
+};
+
+/**
+ * Los dos mutadores optimistas. Iguales para los dos hooks, asi que se arman una vez.
+ *
+ * `patch` recibe la tarea ENTERA y no un id: el deshacer restaura ese objeto tal cual estaba, sin
+ * tener que leer el estado desde dentro del updater. Es lo que permite que todo esto sea puro.
+ */
+const mutators = (setState: React.Dispatch<React.SetStateAction<State>>) => ({
+  patch: (task: Task, changes: Partial<Task>) => {
+    setState((s) => replace(s, task.id, { ...task, ...changes }));
+    return () => setState((s) => replace(s, task.id, task));
+  },
+  drop: (task: Task) => setState((s) => replace(s, task.id, null)),
+  /**
+   * El orden nuevo se pinta YA y el deshacer restaura el anterior tal cual.
+   *
+   * Los dos arrays llegan hechos desde fuera justo para que este updater sea PURO: calcular el nuevo
+   * orden aqui dentro (mover el elemento i al hueco j) correria dos veces en desarrollo y la segunda
+   * partiria de una lista ya movida.
+   */
+  reorder: (next: Task[], previous: Task[]) => {
+    setState((s) => (s.tasks ? { ...s, tasks: next } : s));
+    return () => setState((s) => (s.tasks ? { ...s, tasks: previous } : s));
+  },
+});
 
 /**
  * Las tareas de UN dia, listas para pintar.
@@ -24,19 +86,30 @@ type State = { for: string | null; tasks: Task[] | null; error: string };
  */
 export function useTasks(date: string) {
   const { token } = useAuth();
+  /**
+   * El espacio activo se lee AQUI DENTRO y no llega por parametro, y es deliberado: si fuera un
+   * argumento, cada pantalla tendria que acordarse de pasarlo y la que lo olvidara enseñaria el dia
+   * equivocado sin ningun error. Es el mismo argumento por el que `andSync` vive en el cliente de la
+   * API y no en cada sitio que muta una tarea.
+   */
+  const space = useActiveSpaceId();
   const [state, setState] = useState<State>({ for: null, tasks: null, error: '' });
+
+  // La llave de lo guardado lleva el espacio: al cambiar de espacio, lo del anterior se descarta al
+  // pintar en vez de quedarse un frame diciendo lo que no es.
+  const key = `${date}:${space ?? ''}`;
 
   const reload = useCallback(async () => {
     if (!token || !date) return;
     try {
-      const { tasks } = await tasksApi.list(token, { date });
-      setState({ for: date, tasks, error: '' });
+      const { tasks } = await tasksApi.list(token, { date, workspaceId: space });
+      setState({ for: key, tasks, error: '' });
     } catch (e) {
       const error = e instanceof ApiError ? e.message : 'No pudimos traer ese día';
       // Si ya habia tareas de ESTE dia se quedan: un fallo no borra lo que se esta viendo.
-      setState((s) => (s.for === date ? { ...s, error } : { for: date, tasks: null, error }));
+      setState((s) => (s.for === key ? { ...s, error } : { for: key, tasks: null, error }));
     }
-  }, [token, date]);
+  }, [token, date, space, key]);
 
   // useFocusEffect y no useEffect: corre al montar Y al VOLVER, asi lo que se crea en /new-task
   // aparece al regresar. La carga va dentro y no llama a reload en seco, asi el primer setState
@@ -59,13 +132,73 @@ export function useTasks(date: string) {
    * limpiarlo con un setState: pintar el lunes bajo el encabezado del martes es peor que
    * un instante de "cargando".
    */
-  const fresh = state.for === date;
+  const fresh = state.for === key;
+
+  /**
+   * Se arman con `useMemo` y no en el cuerpo: la fila los recibe como prop y los mete en las
+   * dependencias de sus callbacks. Un objeto nuevo por render volveria a crear esos callbacks en
+   * cada pintada de la pantalla.
+   */
+  const mutate = useMemo(() => mutators(setState), []);
 
   return {
     tasks: fresh ? state.tasks : null,
     error: fresh ? state.error : '',
     loading: !fresh,
     reload,
+    ...mutate,
+  };
+}
+
+/**
+ * TODAS las tareas de un espacio de trabajo, de cualquier dia y sin fecha incluidas.
+ *
+ * Sin filtro de dia a proposito: la pantalla de un espacio es la vista del PROYECTO, no de una fecha —
+ * ahi lo que se quiere ver es todo lo que hay dentro. El orden lo pone el API (pendientes primero, y
+ * dentro de ellas el orden manual si existe).
+ *
+ * Comparte forma con `useTasks` —mismo estado, mismo `useFocusEffect`, mismos mutadores— pero su llave
+ * es un id y no una fecha, asi que no se fusionan en un hook con bandera: son dos preguntas distintas.
+ */
+export function useWorkspaceTasks(workspaceId: number) {
+  const { token } = useAuth();
+  const [state, setState] = useState<State>({ for: null, tasks: null, error: '' });
+  // El estado guarda su llave como texto, igual que los otros dos hooks.
+  const key = String(workspaceId);
+
+  const reload = useCallback(async () => {
+    if (!token || !workspaceId) return;
+    try {
+      const { tasks } = await tasksApi.list(token, { workspaceId });
+      setState({ for: key, tasks, error: '' });
+    } catch (e) {
+      const error = e instanceof ApiError ? e.message : 'No pudimos traer las tareas';
+      setState((s) => (s.for === key ? { ...s, error } : { for: key, tasks: null, error }));
+    }
+  }, [token, workspaceId, key]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        if (cancelled) return;
+        await reload();
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [reload])
+  );
+
+  const fresh = state.for === key;
+  const mutate = useMemo(() => mutators(setState), []);
+
+  return {
+    tasks: fresh ? state.tasks : null,
+    error: fresh ? state.error : '',
+    loading: !fresh,
+    reload,
+    ...mutate,
   };
 }
 
@@ -83,19 +216,26 @@ export function useTasks(date: string) {
  */
 export function useBacklog(today: string) {
   const { token } = useAuth();
+  // Dentro de un espacio, el atraso tambien es el suyo. Ver la nota de `useTasks`.
+  const space = useActiveSpaceId();
   const [state, setState] = useState<State>({ for: null, tasks: null, error: '' });
+  const key = `${today}:${space ?? ''}`;
 
   const reload = useCallback(async () => {
     if (!token || !today) return;
     try {
-      const { tasks } = await tasksApi.list(token, { backlog: today, status: 'pending' });
-      setState({ for: today, tasks, error: '' });
+      const { tasks } = await tasksApi.list(token, {
+        backlog: today,
+        status: 'pending',
+        workspaceId: space,
+      });
+      setState({ for: key, tasks, error: '' });
     } catch {
       // Sin mensaje: el backlog es una seccion secundaria y un error suyo no debe robarle la
       // pantalla al dia. Si falla, no aparece.
-      setState({ for: today, tasks: null, error: '' });
+      setState({ for: key, tasks: null, error: '' });
     }
-  }, [token, today]);
+  }, [token, today, space, key]);
 
   useFocusEffect(
     useCallback(() => {
@@ -103,6 +243,7 @@ export function useBacklog(today: string) {
     }, [reload])
   );
 
-  const fresh = state.for === today;
-  return { tasks: fresh ? state.tasks : null, reload };
+  const fresh = state.for === key;
+  const mutate = useMemo(() => mutators(setState), []);
+  return { tasks: fresh ? state.tasks : null, reload, ...mutate };
 }

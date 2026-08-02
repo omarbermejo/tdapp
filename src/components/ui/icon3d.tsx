@@ -26,6 +26,12 @@ const ICONS = {
   'graph-up': require('@/assets/icons3d/graph-up.webp'),
   health: require('@/assets/icons3d/health.webp'),
   home: require('@/assets/icons3d/home.webp'),
+  /**
+   * La MISMA casa en cromo. La casa es el unico icono con dos trabajos y son incompatibles: como
+   * area "hogar" es calida (el color es el dato) y como pestaña de Hoy tiene que ser verde, porque
+   * al lado van el reloj, el calendario y el usuario. Ver `EXTRA` en `scripts/build-icons3d.mjs`.
+   */
+  'home-chrome': require('@/assets/icons3d/home-chrome.webp'),
   leaf: require('@/assets/icons3d/leaf.webp'),
   light: require('@/assets/icons3d/light.webp'),
   lightning: require('@/assets/icons3d/lightning.webp'),
@@ -78,6 +84,14 @@ export const AREA_ICON: Record<string, Icon3DName> = {
   money: 'money',
   relationships: 'relationships',
   creativity: 'creativity',
+  /*
+    Las tres clasificaciones nuevas reusan slugs que ya estan horneados: `trophy` y `graph-up`
+    llevaban en el bundle sin usarse desde el principio, y `calendar` ya existia para la pestaña.
+    Cero assets nuevos, cero `npm run build:icons3d`.
+  */
+  fitness: 'trophy',
+  event: 'calendar',
+  business: 'graph-up',
 };
 
 /** El icono de un tamaño de tarea: un rayo, un reloj y una luna. */

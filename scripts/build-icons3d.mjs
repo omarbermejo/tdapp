@@ -47,6 +47,82 @@ const PAD = 0.08;
 const INK = 0.34;
 /** Debajo de esto un pixel es borde suavizado y no define el rango tonal del objeto. */
 const SOLID = 200;
+/**
+ * Que fraccion del objeto se recorta en CADA extremo antes de estirar el modelado sobre la rampa.
+ *
+ * Es la perilla que decide si un icono se lee con volumen o como silueta. Con los extremos en el
+ * minimo y el maximo absolutos, un filo especular de dos pixeles se lleva el paso claro de la rampa
+ * entero y el CUERPO del objeto queda comprimido en la parte baja. Se veia en el rayo y en la hoja
+ * —casi una sola faceta mas un filo de luz, que salian planos— mientras el reloj y la paleta, que
+ * reparten su luz sobre area grande, si modelaban. O sea que el defecto no estaba en el tinte:
+ * estaba en dejar que dos outliers fijaran la escala de todo el icono.
+ *
+ * Recortar no pierde nada. El clamp del mapa aplasta lo que queda fuera contra los topes, que es
+ * justo lo que se quiere: un reflejo especular DEBE saturar. Lo que gana es el 96% central, que se
+ * estira sobre la rampa completa.
+ */
+const CLIP = 0.02;
+/**
+ * Donde se ancla la MEDIANA de cada icono dentro de su rampa, de 0 (el paso bajo) a 1 (el alto).
+ *
+ * Es el hermano tonal de `INK`. `INK` empareja cuanta tinta cubre cada icono para que ninguno pese
+ * mas que otro; esto empareja a que ALTURA de su rampa se asienta, para que ninguno se vea mas
+ * oscuro que otro. Sin el, `CLIP` arreglaba cada icono por separado y rompia el conjunto: el
+ * recorte depende de como reparte su luz cada render, asi que la casa y el sol —una faceta grande
+ * y clara, la sombra en un filo— saltaban a mediana 198 y 132 mientras el reloj y el birrete caian
+ * a 44 y 38. Medido sobre los 18: el rango de medianas pasaba de 104 puntos a 168.
+ *
+ * Se ancla la mediana DENTRO de la rampa y no la luminancia absoluta, que es lo que deja vivas las
+ * familias de color: la rampa clay entera es mas clara que la forest, y esa diferencia es el dato
+ * (ver `FAMILY` en focus-accent.ts). Anclar luminancia la borraria.
+ *
+ * 0.38 y no 0.5: el papel de la app es blanco, asi que el objeto tiene que asentarse por DEBAJO del
+ * medio para que la silueta contraste, y el rango que queda por arriba es el que dibuja el
+ * modelado. Se aplica como gamma, o sea que los dos extremos no se mueven — el reflejo sigue
+ * saturando y la sombra sigue tocando fondo.
+ */
+const TONE = 0.38;
+/**
+ * Piso del rango tonal de origen, en niveles. Es el tope de cuanto se le permite AMPLIFICAR a la
+ * tubería, y existe porque el set no es homogeneo ni de lejos.
+ *
+ * Medido sobre los 18, la ventana util (p2-p98 sobre los pixeles del estarcido) se parte en dos
+ * grupos: reloj, birrete, calendario y compañia traen 170-200 niveles de sombreado, y casa, rayo,
+ * luna, hoja, sol y palomita traen entre 21 y 40. Los segundos no vienen mal exportados — vienen
+ * casi PLANOS del render, que es de donde salia la queja de que se ven como siluetas.
+ *
+ * Estirar 21 niveles sobre la rampa entera no inventa modelado: multiplica por doce lo poco que hay
+ * y con ello los escalones de la cuantizacion, que es lo que saco anillos concentricos en la cara
+ * de la casa — curvas de nivel de una superficie casi lisa. Con el piso, un icono plano ocupa la
+ * fraccion de rampa que su sombreado real merece (la casa, 30%) y uno modelado sigue ocupandola
+ * entera.
+ */
+const MIN_SPAN = 70;
+/**
+ * Cuanto puede curvar el anclaje de `TONE`. Sin tope, un icono cuya masa se apila contra un extremo
+ * pedia gamma 19.8 para mover su mediana al ancla — una potencia asi no reasienta el objeto, lo
+ * aplasta contra un tono y convierte todo su modelado en un escalon.
+ *
+ * Con el tope, esos iconos quedan un poco fuera del ancla. Es lo correcto: la alternativa no era
+ * tenerlos en tono y bien, era tenerlos en tono y rotos.
+ */
+const GAMMA = { min: 0.4, max: 3 };
+/**
+ * Tramado ordenado de 4x4, en [-0.5, 0.5) de un nivel de la FUENTE.
+ *
+ * El render de Figma llega en 8 bits, y con la ventana en su piso (`MIN_SPAN`) cada nivel de origen
+ * se abre en ~3.7 de salida. Sin romper ese escalon, una superficie lisa sale en franjas. Es un
+ * artefacto de cuantizacion, no del render: se comprobo estirando el contraste del export original,
+ * que esta limpio.
+ *
+ * Ordenado y no aleatorio para que el build sea reproducible: los .webp se commitean, y con ruido
+ * cada corrida daria un archivo distinto y un diff que no significa nada.
+ *
+ * Se suma en el dominio de la LUMINANCIA y no al color de salida. Es la unica posicion que sirve:
+ * el escalon nace al cuantizar la entrada, asi que media unidad de origen es lo que hay que romper
+ * — medio nivel de SALIDA no llegaria ni a un cuarto de banda.
+ */
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16 - 0.5);
 
 /**
  * Los extremos del mapa salen de las rampas de `theme.ts`, nunca de un hex escrito aqui.
@@ -162,24 +238,52 @@ export async function bake(dir, loHex, hiHex) {
 
   const n = width * height;
   const lum = new Float32Array(n);
-  let min = 255;
-  let max = 0;
+
+  // Un histograma de 256 cubetas sobre los pixeles solidos. Es todo lo que hace falta para sacar un
+  // percentil, y evita ordenar las decenas de miles de luminancias de cada icono.
+  const hist = new Uint32Array(256);
+  let solid = 0;
 
   for (let i = 0, p = 0; p < n; i += 4, p++) {
     if (!stencil[p]) continue;
     lum[p] = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
     if (stencil[p] < SOLID) continue;
-    if (lum[p] < min) min = lum[p];
-    if (lum[p] > max) max = lum[p];
+    hist[Math.round(lum[p])]++;
+    solid++;
   }
 
+  /** La luminancia por debajo de la cual queda `fraction` del objeto. */
+  const percentile = (fraction) => {
+    const target = fraction * solid;
+    let seen = 0;
+    for (let v = 0; v < 256; v++) {
+      seen += hist[v];
+      if (seen >= target) return v;
+    }
+    return 255;
+  };
+
   // 3. El mapa de degradado. El rojo de origen no ocupa 0-255: sin estirar su rango real se tira
-  //    la mayor parte del modelado antes de empezar.
-  const span = max - min || 1;
+  //    la mayor parte del modelado antes de empezar. Los extremos son percentiles y no el minimo y
+  //    el maximo — ver `CLIP`, que es lo que separa un objeto con volumen de una silueta.
+  const min = percentile(CLIP);
+  const max = percentile(1 - CLIP);
+  // El piso solo puede ENSANCHAR la ventana, o sea reducir la amplificacion. Ver `MIN_SPAN`.
+  const span = Math.max(max - min, MIN_SPAN);
+
+  // La gamma que lleva la mediana de ESTE icono al ancla comun del set. Ver `TONE`. Es monotona y
+  // fija los dos extremos, asi que reasienta el objeto sin tocar ni el reflejo ni la sombra.
+  const mid = Math.min(1, Math.max(0, (percentile(0.5) - min) / span));
+  const gamma =
+    mid > 0 && mid < 1
+      ? Math.min(GAMMA.max, Math.max(GAMMA.min, Math.log(TONE) / Math.log(mid)))
+      : 1;
+
   for (let i = 0, p = 0; p < n; i += 4, p++) {
     data[i + 3] = stencil[p];
     if (!stencil[p]) continue;
-    const g = Math.min(1, Math.max(0, (lum[p] - min) / span));
+    const dither = BAYER[((p / width) & 3) * 4 + (p % width & 3)];
+    const g = Math.min(1, Math.max(0, (lum[p] + dither - min) / span)) ** gamma;
     for (let c = 0; c < 3; c++) data[i + c] = Math.round(lo[c] + g * (hi[c] - lo[c]));
   }
 
@@ -216,7 +320,14 @@ export async function bake(dir, loHex, hiHex) {
       bottom: SIZE - h - ((SIZE - h) >> 1),
       background: clear,
     })
-    .webp({ quality: 82, alphaQuality: 100, effort: 6 })
+    // 95 y no 82. WebP con perdida contornea los degradados suaves, y al repartir el modelado sobre
+    // la rampa entera (`CLIP` + `TONE`) los degradados se volvieron anchos: la cara de la casa salia
+    // en anillos concentricos que NO estan en el render de Figma — se comprobo estirando el
+    // contraste del export original. A 82 el encoder los inventa; a 95 no.
+    //
+    // Cuesta 30 KB en los 18 iconos juntos. Es el precio mas barato del proyecto: son los assets
+    // que cargan la identidad visual de la app y se ven en cada fila de cada lista.
+    .webp({ quality: 95, alphaQuality: 100, effort: 6 })
     .toBuffer();
 }
 
@@ -251,11 +362,17 @@ const BLEED_LEFT = [160, 40, 100];
  *
  * `leaf` sube la ventana en la misma rampa que `forest` por la misma razon que en `theme.ts`:
  * comparten familia y sin separarlos se leen como un solo color.
+ *
+ * Pero sube UN paso, no dos. Con 400-900 el tope era `blackForest[900]` (#d5e4c3), un verde casi
+ * blanco que con el mapa viejo casi ningun pixel alcanzaba — en cuanto `CLIP` y `TONE` repartieron
+ * el modelado sobre la ventana entera, la paleta de Creatividad se fue a sage lavado y dejo de
+ * contrastar contra el papel blanco. 300-800 topa en #aac987: sigue siendo visiblemente mas claro
+ * que forest, que es todo lo que se le pedia.
  */
 export const TINT = {
   forest: ['blackForest', '200', '700'],
   olive: ['oliveLeaf', '200', '700'],
-  leaf: ['blackForest', '400', '900'],
+  leaf: ['blackForest', '300', '800'],
   clay: ['sunlitClay', '200', '700'],
   copper: ['copperwood', '200', '700'],
 };
@@ -280,6 +397,21 @@ export const AREA_ACCENT = {
   money: 'copper',
 };
 
+/**
+ * Los iconos que se hornean DOS veces.
+ *
+ * La casa es la unica con dos trabajos, y son incompatibles: como area de enfoque "hogar" el color
+ * ES el dato y tiene que ser calido —la misma familia que salud y relaciones, la que dice "vida" de
+ * un vistazo en la agenda— y como pestaña de Hoy tiene que ser cromo, porque al lado van el reloj,
+ * el calendario y el usuario.
+ *
+ * El mapa de arriba esta indexado por AREA, pero el nombre del area y el del asset coinciden, asi
+ * que la barra se llevaba el clay sin que nadie lo decidiera: la unica casa marron entre tres verdes
+ * — que es justo lo que `CHROME` existe para impedir. Un archivo no puede ser dos colores, asi que
+ * son dos archivos.
+ */
+export const EXTRA = [{ dir: 'home', name: 'home-chrome', accent: CHROME }];
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const palette = await loadPalette();
   await mkdir(OUT, { recursive: true });
@@ -288,10 +420,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if ((await stat(join(RAW, entry))).isDirectory()) slugs.push(entry);
   }
 
-  for (const slug of slugs.sort()) {
-    const [ramp, lo, hi] = TINT[AREA_ACCENT[slug] ?? CHROME];
-    const webp = await bake(join(RAW, slug), palette[ramp][lo], palette[ramp][hi]);
-    await writeFile(join(OUT, `${slug}.webp`), webp);
-    console.log(`${slug.padEnd(16)} ${(webp.length / 1024).toFixed(1)} KB`);
+  const jobs = [
+    ...slugs.sort().map((slug) => ({ dir: slug, name: slug, accent: AREA_ACCENT[slug] ?? CHROME })),
+    ...EXTRA,
+  ];
+
+  for (const job of jobs) {
+    const [ramp, lo, hi] = TINT[job.accent];
+    const webp = await bake(join(RAW, job.dir), palette[ramp][lo], palette[ramp][hi]);
+    await writeFile(join(OUT, `${job.name}.webp`), webp);
+    console.log(`${job.name.padEnd(16)} ${(webp.length / 1024).toFixed(1)} KB`);
   }
 }

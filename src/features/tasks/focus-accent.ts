@@ -1,3 +1,4 @@
+import type { Icon3DName } from '@/components/ui/icon3d';
 import type { AccentName } from '@/constants/theme';
 
 /**
@@ -24,7 +25,27 @@ const FAMILY: Record<string, AccentName> = {
   health: 'clay',
   relationships: 'clay',
   money: 'copper',
+  /*
+    Las tres clasificaciones que los siete focos no nombraban, repartidas por la misma regla:
+    entrenar es produccion sobre uno mismo (verde), un evento se organiza y se vive (calido), y un
+    negocio es dinero — que sigue sin ser ninguna de las dos familias.
+  */
+  fitness: 'leaf',
+  event: 'clay',
+  business: 'copper',
 };
+
+/**
+ * De que va una tarea: su foco propio si lo tiene, y si no, la clasificacion de su espacio.
+ *
+ * **Esta es la herencia**, y vive aqui para que exista en UN solo sitio: el icono, el color y la
+ * etiqueta de una fila salen los tres de esta funcion, y si cada uno resolviera su propio fallback
+ * acabarian discrepando. El foco propio gana siempre — es un override explicito.
+ */
+export const focusOf = (task: {
+  focusArea?: string | null;
+  workspaceTag?: string | null;
+}): string | null => task.focusArea ?? task.workspaceTag ?? null;
 
 /**
  * El acento de una tarea. Sin foco cae en el del usuario: una tarea recien anotada no tiene
@@ -34,3 +55,40 @@ export const accentForFocus = (
   focusArea: string | null | undefined,
   fallback: AccentName
 ): AccentName => (focusArea && FAMILY[focusArea]) || fallback;
+
+/**
+ * La cara de una clasificacion.
+ *
+ * Es el hermano de `FAMILY` —ahi el color, aqui la forma— y existe por el onboarding: ahi se pregunta
+ * DE QUE va tu primer espacio, no que dibujo quieres, asi que el icono tiene que salir de la respuesta.
+ * `study` mapea a `academic` porque el mapa de assets se indexa por slug de archivo y no por area.
+ */
+const FACE: Record<string, Icon3DName> = {
+  study: 'academic',
+  work: 'work',
+  creativity: 'creativity',
+  fitness: 'trophy',
+  home: 'home',
+  health: 'health',
+  relationships: 'relationships',
+  event: 'calendar',
+  money: 'money',
+  business: 'graph-up',
+};
+
+/** El icono 3D de una clasificacion. Sin ella, el maletin: es el default del alta de un espacio. */
+export const iconForTag = (tag: string | null | undefined): Icon3DName =>
+  (tag && FACE[tag]) || 'work';
+
+/**
+ * El foco que le toca a una clasificacion.
+ *
+ * Los siete primeros tags SON los siete focos, asi que casi siempre es la identidad. Las tres nuevas
+ * caen en el foco mas cercano, por la misma regla con la que `FAMILY` les asigna color: entrenar es
+ * cuidarse, un evento se organiza en casa, y un negocio es dinero. Sirve para que el onboarding pueda
+ * dejar de preguntar por el foco sin que el dia se quede sin nada con que ordenarse.
+ */
+const AS_FOCUS: Record<string, string> = { fitness: 'health', event: 'home', business: 'money' };
+
+export const focusForTag = (tag: string | null | undefined): string[] =>
+  tag ? [AS_FOCUS[tag] ?? tag] : [];

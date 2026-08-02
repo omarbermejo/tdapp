@@ -27,7 +27,7 @@ const ROW_EXIT = FadeOut.duration(Motion.exit);
 export function BacklogList({ backlog }: { backlog: ReturnType<typeof useBacklog> }) {
   const t = useTheme();
   const { user } = useAuth();
-  const { tasks, reload } = backlog;
+  const { tasks } = backlog;
 
   if (!tasks?.length) return null;
 
@@ -43,7 +43,15 @@ export function BacklogList({ backlog }: { backlog: ReturnType<typeof useBacklog
 
       {ordered.map((task) => (
         <Animated.View key={task.id} layout={ROW_LAYOUT} exiting={ROW_EXIT}>
-          <TaskRow task={task} accent={user?.accentColor} reload={reload} showDay />
+          {/*
+            Con dia y SIN hora. La meta de la fila cabe en tres segmentos a una linea, y aqui son
+            cuatro: el cuarto se cortaba a medias ("31 jul · 25 min · Creatividad · 5:0…"), que es
+            peor que no estar.
+            El que se va es la hora, y no por espacio: la hora de un dia que ya paso no acciona
+            nada — "5:00 p.m." del martes no te dice cuando hacerla, te dice cuando NO la hiciste.
+            Lo que decide aqui es de que dia es, para moverla o soltarla.
+          */}
+          <TaskRow task={task} accent={user?.accentColor} mutate={backlog} showDay showTime={false} />
         </Animated.View>
       ))}
 

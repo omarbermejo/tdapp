@@ -1,12 +1,27 @@
+import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import Animated, {
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 
 import { BigButton } from '@/components/ui/big-button';
 import { Micro } from '@/components/ui/card';
-import { Radius, Space, Touch, Type, useAccent, useTheme, type Accent } from '@/constants/theme';
+import {
+  Radius,
+  Space,
+  Touch,
+  Type,
+  useAccent,
+  useScheme,
+  useTheme,
+  type Accent,
+} from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { localDate } from '@/features/tasks/api';
@@ -14,6 +29,8 @@ import { DayTimeline } from '@/features/tasks/day-timeline';
 import { useTasks } from '@/features/tasks/use-tasks';
 import { usePressScale } from '@/hooks/use-press-scale';
 
+import { SpacePill } from '@/components/ui/space-pill';
+import { useActiveSpace } from '@/features/workspaces/active-space';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 import { TAB_DOCK } from './_layout';
@@ -58,7 +75,23 @@ const byTime = (a: Task, b: Task) => {
 export default function CalendarScreen() {
   const { user } = useAuth();
   const t = useTheme();
+  const scheme = useScheme();
   const tint = useAccent(user?.accentColor);
+
+  /**
+   * Los controles (titulo y tira de dias) flotan SOBRE la lista, no arriba de ella: asi el
+   * contenido pasa por debajo y hay algo que desenfocar. Sin scroll el blur no se pinta —
+   * sobre el canvas limpio seria una banda gris sin razon; aparece cuando algo pasa detras.
+   */
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
+  // La altura real de los controles: define cuanto aire necesita la lista para no nacer tapada.
+  const [headHeight, setHeadHeight] = useState(0);
+  const veil = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, VEIL_AT], [0, 1], 'clamp'),
+  }));
 
   /**
    * El reloj se lee en el efecto y nunca al pintar: la fecha en el render es impura. El
@@ -94,7 +127,12 @@ export default function CalendarScreen() {
   const { date } = useLocalSearchParams<{ date?: string }>();
   const selected = date || today;
 
-  const { tasks, error, loading, reload } = useTasks(selected);
+  // El objeto entero se guarda además de desestructurarlo: el riel se lo pasa tal cual a las filas
+  // como `mutate`, porque el hook ya cumple `TaskMutations` (pintar ya, quitar ya, traer la verdad).
+  const day = useTasks(selected);
+  /** El espacio activo ya acota `useTasks` por dentro; aqui solo se pinta la señal. */
+  const space = useActiveSpace();
+  const { tasks, error, loading, reload } = day;
 
   // El aire va en el contenido, no en un SafeAreaView: ver `use-screen-padding`.
   const pad = useScreenPadding(TAB_DOCK);
@@ -112,36 +150,14 @@ export default function CalendarScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
-      {/* El encabezado es FIJO (vive fuera del scroll), asi que el hueco del notch le toca a el. */}
-      <View style={[styles.head, { paddingTop: pad.top }]}>
-        <Micro>{relative || 'Que viene'}</Micro>
-        <Text style={[Type.display, { color: t.text }]} numberOfLines={2}>
-          {selected ? upper(long(parse(selected))) : ''}
-        </Text>
-      </View>
-
-      {/* Fuera del padding de la pantalla: la tira se corta en el borde y eso invita a arrastrarla. */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.strip}>
-        {days.map((at) => {
-          const day = localDate(at);
-          return (
-            <Day
-              key={day}
-              at={at}
-              on={day === selected}
-              isToday={day === today}
-              tint={tint}
-              onPress={() => router.setParams({ date: day })}
-            />
-          );
-        })}
-      </ScrollView>
-
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: pad.bottom }]}
+      {/* Va PRIMERO en el arbol para quedar debajo de los controles flotantes. */}
+      <Animated.ScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: headHeight, paddingBottom: pad.bottom },
+        ]}
         showsVerticalScrollIndicator={false}>
         {loading && (
           <View style={styles.message}>
@@ -183,7 +199,7 @@ export default function CalendarScreen() {
             <BigButton
               label="Agendar algo"
               accent={user.accentColor}
-              onPress={() => router.push('/new-task')}
+              onPress={() => router.push('/new-task-steps')}
             />
           </View>
         )}
@@ -201,7 +217,7 @@ export default function CalendarScreen() {
               peakEnergy={user.peakEnergy}
               isToday={isViewingToday}
               minutes={minutes}
-              reload={reload}
+              mutate={day}
             />
           </>
         )}
@@ -210,7 +226,62 @@ export default function CalendarScreen() {
         {!!error && !!tasks && (
           <Text style={[Type.hint, styles.notice, { color: t.danger }]}>{error}</Text>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
+
+      {/*
+        Los controles flotan encima. `pointerEvents` no se toca: la tira de dias se sigue
+        arrastrando, y lo unico que hay a su alrededor es aire del propio encabezado.
+      */}
+      <View
+        style={styles.controls}
+        onLayout={(e) => setHeadHeight(e.nativeEvent.layout.height)}>
+        {/*
+          El velo va detras del contenido del encabezado y se revela con el scroll: el blur
+          separa los controles de lo que corre por debajo, y el filo de abajo dice donde
+          termina la barra ahora que ya no comparte fondo con la lista.
+        */}
+        <Animated.View style={[StyleSheet.absoluteFill, veil]} pointerEvents="none">
+          <BlurView
+            intensity={40}
+            tint={scheme === 'dark' ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[styles.edge, { backgroundColor: t.line }]} />
+        </Animated.View>
+
+        {/* El hueco del notch le toca al encabezado: es lo unico pegado al borde de arriba. */}
+        <View style={[styles.head, { paddingTop: pad.top }]}>
+          {/* La pastilla comparte fila con el rotulo: esta cabecera flota con blur y una linea mas la
+              haria crecer sobre la tira de dias. */}
+          <View style={styles.headTop}>
+            <Micro>{relative || 'Que viene'}</Micro>
+            <SpacePill space={space} />
+          </View>
+          <Text style={[Type.display, { color: t.text }]} numberOfLines={2}>
+            {selected ? upper(long(parse(selected))) : ''}
+          </Text>
+        </View>
+
+        {/* Fuera del padding de la pantalla: la tira se corta en el borde y eso invita a arrastrarla. */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.strip}>
+          {days.map((at) => {
+            const day = localDate(at);
+            return (
+              <Day
+                key={day}
+                at={at}
+                on={day === selected}
+                isToday={day === today}
+                tint={tint}
+                onPress={() => router.setParams({ date: day })}
+              />
+            );
+          })}
+        </ScrollView>
+      </View>
     </View>
   );
 }
@@ -266,9 +337,18 @@ function Day({
 const RAIL = 2;
 const MARK = 5;
 
+/** A cuantos px de scroll el velo ya esta del todo. Corto: tiene que responder al primer gesto. */
+const VEIL_AT = 24;
+
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  controls: { position: 'absolute', top: 0, left: 0, right: 0 },
+  // Un pelo, no un borde: separa la barra de la lista sin dibujar una caja.
+  edge: { position: 'absolute', bottom: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth },
   // El paddingTop lo pone `useScreenPadding`: es el unico elemento pegado al borde de arriba.
+  // Rotulo a la izquierda, espacio activo a la derecha. `space-between` y no un gap: la pastilla
+  // mide lo que mide su nombre y tiene que quedarse pegada al borde.
+  headTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.sm },
   head: { paddingHorizontal: Space.xl, gap: Space.xs },
   strip: {
     flexDirection: 'row',

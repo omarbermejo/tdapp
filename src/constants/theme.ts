@@ -3,6 +3,7 @@ import type { Theme as NavigationTheme } from 'expo-router';
 import { useSyncExternalStore } from 'react';
 import { useColorScheme, type TextStyle } from 'react-native';
 
+import { deriveRamp, isHex, normalizeHex } from './color';
 import { getPreference, subscribe } from './scheme-store';
 
 /**
@@ -12,14 +13,14 @@ import { getPreference, subscribe } from './scheme-store';
  * generosos, jerarquía por tamaño y color de texto (no por cajas), y un solo CTA sólido por
  * pantalla.
  *
- * **El papel es cálido y la tarjeta es blanca.** Es la inversión del escalón anterior (papel
- * blanco, tarjeta crema) y es una decisión sensorial antes que estética: es lo que hace Tiimo,
- * que diseña para el mismo público, y su argumento es que el blanco puro a pantalla completa es
- * un estímulo que cansa. Además los iconos 3D de la app traen su propio modelado en gris, y sobre
- * blanco puro flotan sin asentarse.
+ * **El papel es blanco y la tarjeta también.** El crema a pantalla completa se leía como un tinte
+ * sucio, así que el papel vuelve a blanco puro y lo que separa una tarjeta es SOLO su sombra
+ * (`Elevation.raised`), nunca un escalón de valor ni un borde grueso. Es lo que ya decía el
+ * sistema: el escalón de 1.07:1 que había antes no era lo que levantaba nada.
  *
- * De ahí sale la regla de temperatura: **una sola, y se hace cumplir**. Un gris frío sobre papel
- * cálido se ve sucio, así que en modo claro no hay grises neutros — todo neutro es cálido.
+ * La regla de temperatura sigue en pie para todo lo que NO es el papel: **una sola, y se hace
+ * cumplir**. Un gris frío junto a los cremas de la marca se ve sucio, así que en modo claro no hay
+ * grises neutros — todo neutro (lo hundido, la línea, la superficie de acento) es cálido.
  *
  * Regla: ningún hex vive fuera de este archivo. Los componentes consumen tokens, y los
  * de color SOLO a través de `useTheme()` / `useAccent()` — un import estático se
@@ -100,13 +101,12 @@ export const Palette = {
    * ensuciarse.
    */
   paper: {
-    /** La tarjeta. Blanco puro, y solo aquí: es lo único que se levanta. */
+    /** El papel Y la tarjeta. Blanco puro: entre los dos no hay escalón, solo la sombra. */
     0: '#ffffff',
     /**
-     * El papel de la app. Medido: la tinta encima da 12.0:1 y la tarjeta se separa 1.07:1 — poco
-     * a propósito, porque lo que levanta una tarjeta es su sombra (`Elevation.raised`), no un
-     * escalón de valor. Un escalón fuerte convierte cada tarjeta en una caja, que es justo lo que
-     * la referencia no hace.
+     * Crema apenas teñido. Ya NO es el papel — quedó para lo que necesita un fondo cálido sin
+     * llegar al crema de marca (`sand`). Se mantiene porque `paper[100]` y `[200]` se derivan
+     * visualmente de él y la rampa se leería rota sin este paso.
      */
     50: '#faf7ef',
     /** Lo hundido: chips sin seleccionar, pistas de progreso, avatares. `textMuted` encima da 6.7:1. */
@@ -183,9 +183,9 @@ export type Tokens = {
 
 const TOKENS: Record<Scheme, Tokens> = {
   light: {
-    /** El papel cálido. 12.0:1 con la tinta encima. */
-    canvas: Palette.paper[50],
-    /** La tarjeta: blanco, y lo único blanco. Se separa por sombra, no por escalón de valor. */
+    /** El papel: blanco puro. 12.6:1 con la tinta encima. */
+    canvas: Palette.paper[0],
+    /** La tarjeta: el mismo blanco. Se separa SOLO por sombra, nunca por escalón de valor. */
     surface: Palette.paper[0],
     /** El crema de la marca, ahora como superficie de acento. 12.2:1 con la tinta encima. */
     surfaceAlt: Palette.sand[0],
@@ -197,9 +197,9 @@ const TOKENS: Record<Scheme, Tokens> = {
 
     text: Palette.blackForest[500],
     /**
-     * Sube un paso (era `oliveLeaf[500]`). Sobre el papel cálido ese daba 5.3:1 y este da 7.3:1 —
-     * el papel tiene menos luz que el blanco de antes, así que mantener el paso viejo habría sido
-     * perder contraste sin que se notara en ninguna revisión.
+     * Un paso por debajo de `oliveLeaf[500]`, que sobre blanco daba 5.6:1. Este da 7.7:1 y se queda
+     * aunque el papel haya vuelto a blanco: el texto secundario también se lee sobre `surfaceAlt`
+     * (el crema de marca), que es la superficie con menos luz de la app.
      */
     textMuted: Palette.oliveLeaf[400],
 
@@ -207,9 +207,9 @@ const TOKENS: Record<Scheme, Tokens> = {
     inkPressed: Palette.blackForest[400],
     onInk: Palette.paper[0],
 
-    /** 5.2:1 sobre el papel. Verde, no del acento: cerrar algo se ve igual para todo el mundo. */
+    /** 5.5:1 sobre el papel. Verde, no del acento: cerrar algo se ve igual para todo el mundo. */
     success: Palette.blackForest[600],
-    /** 5.4:1 sobre el papel: el mensaje de error es justo el que hay que poder leer. */
+    /** 5.7:1 sobre el papel: el mensaje de error es justo el que hay que poder leer. */
     danger: Palette.copperwood[400],
     // Tinta de la marca al 40%, no negro puro: el velo tambien es de la paleta.
     scrim: 'rgba(40, 54, 24, 0.40)',
@@ -247,9 +247,21 @@ const TOKENS: Record<Scheme, Tokens> = {
  *   sobre blanco pero no se leen; en oscuro pasa al revés y hay que subir la rampa.
  */
 export type Accent = { solid: string; soft: string; ink: string };
-export type AccentName = 'forest' | 'olive' | 'leaf' | 'clay' | 'copper';
 
-const ACCENTS: Record<Scheme, Record<AccentName, Accent>> = {
+/** Los cinco de la marca. Sus tres pasos estan escritos a mano y MEDIDOS: ver los docstrings. */
+export type BrandName = 'forest' | 'olive' | 'leaf' | 'clay' | 'copper';
+
+/**
+ * Todo lo que se puede pedir como acento.
+ *
+ * Tres familias y una sola puerta de entrada (`resolve`): los cinco de la marca, los seis derivados de
+ * un color base, y el hex que teclea la persona en "Otro". Los dos ultimos comparten exactamente el
+ * mismo derivador, asi que un color propio no es un caso especial — es el caso general con el nombre
+ * puesto por quien lo eligio.
+ */
+export type AccentName = BrandName | ExtraName | `#${string}`;
+
+const ACCENTS: Record<Scheme, Record<BrandName, Accent>> = {
   light: {
     forest: { solid: Palette.blackForest[500], soft: Palette.blackForest[900], ink: Palette.blackForest[500] },
     olive: { solid: Palette.oliveLeaf[500], soft: Palette.oliveLeaf[900], ink: Palette.oliveLeaf[400] },
@@ -276,8 +288,80 @@ const ACCENTS: Record<Scheme, Record<AccentName, Accent>> = {
   },
 };
 
-/** Nombres del catálogo, para pintar el selector de color sin depender del esquema. */
-export const ACCENT_NAMES = Object.keys(ACCENTS.light) as AccentName[];
+/**
+ * Los colores que NO son de la marca, cada uno con un solo color base.
+ *
+ * Se escriben con un hex y no con una rampa de nueve pasos porque no hacen falta: `deriveRamp` saca
+ * los tres pasos del base y garantiza que `ink` pase AA, que es la unica propiedad que los cinco de
+ * arriba consiguen a mano. Escribirlos como rampas seria inventarse cincuenta y cuatro hex que nadie
+ * ha medido, y encima dejaria dos mecanismos distintos para el mismo concepto.
+ *
+ * Los tonos estan apagados a proposito. La paleta de la app es tierra —oliva, bosque, barro, cobre— y
+ * un rosa o un lila a plena saturacion al lado de eso no se lee como "otro color de la misma familia",
+ * se lee como un error. Todos rondan el 40-50% de saturacion.
+ */
+const EXTRAS = {
+  rose: '#c17f86',
+  lilac: '#9b8ec4',
+  plum: '#7d5a6e',
+  sky: '#6f92a8',
+  teal: '#4e8c81',
+  amber: '#c9962f',
+} as const;
+
+export type ExtraName = keyof typeof EXTRAS;
+
+/** El papel sobre el que se mide el contraste de un acento derivado, por esquema. */
+const SURFACE_OF: Record<Scheme, string> = {
+  light: Palette.paper[0],
+  dark: Palette.carbon[900],
+};
+
+/**
+ * Las rampas derivadas, cacheadas por `esquema:color`.
+ *
+ * `deriveRamp` recorre hasta cincuenta pasos de luminosidad midiendo contraste en cada uno, y esto se
+ * llama desde `useAccent`, o sea en CADA render de cada fila, cada chip y cada anillo. Sin la cache,
+ * una lista de treinta tareas haria mil quinientas conversiones de color por frame.
+ *
+ * Un `Map` de modulo y no un `useMemo`: el resultado no depende del componente ni del ciclo de vida de
+ * React —es una funcion pura de (color, esquema)— y compartirlo entre todos los consumidores es justo
+ * lo que lo hace barato. Crece como mucho a dos entradas por color que la persona haya usado.
+ */
+const derived = new Map<string, Accent>();
+
+/**
+ * De un nombre a sus tres pasos. La UNICA puerta: `useAccent`, `accentOnDark` y `accentInks` entran
+ * todas por aqui, y por eso admitir un color nuevo no obliga a tocar ni uno de sus consumidores.
+ *
+ * Lo desconocido cae en `olive` y no revienta, igual que antes. Es tolerancia a propósito: el acento
+ * viaja por la red y puede llegar de una version de la app que tenga colores que esta no conoce.
+ */
+function resolve(scheme: Scheme, name?: string | null): Accent {
+  const brand = ACCENTS[scheme][name as BrandName];
+  if (brand) return brand;
+
+  const base = (name && EXTRAS[name as ExtraName]) || (isHex(name) ? normalizeHex(name!) : null);
+  if (!base) return ACCENTS[scheme].olive;
+
+  const key = `${scheme}:${base}`;
+  const hit = derived.get(key);
+  if (hit) return hit;
+
+  const ramp = deriveRamp(base, SURFACE_OF[scheme]);
+  derived.set(key, ramp);
+  return ramp;
+}
+
+/**
+ * Nombres del catálogo, para pintar el selector de color sin depender del esquema.
+ *
+ * Los de la marca primero: son los que la app usa por defecto y los que llevan mas tiempo medidos.
+ */
+export const ACCENT_NAMES = [
+  ...(Object.keys(ACCENTS.light) as BrandName[]),
+  ...(Object.keys(EXTRAS) as ExtraName[]),
+];
 
 /**
  * El esquema en el que se pinta la app.
@@ -305,8 +389,7 @@ export function useTheme(): Tokens {
 
 /** Tolera acentos viejos o vacíos guardados en la base: nunca deja la UI sin color. */
 export function useAccent(name?: string | null): Accent {
-  const accents = ACCENTS[useScheme()];
-  return accents[name as AccentName] ?? accents.olive;
+  return resolve(useScheme(), name);
 }
 
 /**
@@ -322,7 +405,7 @@ export function useAccent(name?: string | null): Accent {
  * 4.5:1 ni en negro (fue lo que hizo que 'Enfoque' se viera apagado y 'Descanso' no).
  */
 export function accentOnDark(name?: string | null): string {
-  return (ACCENTS.dark[name as AccentName] ?? ACCENTS.dark.olive).ink;
+  return resolve('dark', name).ink;
 }
 
 /**
@@ -337,21 +420,17 @@ export function accentOnDark(name?: string | null): string {
  * todo monocromo y un color propio se ignora o se ve sucio.)
  */
 export function accentInks(name?: string | null): { light: string; dark: string } {
-  const key = name as AccentName;
-  return {
-    light: (ACCENTS.light[key] ?? ACCENTS.light.olive).ink,
-    dark: (ACCENTS.dark[key] ?? ACCENTS.dark.olive).ink,
-  };
+  return { light: resolve('light', name).ink, dark: resolve('dark', name).ink };
 }
 
 /**
  * Las sombras solo existen en claro: en oscuro una sombra negra sobre fondo oscuro no se ve, y lo
  * que separa es el escalón de luz de `surface`.
  *
- * Son tres y antes era una. La razón es el papel cálido: con la tarjeta blanca a 1.07:1 contra el
- * papel, la sombra dejó de ser un adorno y pasó a ser LO que separa, así que necesita decir a qué
- * altura está cada cosa. Y todas usan la tinta de la marca, nunca negro: una sombra negra sobre
- * papel cálido lo agrisa.
+ * Son tres y antes era una, y ahora cargan aún más: con el papel de vuelta en blanco, la tarjeta y
+ * el fondo son el MISMO color y la sombra es lo único que separa, así que tiene que decir a qué
+ * altura está cada cosa. Y todas usan la tinta de la marca, nunca negro: una sombra negra junto a
+ * los cremas de la marca los agrisa.
  */
 export type Elevation = 'raised' | 'floating' | 'pressed';
 
@@ -360,11 +439,14 @@ export function useShadow(level: Elevation = 'raised') {
 }
 
 const SHADOWS = {
-  /** La tarjeta apoyada en el papel. */
+  /**
+   * La tarjeta apoyada en el papel. Sube de 0.07 a 0.10 al volver el papel a blanco: sin el
+   * escalón de valor que había antes, con 0.07 la tarjeta se disolvía en el fondo.
+   */
   raised: {
     shadowColor: Palette.blackForest[500],
-    shadowOpacity: 0.07,
-    shadowRadius: 18,
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
@@ -498,6 +580,23 @@ export const Type = {
    * a cuerpo chico pierde justo lo que la hace valer: el contraste de trazo.
    */
   day: { fontFamily: Serif, fontSize: 44, lineHeight: 50, letterSpacing: -0.5 },
+  /**
+   * El número de un día en la tira de la semana.
+   *
+   * Lleva la serif y eso NO rompe la regla de arriba, que es que Fraunces vive en UN sitio: es el
+   * MISMO dato —el día— a otra escala, no un segundo uso de la serif. La tira y el titular de Hoy
+   * cuentan la misma cosa (en qué día estás) con la misma voz, uno en grande y otro en pequeño; media
+   * adopción se vería como error justo porque los dos hablan del día.
+   *
+   * `tabular-nums` porque el relleno del acento VIAJA de columna en columna: con figuras
+   * proporcionales el 11 es más angosto que el 30 y el número bailaría dentro de su círculo al llegar.
+   */
+  dayNum: {
+    fontFamily: Serif,
+    fontSize: 17,
+    lineHeight: 22,
+    fontVariant: ['tabular-nums'] as TextStyle['fontVariant'],
+  },
   display: { fontFamily: Display, fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
   /** El número grande de una métrica: el hero del día, la racha, un total de Progreso. */
   hero: { fontFamily: Display, fontSize: 44, lineHeight: 48, letterSpacing: -1 },

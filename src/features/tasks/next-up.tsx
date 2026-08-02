@@ -9,7 +9,7 @@ import type { Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { usePressScale } from '@/hooks/use-press-scale';
 
-import { accentForFocus } from './focus-accent';
+import { accentForFocus, focusOf } from './focus-accent';
 import type { useTasks } from './use-tasks';
 
 /**
@@ -34,7 +34,7 @@ export function NextUp({ day }: { day: ReturnType<typeof useTasks> }) {
 
   const pending = day.tasks?.filter((task) => task.status === 'pending') ?? [];
   const next = pickNext(pending);
-  const tint = useAccent(accentForFocus(next?.focusArea ?? null, user?.accentColor ?? 'olive'));
+  const tint = useAccent(accentForFocus(next ? focusOf(next) : null, user?.accentColor ?? 'olive'));
 
   // Sin nada pendiente no hay "lo siguiente". El dia cerrado lo celebra la card de arriba; dos
   // mensajes de felicitacion apilados se leen como una plantilla, no como la app hablandote.
@@ -47,7 +47,23 @@ export function NextUp({ day }: { day: ReturnType<typeof useTasks> }) {
         accessibilityLabel={`Empezar: ${next.title}`}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
-        onPress={() => router.push('/timer')}
+        /**
+         * La tarea y sus minutos VIAJAN con el toque.
+         *
+         * Empujaba `/timer` pelado, y eso hacia que esta tarjeta mintiera: promete "Editar el video ·
+         * 25 min" y al llegar el dial decia 25:00 por defecto —no por esta tarea— y la cuadricula de
+         * "En qué" volvia a abrir la pregunta que este toque acababa de cerrar.
+         *
+         * Los minutos van en el parametro y NO se vuelven a buscar en la tarea al llegar: asi estan en
+         * el PRIMER render de Enfoque, sin esperar a que su `/tasks` cargue. Es lo que permite sembrar
+         * la caratula sin un efecto y sin una carrera entre las dos pantallas.
+         */
+        onPress={() =>
+          router.push({
+            pathname: '/timer',
+            params: { task: String(next.id), min: String(next.suggestedMinutes) },
+          })
+        }
         style={[styles.card, shadow, { backgroundColor: t.surfaceAlt, borderColor: t.line }]}>
         <View style={styles.head}>
           <Micro>Lo que sigue</Micro>

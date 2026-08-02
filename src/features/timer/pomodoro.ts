@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
+import { TICKS } from './dial';
 import { clearBlock, loadBlock, saveBlock, type Saved } from './vault';
 
 /**
@@ -147,10 +148,31 @@ export type Pomodoro = ReturnType<typeof usePomodoro>;
  */
 export function usePomodoro({
   onFinish,
+  initialMinutes,
 }: {
   onFinish?: (closed: Phase, done: number, silent: boolean) => void;
+  /**
+   * Con cuantos minutos abre la caratula si NO hay bloque guardado. Es como llega la sugerencia de la
+   * tarea desde el inicio.
+   *
+   * La precedencia sale gratis y por eso esto es una semilla y no un `setState`: si `loadBlock()`
+   * encuentra un bloque a medias, `rehydrate` lo pisa; si no encuentra nada, esa rama no toca el
+   * estado y la semilla se queda. Un bloque vivo siempre gana a una sugerencia.
+   *
+   * Se recorta a lo que la caratula sabe pintar: una marca es un minuto y hay sesenta. Los tamaños
+   * de tarea sugieren 5, 25 y 50, asi que caben todos — pero `suggestedMinutes` admite hasta 480 y sin
+   * el recorte una tarea de ocho horas abriria el dial en un estado que su gesto no puede alcanzar.
+   */
+  initialMinutes?: number;
 } = {}) {
-  const [state, setState] = useState<State>(() => start(DEFAULT_MINUTES));
+  /**
+   * Inicializador PEREZOSO y no un efecto: la semilla tiene que estar en el primer render o la
+   * pantalla pinta 25:00 y salta, que es justo el fallo que `ready` existe para evitar. Y un
+   * `setState` dentro de un efecto no compila en este repo.
+   */
+  const [state, setState] = useState<State>(() =>
+    start(Math.min(TICKS, Math.max(1, Math.round(initialMinutes || DEFAULT_MINUTES))))
+  );
   /**
    * `false` hasta que se leyo el almacen. La pantalla no debe pintar numeros antes: mostrar 25:00 y
    * saltar a 07:12 un frame despues se lee como un fallo.

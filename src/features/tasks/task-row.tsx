@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
+import { useCallback, useEffect, useRef, type ComponentProps } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import ReanimatedSwipeable, {
   SwipeDirection,
@@ -22,19 +22,29 @@ import { AREA_ICON, Icon3D, Icon3DSize, SIZE_ICON } from '@/components/ui/icon3d
 import { Motion, Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
-import { FOCUS_AREAS } from '@/features/auth/options';
+import { WORKSPACE_TAGS } from '@/features/auth/options';
 
 import { tasksApi } from './api';
-import { accentForFocus } from './focus-accent';
+import { accentForFocus, focusOf } from './focus-accent';
+import type { TaskMutations } from './use-tasks';
 
-/** Ancho del panel que se revela detras de la fila. */
-const ACTION = 104;
+/**
+ * Ancho del panel que se revela detras de la fila.
+ *
+ * Bajo de 104 a 88: el panel solo carga un glifo de 22 y una palabra de `micro`, y con 104 habia que
+ * arrastrar 75pt para confirmar — la mitad del pulgar de alguien con el telefono en una mano.
+ */
+const ACTION = 88;
 
 /**
  * Fraccion del panel que hay que arrastrar para que la accion cuente. El mismo numero manda
  * el umbral del gesto Y el haptico, para que lo que sientes sea exactamente lo que va a pasar.
+ *
+ * Baja de 0.72 a 0.6: con 88pt de panel son 53pt de viaje, asi que la accion se confirma antes de que
+ * el brazo se estire. Las dos acciones son reversibles (marcar se desmarca, borrar pregunta), asi que
+ * un umbral generoso no cuesta nada.
  */
-const COMMIT = 0.72;
+const COMMIT = 0.6;
 
 /**
  * Intencion horizontal antes de que la fila se mueva.
@@ -72,8 +82,9 @@ const thud = () => {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 };
 
+/** Busca en las DIEZ y no en los siete focos: una tarea puede heredar la clasificacion del espacio. */
 const focusLabel = (value: string | null) =>
-  value ? (FOCUS_AREAS.find((o) => o.value === value)?.label ?? value) : null;
+  value ? (WORKSPACE_TAGS.find((o) => o.value === value)?.label ?? value) : null;
 
 /** Solo la hora agendada, nunca la actual: leer el reloj en el render es impuro. */
 const timeLabel = (iso: string | null) =>
@@ -97,7 +108,7 @@ const dayStamp = (dueDate: string | null) => {
  * Nunca queda sin icono. Una fila sin ancla en una lista donde las demas si la tienen deja un
  * hueco que se lee como error, y el tamaño es un dato que TODA tarea tiene.
  */
-const rowIcon = (task: Task) => AREA_ICON[task.focusArea ?? ''] ?? SIZE_ICON[task.size] ?? 'clock';
+const rowIcon = (task: Task) => AREA_ICON[focusOf(task) ?? ''] ?? SIZE_ICON[task.size] ?? 'clock';
 
 /**
  * El panel de detras. Vive en su propio componente porque necesita hooks de reanimated y
@@ -139,16 +150,26 @@ function SwipeFace({
     }
   );
 
+  /*
+    El movimiento del panel, afinado a la baja. Los tres numeros de antes juntos hacian que un swipe
+    se leyera como un zoom: el contenido entraba de golpe, recorria 52pt y crecia un 34%.
+
+    - `p / 0.5` en vez de `/ 0.35`: el glifo aparece a mitad de la rendija y no de golpe con ella
+      apenas abierta.
+    - `ACTION * 0.28` (≈25pt) en vez de `ACTION / 2` (52pt): el contenido sigue centrandose en lo
+      REVELADO —que es lo que arreglaba la etiqueta cortada— pero sin cruzar media pantalla.
+    - `0.94 + p*0.06 + armed*0.04` (tope 1.04) en vez de `0.82 + p*0.18 + armed*0.1` (tope 1.10): un 10%
+      de recorrido de escala se lee como respuesta; un 34% se lee como que algo se acerca a la camara.
+  */
   const content = useAnimatedStyle(() => {
     // Sin overshoot el progreso no pasa de 1, pero se acota igual: un clamp de mas nunca
     // rompio nada y un NaN en un transform deja el panel invisible.
     const p = Math.min(Math.max(progress.value, 0), 1);
     return {
-      // Aparece en el primer tercio: antes de eso la rendija es mas angosta que el glifo.
-      opacity: Math.min(1, p / 0.35),
+      opacity: Math.min(1, p / 0.5),
       transform: [
-        { translateX: direction * (1 - p) * (ACTION / 2) },
-        { scale: 0.82 + p * 0.18 + armed.value * 0.1 },
+        { translateX: direction * (1 - p) * (ACTION * 0.28) },
+        { scale: 0.94 + p * 0.06 + armed.value * 0.04 },
       ],
     };
   });
@@ -178,21 +199,33 @@ function SwipeFace({
  * gesto que nadie descubre no existe, y desmarcar cuesta lo mismo que marcar: equivocarse
  * no puede castigar.
  *
- * ponytail: no hay optimistic update — se espera al servidor y se recarga el dia entero. Con
- * pocas tareas el viaje se nota menos que el riesgo de pintar un estado que el API rechazo
- * (el 409 del cronometro es real). Techo: si la lista crece o la red empieza a doler, hay que
- * mover el estado a un cache de verdad y ahi si pintar antes de confirmar.
+ * **Pinta antes de confirmar.** Antes esperaba al servidor y recargaba el dia entero: tachar una
+ * tarea tardaba un viaje de red y mientras la fila se quedaba al 55% de opacidad. En la interaccion
+ * mas frecuente de la app eso es justo la friccion que hace que no se use.
+ *
+ * Ahora el cambio se pinta YA con `mutate.patch`, que devuelve su propio deshacer, y la peticion va
+ * detras. Si el servidor rechaza, se deshace y se avisa. Es lo que el comentario viejo dejaba como
+ * techo, y ya se cruzo: el riesgo real no era pintar de mas, era que marcar se sintiera lento.
  */
 export function TaskRow({
   task,
   accent,
-  reload,
+  mutate,
   showTime = true,
   showDay = false,
+  swipeEnabled = true,
 }: {
   task: Task;
   accent?: AccentName;
-  reload: () => Promise<void> | void;
+  /** Pintar ya, quitar ya, y traer la verdad. Ver `TaskMutations` en `use-tasks`. */
+  mutate: TaskMutations;
+  /**
+   * Apagar el gesto lateral. Lo usa la lista mientras se ARRASTRA una fila para reordenar: el asa vive
+   * fuera de este componente justo para no compartir subarbol con el Pan del Swipeable, y apagarlo
+   * durante el arrastre cierra el ultimo caso — el diagonal, donde un pulgar que sube tambien se
+   * mueve de lado y el swipeable podria quedarse el gesto a medio viaje.
+   */
+  swipeEnabled?: boolean;
   /** El calendario ya pinta la hora en su columna: ahi la fila no la repite. */
   showTime?: boolean;
   /**
@@ -205,10 +238,15 @@ export function TaskRow({
   // El tinte sale de la familia del foco, no del acento del usuario: asi un dia entero de
   // trabajo se lee verde de un vistazo. Sin foco cae en el acento del usuario, y sin acento
   // en el mismo default que `useAccent`.
-  const tint = useAccent(accentForFocus(task.focusArea, accent ?? 'olive'));
+  const tint = useAccent(accentForFocus(focusOf(task), accent ?? 'olive'));
   const { token } = useAuth();
   const swipe = useRef<SwipeableMethods | null>(null);
-  const [busy, setBusy] = useState(false);
+  /**
+   * Guarda contra el doble toque. Es un ref y NO estado a proposito: no tiene que repintar nada —
+   * con optimismo la fila ya se ve cambiada — y un estado aqui devolveria el parpadeo que se acaba
+   * de quitar.
+   */
+  const sending = useRef(false);
 
   const done = task.status === 'done';
 
@@ -217,7 +255,6 @@ export function TaskRow({
   // tareas ya hechas no se animen al montar la lista.
   const mark = useSharedValue(done ? 1 : 0);
   const pop = useSharedValue(1);
-  const dim = useSharedValue(1);
   // El estado anterior en un ref: el efecto tambien corre al montar y ahi no hay nada que animar.
   const wasDone = useRef(done);
 
@@ -225,15 +262,10 @@ export function TaskRow({
     if (wasDone.current === done) return;
     wasDone.current = done;
     mark.value = withTiming(done ? 1 : 0, CROSS);
-    pop.value = withSequence(withTiming(1.16, { duration: Motion.pop }), withSpring(1, Motion.confirm));
+    // 1.10 y no 1.16: en un circulo de 24pt un 16% son casi 4pt de salto, que en una lista de doce
+    // filas se lee como un tic nervioso. 1.10 sigue acusando el toque sin brincar.
+    pop.value = withSequence(withTiming(1.1, { duration: Motion.pop }), withSpring(1, Motion.confirm));
   }, [done, mark, pop]);
-
-  useEffect(() => {
-    // La espera del servidor ya no es un corte a opacidad 0.5: se apaga y se prende.
-    dim.value = withTiming(busy ? 0.55 : 1, { duration: Motion.exit });
-  }, [busy, dim]);
-
-  const rowStyle = useAnimatedStyle(() => ({ opacity: dim.value }));
 
   // De `sunken` (el propio fondo de la fila, o sea "vacio") a `ink`, y el borde con el. En hecha
   // el borde queda del mismo color que el relleno: se lee como el circulo lleno de siempre.
@@ -259,32 +291,42 @@ export function TaskRow({
     color: interpolateColor(mark.value, [0, 1], [t.text, t.textMuted]),
   }));
 
-  const toggle = useCallback(async () => {
-    if (!token) return;
-    setBusy(true);
-    try {
-      await tasksApi.update(token, task.id, { status: done ? 'pending' : 'done' });
-      await reload();
-    } catch {
-      Alert.alert('No pudimos guardarla', 'Inténtalo otra vez.');
-    } finally {
-      // Siempre, tambien tras un fallo: si `busy` se queda pegado la fila queda muerta al gesto.
-      setBusy(false);
-    }
-  }, [token, task.id, done, reload]);
+  const toggle = useCallback(() => {
+    if (!token || sending.current) return;
+    sending.current = true;
+    const status = done ? 'pending' : 'done';
+    // El cambio se ve AQUI, antes de que salga la peticion. `undo` restaura la tarea tal cual estaba.
+    const undo = mutate.patch(task, { status });
 
-  const remove = useCallback(async () => {
+    void (async () => {
+      try {
+        await tasksApi.update(token, task.id, { status });
+      } catch {
+        undo();
+        Alert.alert('No pudimos guardarla', 'Inténtalo otra vez.');
+      } finally {
+        sending.current = false;
+      }
+    })();
+  }, [token, task, done, mutate]);
+
+  const remove = useCallback(() => {
     if (!token) return;
-    setBusy(true);
-    try {
-      await tasksApi.remove(token, task.id);
-      await reload();
-    } catch {
-      Alert.alert('No pudimos borrarla', 'Inténtalo otra vez.');
-    } finally {
-      setBusy(false);
-    }
-  }, [token, task.id, reload]);
+    // La fila se va en el mismo frame del toque. Borrar ya paso por un Alert, asi que aqui no hay
+    // nada mas que preguntar.
+    mutate.drop(task);
+
+    void (async () => {
+      try {
+        await tasksApi.remove(token, task.id);
+      } catch {
+        // Sin deshacer propio: reinsertar en su sitio exacto necesitaria recordar el indice, y
+        // `reload` trae la verdad entera — que es lo correcto cuando ya no sabemos que paso.
+        await mutate.reload();
+        Alert.alert('No pudimos borrarla', 'Inténtalo otra vez.');
+      }
+    })();
+  }, [token, task, mutate]);
 
   const confirmRemove = useCallback(() => {
     // Borrar no se deshace, asi que se pregunta. Es la unica friccion a proposito de la fila.
@@ -295,8 +337,7 @@ export function TaskRow({
   }, [task.title, remove]);
 
   const onCheck = useCallback(() => {
-    // El mismo golpe que el gesto: la casilla y el swipe hacen lo mismo y tienen que sentirse
-    // igual. Y es la respuesta inmediata al toque, porque el relleno espera al servidor.
+    // El mismo golpe que el gesto: la casilla y el swipe hacen lo mismo y tienen que sentirse igual.
     thud();
     void toggle();
   }, [toggle]);
@@ -316,12 +357,13 @@ export function TaskRow({
   return (
     <ReanimatedSwipeable
       ref={swipe}
-      enabled={!busy}
-      // El cuerpo de la fila es `surface`, o sea blanco, sobre el papel calido. Una sombra como la
-      // de Card no sirve aqui: el `overflow: 'hidden'` que el panel necesita para recortarse
-      // tambien recorta la sombra del propio layer en iOS. Asi que la fila se levanta con dos
-      // señales planas — el blanco contra el papel (1.07:1) y el hairline de `line` encima — que
-      // es poco a proposito: una lista de doce cajas con borde pesa mas que la lista misma.
+      // La fila NO se puede levantar con sombra: el `overflow: 'hidden'` que el panel del swipe
+      // necesita para recortarse tambien recorta la sombra del propio layer en iOS.
+      //
+      // Asi que con el papel de vuelta en blanco le queda UNA señal: el hairline de `line`, que es
+      // calido y por eso se ve sobre blanco. Es poco a proposito — una lista de doce cajas con
+      // borde pesa mas que la lista misma — y es el limite: si la fila necesitara separarse mas,
+      // el camino es `sunken` de relleno, no un borde mas grueso.
       containerStyle={[styles.container, { borderColor: t.line }]}
       // Arrastrar hacia la derecha revela el panel de la IZQUIERDA. De ahi el cruce.
       renderLeftActions={(progress) => (
@@ -355,8 +397,9 @@ export function TaskRow({
       dragOffsetFromLeftEdge={DRAG_OFFSET}
       dragOffsetFromRightEdge={DRAG_OFFSET}
       animationOptions={SPRING}
+      enabled={swipeEnabled}
       onSwipeableOpen={onOpen}>
-      <Animated.View style={[styles.row, { backgroundColor: t.surface }, rowStyle]}>
+      <View style={[styles.row, { backgroundColor: t.surface }]}>
         {/* El ancla de la fila. Es lo que hace escaneable una lista larga: el area se reconoce por
             forma y color antes de leer una sola palabra, que es exactamente lo que hacen Tiimo con
             su emoji en circulo y las dos referencias de Dribbble con su cuadro tintado. Se apaga
@@ -375,7 +418,7 @@ export function TaskRow({
             {[
               showDay ? dayStamp(task.dueDate) : null,
               `${task.suggestedMinutes} min`,
-              focusLabel(task.focusArea),
+              focusLabel(focusOf(task)),
               showTime ? timeLabel(task.dueAt) : null,
             ]
               .filter(Boolean)
@@ -388,9 +431,8 @@ export function TaskRow({
             compite con el icono por ser lo primero que se mira. */}
         <Pressable
           accessibilityRole="checkbox"
-          accessibilityState={{ checked: done, disabled: busy }}
+          accessibilityState={{ checked: done }}
           accessibilityLabel={done ? 'Marcar como pendiente' : 'Marcar como hecha'}
-          disabled={busy}
           onPress={onCheck}
           hitSlop={Space.sm}
           style={styles.check}>
@@ -411,7 +453,7 @@ export function TaskRow({
             </Animated.View>
           </Animated.View>
         </Pressable>
-      </Animated.View>
+      </View>
     </ReanimatedSwipeable>
   );
 }

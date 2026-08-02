@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 
+import { reset as resetCache, setOwner } from '@/features/cache/store';
 import { clearReminders } from '@/features/notifications/reminders';
 import { syncTodayWidget } from '@/features/widgets/sync-today';
 
@@ -84,6 +85,13 @@ type AuthValue = {
    */
   updateProfile: (patch: Partial<ProfileInput>) => Promise<void>;
   /**
+   * Entra a un espacio de trabajo, o vuelve al modo general con `null`.
+   *
+   * Aparte de `updateProfile` aunque escriba el mismo endpoint: la firma pide un espacio y no un
+   * parche de perfil, y quien la llama esta cambiando el CONTEXTO de la app, no editando sus ajustes.
+   */
+  setActiveSpace: (space: User['activeWorkspace']) => Promise<void>;
+  /**
    * Cambia la contraseña con el codigo del correo. Vive aqui y no en la pantalla —al contrario que
    * `api.forgot`— porque devuelve sesion: es un `start`, como `signUp` y `verify`.
    */
@@ -112,6 +120,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const start = useCallback(async (next: Session) => {
     await storage.set(next);
+    /*
+      Quien es la persona, para el cache. Va ANTES del `setSession` porque el render que sigue ya
+      puede leer del cache, y leerlo con el owner anterior devolveria datos de la cuenta de antes.
+    */
+    setOwner(next.user.id);
     setSession(next);
   }, []);
 
@@ -125,12 +138,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // sin que la app corra, asi que sin esto una cuenta cerrada seguiria recibiendolo hasta que
     // alguien desinstale la app. Cancela solo lo suyo, por prefijo.
     void clearReminders();
+    // El cache se va con la sesion: no puede quedar nada de esta cuenta ni en memoria ni en disco.
+    resetCache();
     await storage.clear();
     setSession(null);
   }, []);
 
   useEffect(() => {
     storage.get().then((cached) => {
+      // El owner ANTES de pintar: el primer render de `(app)` ya lee del cache, y sin owner leeria
+      // llaves de nadie. Es tambien lo que destapa el cache en disco para el arranque en frio.
+      if (cached) setOwner(cached.user.id);
       setSession(cached);
       setLoading(false);
       if (!cached) return;
@@ -195,6 +213,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (patch.accentColor) void syncTodayWidget(token);
           } catch (error) {
             // Vuelve a lo que habia. Quien llamo se encarga de contarlo; aqui no se traga nada.
+            setSession({ token, user: previous });
+            throw error;
+          }
+        });
+
+        return queue as Promise<void>;
+      },
+      /**
+       * Entra a un espacio, o vuelve al modo general con `null`.
+       *
+       * Hermana de `updateProfile` y **comparte su `queue`**, que no es cosmetico: las dos escriben en
+       * `user_profiles` y el API hace `findById -> createProfile -> saveProfile` sin transaccion, asi
+       * que dos en vuelo se pisan. Cambiar de espacio mientras se guarda un color es un caso real.
+       *
+       * Optimista con el objeto entero y no solo el id: la pastilla del saludo lee `name`, `icon` y
+       * `accent`, y sin ellos parpadearia vacia hasta que volviera el servidor. Es el mismo argumento
+       * del acento en `updateProfile`.
+       */
+      setActiveSpace: async (space) => {
+        const previous = session?.user;
+        if (!token || !previous) return;
+
+        setSession({ token, user: { ...previous, activeWorkspace: space } });
+
+        queue = queue.then(async () => {
+          try {
+            const { user } = await api.onboard(token, { activeWorkspaceId: space?.id ?? null });
+            await start({ token, user });
+          } catch (error) {
             setSession({ token, user: previous });
             throw error;
           }

@@ -1,12 +1,19 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import Settings from 'lucide-react-native/icons/settings';
+import UserPen from 'lucide-react-native/icons/user-pen';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
-import { BigButton } from '@/components/ui/big-button';
-import { Card, Micro } from '@/components/ui/card';
-import { SchemeToggle } from '@/components/ui/scheme-toggle';
-import { Radius, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
+import { Avatar3DSize } from '@/components/ui/avatar3d';
+import { HeaderAction, ScreenHeader } from '@/components/ui/screen-header';
+import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
+import { Space, Type, useTheme } from '@/constants/theme';
 import { useAuth } from '@/features/auth/auth-context';
-import { DeleteAccount } from '@/features/profile/delete-account';
-import { ProfileFields } from '@/features/profile/profile-fields';
+import { ProfileAvatar } from '@/features/profile/avatar';
+import { SummaryCards } from '@/features/profile/summary-cards';
+import { HeatMap } from '@/features/stats/heat-map';
+import { useStats } from '@/features/stats/use-stats';
+import { useTaskCounts } from '@/features/stats/use-task-counts';
 import { StreakCard } from '@/features/streak/streak-card';
 import { useStreak } from '@/features/streak/use-streak';
 import { useLocalToday } from '@/features/tasks/day';
@@ -14,20 +21,12 @@ import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 import { TAB_DOCK } from './_layout';
 
-/** Por que importa: una cuenta de Google o Apple no tiene contraseña con la que entrar. */
-const ENTRY: Record<string, string> = {
-  password: 'Con tu correo y contraseña',
-  google: 'Con tu cuenta de Google',
-  apple: 'Con tu cuenta de Apple',
-  oauth: 'Con un proveedor externo',
-};
-
 /**
- * 'JULIO DE 2026' desde el `createdAt` del servidor.
+ * 'CONTIGO DESDE JULIO DE 2026' desde el `createdAt` del servidor.
  *
  * El `slice(0,10)` no es adorno: la columna es `datetime('now')`, o sea `'2026-07-30 12:34:56'` con un
  * espacio, y Hermes lo parsea como `Invalid Date`. Recortando la fecha y pegando la hora en ISO se
- * arregla, que es el mismo truco que ya usaba la fila de "Naciste".
+ * arregla, que es el mismo truco que usa la fila de "Naciste".
  */
 const sinceLabel = (createdAt: string) => {
   const at = new Date(`${createdAt.slice(0, 10)}T00:00:00`);
@@ -36,93 +35,97 @@ const sinceLabel = (createdAt: string) => {
 };
 
 /**
- * Tu perfil: un retrato con un solo dato vivo.
+ * Tu perfil: quien eres y cuanto llevas.
  *
- * Antes era una vitrina — nueve datos del mismo peso, ninguno tocable, y un encabezado que decía "Lo
- * que nos contaste al empezar" como si fuera piedra. Se veia igual el dia 1 que el dia 200, y la unica
- * accion de la pantalla era irse.
+ * La cabecera va en DOS MITADES porque son dos preguntas distintas y ninguna manda sobre la otra: a
+ * la izquierda quien eres — la cara y el nombre — y a la derecha cuanto has movido, en cuatro
+ * semanas de celdas. Puestas una junto a otra se leen de un vistazo; apiladas, la de abajo se
+ * convierte en un detalle.
  *
- * Ahora manda la racha, que es lo unico de esta cuenta que cambia a diario y la unica razon para abrir
- * la pestaña dos veces; y los seis campos del onboarding viven debajo como pastillas que se corrigen
- * tocandolas. El API mergea por campo desde el primer dia (`PATCH /me/profile`), asi que la pantalla
- * por fin usa lo que ya existia.
- *
- * En reposo NO hay ningun boton solido: es una pantalla para leer. El unico `primary` aparece dentro de
- * un panel, cuando de verdad hay algo que confirmar.
+ * Lo que ya no vive aqui: la cuenta, el tema, cerrar sesion y borrarse estan en Ajustes (el engrane),
+ * y los campos del onboarding en Editar perfil (el lapiz). Esta pantalla es un retrato, no un panel
+ * de control — y antes era las dos cosas a la vez.
  */
 export default function ProfileScreen() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const t = useTheme();
-  const accent = useAccent(user?.accentColor);
+  const veil = useScrollVeil();
   const today = useLocalToday();
   const streak = useStreak(today);
+  const stats = useStats(today);
+  const { counts } = useTaskCounts();
   // El aire va en el contenido, no en un SafeAreaView: ver `use-screen-padding`.
   const pad = useScreenPadding(TAB_DOCK);
 
-  // El guard va DESPUES de los hooks: al cerrar sesion el user se vuelve null.
+  // El guard va DESPUES de todos los hooks: al cerrar sesion el user se vuelve null y salir antes
+  // dejaria a React con menos hooks que en el render anterior.
   if (!user) return null;
 
   const since = sinceLabel(user.createdAt);
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
-      <ScrollView
+      <Animated.ScrollView
+        {...veil.scrollProps}
         contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
         showsVerticalScrollIndicator={false}>
-        {/*
-          Identidad comprimida. El nombre baja de `display` a `section`: el `display` es la primera
-          linea de una pantalla, y aqui la primera linea de verdad es la racha. Ademas el home ya
-          saluda por el nombre todos los dias.
-        */}
-        <View style={styles.head}>
-          <View style={[styles.avatar, { backgroundColor: accent.soft }]}>
-            <Text style={[Type.section, { color: t.text }]}>
-              {user.name.trim().charAt(0).toUpperCase()}
-            </Text>
-          </View>
+        <ScreenHeader
+          title="Perfil"
+          actions={
+            <>
+              <HeaderAction
+                icon={UserPen}
+                label="Editar perfil"
+                onPress={() => router.push('/edit-profile')}
+              />
+              <HeaderAction
+                icon={Settings}
+                label="Ajustes"
+                onPress={() => router.push('/settings')}
+              />
+            </>
+          }
+        />
+
+        <View style={styles.identity}>
           <View style={styles.who}>
-            <Text style={[Type.section, { color: t.text }]} numberOfLines={2}>
+            <ProfileAvatar user={user} size={Avatar3DSize.hero} />
+            <Text style={[Type.section, styles.name, { color: t.text }]} numberOfLines={2}>
               {user.name}
             </Text>
             {/* `Micro` inline y no el componente: su docstring lo reserva para dentro de una tarjeta. */}
             {!!since && (
-              <Text style={[Type.micro, { color: t.textMuted }]}>{since.toUpperCase()}</Text>
+              <Text style={[Type.micro, styles.since, { color: t.textMuted }]}>
+                {since.toUpperCase()}
+              </Text>
             )}
           </View>
 
-          {/*
-            El tema va AQUI y no como una pastilla más abajo: es lo único de esta pantalla que no
-            describe a la persona sino al aparato, y su confirmación es que la pantalla entera cambia de
-            color — no hace falta que diga su valor, porque el valor se ve.
-          */}
-          <SchemeToggle />
+          <View style={styles.map}>
+            <Micro>Últimas 4 semanas</Micro>
+            <HeatMap stats={stats} today={today} accent={user.accentColor} />
+          </View>
         </View>
 
+        {/*
+          La racha se queda aunque el mapa mida lo mismo: no dicen lo mismo. El mapa dice DENSIDAD —
+          cuanto has movido — y la racha dice CONTINUIDAD, que es lo unico de esta cuenta que se
+          puede perder por dejar pasar un dia.
+        */}
         <StreakCard streak={streak} accent={user.accentColor} />
 
-        <ProfileFields user={user} />
+        <SummaryCards counts={counts} />
+      </Animated.ScrollView>
 
-        {/*
-          El nombre, el correo y la contraseña siguen sin tocarse desde aqui: `ProfileInput` no los
-          incluye, y pintar un control que no puede guardar es peor que una etiqueta honesta. La
-          contraseña se cambia desde la pantalla de entrar, con el codigo del correo.
-
-          Lo que si vive aqui es borrarse. Esta tarjeta era la unica puramente informativa de la
-          pantalla, y borrar la cuenta es la unica accion que existe sobre la cuenta.
-        */}
-        <Card>
-          <Micro>Tu cuenta</Micro>
-          <Text style={[Type.body, styles.email, { color: t.text }]}>{user.email}</Text>
-          <Text style={[Type.hint, { color: t.textMuted }]}>
-            {ENTRY[user.authProvider ?? 'password']}
-          </Text>
-          <DeleteAccount user={user} />
-        </Card>
-
-        <BigButton label="Cerrar sesión" variant="ghost" accent="copper" onPress={signOut} />
-      </ScrollView>
+      <StatusVeil scrollY={veil.scrollY} />
     </View>
   );
+}
+
+/** `Micro` local: el de `card.tsx` está reservado a lo que va dentro de una tarjeta. */
+function Micro({ children }: { children: React.ReactNode }) {
+  const t = useTheme();
+  return <Text style={[Type.micro, { color: t.textMuted }]}>{children}</Text>;
 }
 
 const styles = StyleSheet.create({
@@ -132,15 +135,10 @@ const styles = StyleSheet.create({
     // El vertical lo pone `useScreenPadding`: sale de los insets del telefono.
     gap: Space.xl,
   },
-  // En fila y no apilado: el avatar deja de ser un adorno suelto y la cabecera ocupa la mitad de alto.
-  head: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  who: { flex: 1, gap: 2 },
-  avatar: {
-    width: Touch.chip,
-    height: Touch.chip,
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  email: { fontWeight: '600' },
+  identity: { flexDirection: 'row', gap: Space.lg, alignItems: 'center' },
+  // Las dos mitades miden igual: la cara no se come el mapa ni al reves.
+  who: { flex: 1, alignItems: 'center', gap: Space.sm },
+  map: { flex: 1, gap: Space.sm },
+  name: { textAlign: 'center' },
+  since: { textAlign: 'center' },
 });
