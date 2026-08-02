@@ -101,6 +101,37 @@ export const workspacesApi = {
  * lo que tienes en pantalla. Crear y revocar codigos no, porque ningun hook cacheado pinta
  * invitaciones.
  */
+/**
+ * Quien ha pedido entrar a algo mio, y la respuesta.
+ *
+ * Aparte de `workspacesApi` y de `invitesApi` porque es de un tercer actor: aqui el sujeto no es el
+ * espacio ni la invitacion, es la PERSONA que espera. Y su lista no se pide por espacio sino de
+ * golpe — la pantalla de novedades pregunta "¿alguien quiere entrar a algo mio?".
+ */
+export const requestsApi = {
+  list: (token: string) =>
+    request<{ requests: JoinRequest[] }>('/workspaces/requests', { headers: bearer(token) }),
+
+  decide: (token: string, workspaceId: number, personId: number, approve: boolean) =>
+    andInvalidate(
+      request<{ approved: boolean }>(`/workspaces/${workspaceId}/requests/${personId}`, {
+        method: 'POST',
+        headers: bearer(token),
+        body: JSON.stringify({ approve }),
+      }),
+      // Aprobar suma un miembro al espacio; rechazar no cambia nada del espacio pero si la lista de
+      // solicitudes, que no esta cacheada. Invalidar de mas aqui cuesta un GET y evita un anillo viejo.
+      'workspaces'
+    ),
+};
+
+/** Una solicitud pendiente, ya resuelta a persona y espacio por el API. */
+export type JoinRequest = {
+  person: Member;
+  workspace: { id: number; name: string };
+  askedAt: string;
+};
+
 export const invitesApi = {
   /**
    * Crea un codigo. Del dueño.
@@ -136,7 +167,14 @@ export const invitesApi = {
   /** Entra. El codigo es de un solo uso: despues de esto ya no vale. */
   join: (token: string, code: string) =>
     andInvalidate(
-      request<{ workspace: { id: number; name: string; icon: string; accent: Workspace['accent'] } }>(
+      request<{
+        workspace: { id: number; name: string; icon: string; accent: Workspace['accent'] };
+        /**
+         * `false` cuando el codigo era ABIERTO: no entraste, dejaste una solicitud que el dueño
+         * tiene que aprobar. Un codigo atado a un correo si entra directo y devuelve `true`.
+         */
+        joined: boolean;
+      }>(
         '/workspaces/join',
         { method: 'POST', headers: bearer(token), body: JSON.stringify({ code }) }
       ),
