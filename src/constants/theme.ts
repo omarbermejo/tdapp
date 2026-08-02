@@ -447,6 +447,46 @@ export function accentInks(name?: string | null): { light: string; dark: string 
 }
 
 /**
+ * Los DOS extremos de la rampa del acento, por esquema. Tampoco es un hook.
+ *
+ * `accentInks` da un solo paso legible y eso basta para texto. El mapa de calor necesita el
+ * DEGRADADO entero — de la celda con una cosa a la celda llena — y esos son `soft` y `solid`.
+ *
+ * Existe para el widget: alli la rampa hay que cocinarla aqui y mandarla ya hecha, porque el layout
+ * corre en un JSContext pelado dentro de la extension y no puede resolver un acento. Es la misma
+ * puerta que `accentInks`, y por eso la regla de "ningun hex fuera de theme.ts" sigue en pie.
+ */
+export function accentRamp(name?: string | null): {
+  soft: string;
+  solid: string;
+  softDark: string;
+  solidDark: string;
+} {
+  const light = resolve('light', name);
+  const dark = resolve('dark', name);
+  return { soft: light.soft, solid: light.solid, softDark: dark.soft, solidDark: dark.solid };
+}
+
+/**
+ * Los dos neutros del mapa de calor en un widget: el dia sin nada y el dia que TODAVIA no llega.
+ *
+ * Son distintos a proposito y por la misma razon que en la app (`heat-map.tsx`): un dia vacio del
+ * pasado dice "aqui no hiciste nada" y uno futuro dice "todavia no", y pintarlos igual convierte la
+ * mitad derecha del mapa en un reproche.
+ */
+export const HEAT_NEUTRAL: {
+  empty: string;
+  emptyDark: string;
+  future: string;
+  futureDark: string;
+} = {
+  empty: TOKENS.light.sunken,
+  emptyDark: TOKENS.dark.sunken,
+  future: TOKENS.light.surface,
+  futureDark: TOKENS.dark.surface,
+};
+
+/**
  * El papel de una baldosa de la pantalla de INICIO, en sus dos esquemas.
  *
  * No es cosmética y no es opcional: desde iOS 17 un widget que no declara su fondo con

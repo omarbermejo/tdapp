@@ -83,7 +83,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
  * y al oeste de Greenwich devuelve el dia anterior, con lo que la rejilla entera saldria corrida un
  * dia. Es la misma trampa que documentan `day.ts` y `calendar.tsx`.
  */
-const shift = (date: string, days: number): string => {
+export const shiftDay = (date: string, days: number): string => {
   const [y, m, d] = date.split('-').map(Number);
   const at = new Date(y, m - 1, d + days);
   return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
@@ -92,7 +92,7 @@ const shift = (date: string, days: number): string => {
 /** El lunes de la semana de `date`. getDay() da 0 el domingo, de ahi el `(day + 6) % 7`. */
 const mondayOf = (date: string): string => {
   const [y, m, d] = date.split('-').map(Number);
-  return shift(date, -((new Date(y, m - 1, d).getDay() + 6) % 7));
+  return shiftDay(date, -((new Date(y, m - 1, d).getDay() + 6) % 7));
 };
 
 /**
@@ -102,7 +102,7 @@ const mondayOf = (date: string): string => {
  * al componente como un simple `rows.map(row => row.map(cell => ...))`.
  *
  * Sin dia anclado no se inventan fechas: `useLocalToday()` devuelve '' hasta que el efecto corre, y
- * `shift('')` daria 'NaN-NaN-NaN' en cada celda. La rejilla se pinta apagada igual, que es exactamente
+ * `shiftDay('')` daria 'NaN-NaN-NaN' en cada celda. La rejilla se pinta apagada igual, que es exactamente
  * la forma correcta de "todavia no se".
  */
 export function heatGrid(stats: Stats | null, today: string, spec: HeatSpec = PROGRESS_HEAT): Cell[][] {
@@ -127,7 +127,7 @@ export function heatGrid(stats: Stats | null, today: string, spec: HeatSpec = PR
     // 7 dias corridos por fila, la ultima celda es HOY: queda en la esquina inferior derecha, que es
     // donde el ojo termina de leer y donde lo busca.
     const flat = Array.from({ length: spec.days }, (_, i) =>
-      cell(today ? shift(today, i - (spec.days - 1)) : '')
+      cell(today ? shiftDay(today, i - (spec.days - 1)) : '')
     );
     return Array.from({ length: spec.days / 7 }, (_, r) => flat.slice(r * 7, (r + 1) * 7));
   }
@@ -138,10 +138,10 @@ export function heatGrid(stats: Stats | null, today: string, spec: HeatSpec = PR
     mentiria — y de paso los dias que quedan de esta semana se ven como lo que son: futuro agendado.
   */
   const weeks = spec.days / 7;
-  const start = today ? shift(mondayOf(today), -(weeks - 1) * 7) : '';
+  const start = today ? shiftDay(mondayOf(today), -(weeks - 1) * 7) : '';
 
   return Array.from({ length: 7 }, (_, row) =>
-    Array.from({ length: weeks }, (_, col) => cell(start ? shift(start, col * 7 + row) : ''))
+    Array.from({ length: weeks }, (_, col) => cell(start ? shiftDay(start, col * 7 + row) : ''))
   );
 }
 

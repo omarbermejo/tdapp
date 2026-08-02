@@ -61,6 +61,28 @@ const luminance = ({ r, g, b }: Rgb): number => {
 };
 
 /** El cociente de WCAG: 1 (identicos) a 21 (negro sobre blanco). AA en texto normal pide 4.5. */
+/**
+ * Un punto intermedio entre dos colores, en RGB lineal simple.
+ *
+ * Existe para la RAMPA del mapa de calor del widget: alli los pasos hay que cocinarlos en la app
+ * —el layout corre en un JSContext pelado y no puede resolver colores— asi que hace falta poder
+ * pedir "el 40% del camino de soft a solid".
+ *
+ * En RGB y no en HSL a proposito: los dos extremos ya salen de la misma rampa, o sea que comparten
+ * tono y solo se separan en luz y saturacion. Interpolar en HSL ahi no compra nada y puede cruzar
+ * el circulo de tono por el lado largo si los hex se redondearon distinto.
+ */
+export const mixHex = (from: string, to: string, at: number): string => {
+  const a = toRgb(from);
+  const b = toRgb(to);
+  const t = Math.min(Math.max(at, 0), 1);
+  return toHex({
+    r: Math.round(a.r + (b.r - a.r) * t),
+    g: Math.round(a.g + (b.g - a.g) * t),
+    b: Math.round(a.b + (b.b - a.b) * t),
+  });
+};
+
 export const contrast = (a: string, b: string): number => {
   const [x, y] = [luminance(toRgb(a)), luminance(toRgb(b))];
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
