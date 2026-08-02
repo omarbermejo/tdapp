@@ -12,7 +12,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Card } from '@/components/ui/card';
 import {
   Motion,
   Radius,
@@ -87,8 +86,14 @@ const SLOT = '14.2857%';
  * tocar el lunes mandaria a una pantalla que no puede mostrarlo.
  *
  * Aqui vivio y se fue una vez, porque entonces Hoy y Planear eran la misma pantalla dos veces. Ya no:
- * arriba de esta tira hay un mapa del trimestre, los espacios de trabajo y la racha, y Planear tiene el
- * riel de horas que aqui no esta. La tira es la frontera — de aqui abajo se habla del dia que miras.
+ * en Hoy hay un mapa del trimestre, los espacios de trabajo y la racha, y Planear tiene el riel de
+ * horas que aqui no esta.
+ *
+ * Estuvo a media pantalla haciendo de frontera —"de aqui abajo se habla del dia que miras"— y ahora
+ * ABRE el inicio, encima del mapa de calor. Ya no separa nada: es el primer control de la pantalla, y
+ * el dia que elige manda sobre todo lo que hay por debajo. El precio es que el mapa de calor y los
+ * espacios quedan ENTRE el control y lo que controla, y esos dos hablan de siempre, no del dia
+ * elegido; lo que lo hace legible es que la lista de abajo rotula su propio dia (`dayLabel`).
  */
 export function WeekStrip({
   today,
@@ -164,15 +169,24 @@ export function WeekStrip({
   const fill = useAnimatedStyle(() => ({ transform: [{ scale: land.get() }] }));
 
   /*
-    Dentro de una `Card`, y eso es LA señal que la recalca.
+    SIN papel debajo, y eso es un cambio con historia.
 
-    Se probaron y se descartaron: BlurView (es el lenguaje del velo del calendario, y aqui no hay
-    scroll que velar), un subrayado que viaja (competiria con el relleno, que ya viaja), y el numero
-    del elegido en Fraunces grande (cambiaria de tamaño al tocar y movería la fila entera).
-    El papel levantado no compite con nada de lo que ya hay dentro.
+    Estuvo dentro de una `Card` —papel levantado con sombra— cuando la tira vivia a media pantalla y
+    tenia que recalcarse contra lo que la rodeaba. Ahora abre el inicio, pegada al titular del dia, y
+    ahi el papel sobra por dos motivos: no hay nada de lo que separarse, y una card justo debajo de la
+    fecha se lee como un objeto MAS en vez de como la continuacion de la cabecera.
+
+    Lo que queda es el mismo control con el mismo lenguaje: relleno del acento en el elegido, aro en
+    hoy, punto de densidad debajo. Se probaron y se descartaron en su momento BlurView (es el lenguaje
+    del velo del calendario, y aqui no hay scroll que velar), un subrayado que viaja (competiria con el
+    relleno, que ya viaja) y el numero del elegido en Fraunces grande (cambiaria de tamaño al tocar y
+    moveria la fila entera).
+
+    El `gap` NO es decorativo: era el de la `Card`. Sin el, la cabecera "Hoy / AGOSTO" se pega a la fila
+    de dias, porque `styles.head` y `styles.week` son hermanos sueltos sin aire propio.
   */
   return (
-    <Card>
+    <View style={styles.strip}>
       <Animated.View style={[styles.head, head]}>
         <Text style={[Type.section, { color: t.text }]}>{dayLabel(selected, today)}</Text>
         {/* Type.micro ya va en mayusculas: 'julio' sale 'JULIO'. */}
@@ -212,7 +226,7 @@ export function WeekStrip({
           />
         ))}
       </View>
-    </Card>
+    </View>
   );
 }
 
@@ -339,6 +353,8 @@ const DOT = 34;
 const LOAD = 4;
 
 const styles = StyleSheet.create({
+  // El aire que ponia la `Card` que envolvia esto. Ver el comentario del return.
+  strip: { gap: Space.md },
   // Baseline y no centro: el mes es una micro-etiqueta que se apoya en la linea del nombre del dia.
   head: {
     flexDirection: 'row',

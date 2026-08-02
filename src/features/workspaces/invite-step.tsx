@@ -124,10 +124,16 @@ export function InviteStep({ workspace, accent }: { workspace: Workspace; accent
           autoCorrect={false}
           inputMode="email"
         />
+        {/*
+          `!!email.trim()` no es una redundancia: la clave del ocupado ES el correo, y un campo vacio
+          da `''`, que es exactamente el valor de reposo de `busy` — sin esto el boton nacia girando
+          para siempre. La clave lleva el correo a proposito, para que dos envios seguidos a personas
+          distintas no se confundan.
+        */}
         <BigButton
           label="Enviar la invitación"
           variant="outline"
-          loading={busy === email.trim().toLowerCase()}
+          loading={!!email.trim() && busy === email.trim().toLowerCase()}
           onPress={byEmail}
           accent={accent}
         />

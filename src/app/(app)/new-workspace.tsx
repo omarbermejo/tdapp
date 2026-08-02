@@ -216,7 +216,13 @@ export default function NewWorkspaceScreen() {
             */}
             {step < 3 && (
               <View style={styles.preview}>
-                <View style={[styles.card, { backgroundColor: t.surface }]}>
+                {/*
+                  Papel con filete y SIN sombra. En claro `surface` y `canvas` son el mismo color, asi
+                  que sin nada la vista previa flotaba como texto suelto; con sombra se leeria como una
+                  card de verdad y esto es una maqueta. Y no se hunde a `t.sunken`: ese es justo el
+                  color del riel vacio del anillo, que ahi dentro desapareceria.
+                */}
+                <View style={[styles.card, { backgroundColor: t.surface, borderColor: t.line }]}>
                   <View style={styles.cardHead}>
                     <ProgressRing done={0} total={0} accent={color} />
                     <Icon3D name={icon} size={Icon3DSize.md} />
@@ -224,7 +230,19 @@ export default function NewWorkspaceScreen() {
                   <Text style={[Type.section, { color: t.text }]} numberOfLines={1}>
                     {name.trim() || 'Sin nombre'}
                   </Text>
-                  <Text style={[Type.hint, { color: t.textMuted }]}>Sin tareas todavía</Text>
+                  {/*
+                    El chip del estado, y aqui hace DOS trabajos.
+
+                    En la card de verdad es donde van las cuentas ("18 hechas"), y un espacio recien
+                    creado no tiene ninguna — pero es tambien lo unico teñido con el acento, asi que sin
+                    el, el paso del color no tendria ninguna respuesta: un espacio vacio no pinta el
+                    anillo, y elegir "Cobre" no cambiaba nada de lo que se esta mirando.
+                  */}
+                  <View style={[styles.chip, { backgroundColor: picked.soft }]}>
+                    <Text style={[Type.micro, styles.chipLabel, { color: t.text }]}>
+                      Sin tareas todavía
+                    </Text>
+                  </View>
                 </View>
               </View>
             )}
@@ -384,8 +402,11 @@ const styles = StyleSheet.create({
   step: { gap: Space.lg },
   preview: { alignItems: 'center' },
   // La misma card del inicio, a media anchura: lo que se ve aqui es lo que va a salir alla.
-  card: { width: '62%', borderRadius: Radius.lg, padding: Space.lg, gap: Space.md },
+  card: { width: '62%', borderRadius: Radius.lg, borderWidth: 1, padding: Space.lg, gap: Space.md },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  // El mismo chip de `workspace-card`: se mide por su texto, no por la card.
+  chip: { alignSelf: 'flex-start', borderRadius: Radius.pill, paddingHorizontal: Space.sm, paddingVertical: 2 },
+  chipLabel: { letterSpacing: 0 },
   name: { minHeight: Touch.button, paddingTop: Space.sm },
   icons: { gap: Space.sm },
   iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },

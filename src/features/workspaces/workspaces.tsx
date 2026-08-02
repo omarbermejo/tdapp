@@ -1,10 +1,8 @@
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
-import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
 import { Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
 import { usePressScale } from '@/hooks/use-press-scale';
 
@@ -17,25 +15,23 @@ import { WorkspaceCard } from './workspace-card';
 const TANGLE_RATIO = 96 / 84;
 
 /**
- * Los espacios de trabajo del inicio, con el boton de anotar.
+ * Los espacios de trabajo del inicio.
  *
- * **El "+" se pinta SIEMPRE**, con espacios, sin ellos, cargando y con error, y eso no es un detalle
- * de layout: aqui vivia el `BigButton "Anotar algo"` de la tarjeta del dia, que estaba fuera de su
- * cuerpo condicional justo para que ningun estado dejara la pantalla sin la unica forma de crear una
- * tarea. Al quitar esa tarjeta, esta cabecera hereda esa responsabilidad.
+ * **Este bloque NO se pinta dentro de un espacio activo**: ahi la pantalla entera ya habla de ese
+ * espacio —el saludo lo nombra, el mapa de calor lo mide, la lista es la suya— y una rejilla con los
+ * otros cinco al lado seria una invitacion a irse de donde acabas de entrar. Lo decide el inicio, no
+ * este componente: quien sabe si hay espacio activo es la pantalla.
  *
- * El "+" ABRIA un panel con dos opciones —tarea nueva y espacio de trabajo— y ahora empuja directo a
- * anotar. Crear un espacio se mudo al selector de "¿En qué estás?", que se abre desde cualquier
- * pantalla: dejarlo tambien aqui serian dos caminos a la misma pantalla a un centimetro uno de otro, y
- * un menu de una sola opcion es un boton con un paso de mas.
+ * **El "+" de anotar ya no vive aqui.** Vivio en esta cabecera y se mudo a la del inicio por eso
+ * mismo: era la unica forma de crear una tarea desde Hoy (la barra de pestañas no tiene "+", y el
+ * detalle de un espacio tampoco), asi que un bloque que desaparece la mitad del tiempo no puede
+ * hospedarla. Arriba se pinta en los dos modos y sigue cayendo bajo el pulgar.
  */
 export function Workspaces({
   workspaces: data,
-  accent,
   onActivate,
 }: {
   workspaces: ReturnType<typeof useWorkspaces>;
-  accent?: AccentName;
   /** Entrar a un espacio. Lo resuelve la pantalla, que es quien tiene `setActiveSpace`. */
   onActivate: (workspace: Workspace) => void;
 }) {
@@ -44,16 +40,14 @@ export function Workspaces({
 
   return (
     <View style={styles.block}>
-      <View style={styles.header}>
-        <View style={styles.title}>
-          <Text style={[Type.section, { color: t.text }]}>Tus espacios</Text>
-          {!!workspaces?.length && (
-            <Text style={[Type.hint, { color: t.textMuted }]}>
-              {workspaces.length === 1 ? '1 espacio' : `${workspaces.length} espacios`}
-            </Text>
-          )}
-        </View>
-        <PlusButton accent={accent} onPress={() => router.push('/new-task')} />
+      {/* Sin fila: el "+" que vivia a la derecha se mudo a la cabecera de la pantalla. */}
+      <View style={styles.title}>
+        <Text style={[Type.section, { color: t.text }]}>Tus espacios</Text>
+        {!!workspaces?.length && (
+          <Text style={[Type.hint, { color: t.textMuted }]}>
+            {workspaces.length === 1 ? '1 espacio' : `${workspaces.length} espacios`}
+          </Text>
+        )}
       </View>
 
       {/* `null` es "todavia no llego" y se pinta callado: un hueco vacio no dice nada falso. */}
@@ -77,8 +71,14 @@ export function Workspaces({
   );
 }
 
-/** El "+" de anotar. La accion mas repetida de la app, y por eso vive donde cae el pulgar. */
-function PlusButton({ accent, onPress }: { accent?: AccentName; onPress: () => void }) {
+/**
+ * El "+" de anotar. La accion mas repetida de la app, y por eso vive donde cae el pulgar.
+ *
+ * Exportado y montado por el INICIO, no por este bloque: "Tus espacios" desaparece dentro de un
+ * espacio activo, y este boton es la unica forma de crear una tarea desde Hoy. Se queda aqui como
+ * archivo porque es donde nacio y donde estan sus estilos, pero no lo pinta nadie de este modulo.
+ */
+export function PlusButton({ accent, onPress }: { accent?: AccentName; onPress: () => void }) {
   const t = useTheme();
   const tint = useAccent(accent);
   const press = usePressScale({ to: 0.92 });
@@ -131,31 +131,13 @@ function EmptyWorkspaces() {
 
 const styles = StyleSheet.create({
   block: { gap: Space.md },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md },
-  title: { gap: Space.xs, flex: 1 },
+  title: { gap: Space.xs },
   plus: {
     width: Touch.icon,
     height: Touch.icon,
     borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  /** 45 grados: el mismo trazo se lee como cruz. Sin animar: el panel que baja ya cuenta el cambio. */
-  turned: { transform: [{ rotate: '45deg' }] },
-  /**
-   * `alignSelf: flex-end` y `alignItems: stretch`: el panel mide lo que mide su opcion mas ancha —no la
-   * pantalla— y las dos quedan del mismo ancho, que es lo que lo hace leerse como un menu y no como dos
-   * botones sueltos. Pegado a la derecha, debajo del "+".
-   */
-  panel: { alignSelf: 'flex-end', alignItems: 'stretch', gap: Space.sm },
-  optionTouch: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    minHeight: Touch.chip,
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.md },
   empty: {

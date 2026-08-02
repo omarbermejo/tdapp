@@ -4,6 +4,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigButton } from '@/components/ui/big-button';
+import { BigField } from '@/components/ui/big-field';
 import { Choice, type Option } from '@/components/ui/choice';
 import { DateField } from '@/components/ui/date-field';
 import { FormError } from '@/components/ui/form-error';
@@ -13,12 +14,14 @@ import { ApiError, type ProfileInput, type User } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import {
   ACCENT_COLOR,
-  FOCUS_AREAS,
   PEAK_ENERGY,
   REMINDER_HOUR,
   REMINDER_STYLE,
+  WORKSPACE_TAGS,
 } from '@/features/auth/options';
 import { askForNotifications } from '@/features/notifications/local';
+import { focusForTag, iconForTag } from '@/features/tasks/focus-accent';
+import { workspacesApi } from '@/features/workspaces/api';
 
 /**
  * Onboarding como conversacion: la app pregunta en burbujas, tu respuesta se queda en el hilo,
@@ -30,23 +33,33 @@ import { askForNotifications } from '@/features/notifications/local';
  * de avisos del sistema, que ademas no se puede forzar.
  */
 type Step = {
-  key: keyof ProfileInput;
+  /**
+   * El campo del perfil que responde, o `workspace` para el primer paso — que no guarda un campo del
+   * perfil sino que CREA un espacio. Es el unico con esa llave y por eso no colisiona con `e.fields`.
+   */
+  key: keyof ProfileInput | 'workspace';
   ask: string;
   hint?: string;
-  /** `multi` y `date` piden confirmar con el boton; el resto avanza al tocar. */
-  kind: 'multi' | 'single' | 'hour' | 'date';
+  /** `workspace` y `date` piden confirmar con el boton; el resto avanza al tocar. */
+  kind: 'workspace' | 'single' | 'hour' | 'date';
   options?: readonly Option[];
-  max?: number;
 };
 
 const STEPS: readonly Step[] = [
+  /**
+   * La primera pregunta ERA "¿en qué te quieres enfocar?", hasta tres de siete focos. Ahora es tu
+   * primer espacio de trabajo, y el cambio no es de forma sino de fondo: los focos eran una etiqueta
+   * suelta que solo pintaba iconos, y un espacio es donde de verdad vive el trabajo — se comparte, se
+   * mide, y la app entera se puede acotar a el.
+   *
+   * El foco no se pierde: sale de la clasificacion que elijas (ver `focusForTag`), asi que el dia
+   * sigue teniendo con que ordenarse sin una pregunta mas.
+   */
   {
-    key: 'focusAreas',
-    ask: '¿En qué te quieres enfocar?',
-    hint: 'Hasta 3. Menos focos, más resultados.',
-    kind: 'multi',
-    options: FOCUS_AREAS,
-    max: 3,
+    key: 'workspace',
+    ask: '¿En qué vas a trabajar?',
+    hint: 'Tu primer espacio: la tesis, la mudanza, el trabajo.',
+    kind: 'workspace',
   },
   { key: 'peakEnergy', ask: '¿Cuándo rindes mejor?', kind: 'single', options: PEAK_ENERGY },
   { key: 'reminderStyle', ask: '¿Cómo te recuerdo las cosas?', kind: 'single', options: REMINDER_STYLE },
@@ -61,9 +74,14 @@ const TOTAL = STEPS.length + 1;
 const labelOf = (options: readonly Option[] | undefined, value: string) =>
   options?.find((o) => o.value === value)?.label ?? value;
 
+/** El borrador del primer espacio. Vive fuera de `form` porque no es un campo del perfil. */
+type Draft = { name: string; tag: string };
+
 /** Lo que queda escrito en el hilo como tu respuesta. */
-const answerOf = (step: Step, form: ProfileInput) => {
-  if (step.kind === 'multi') return form.focusAreas.map((v) => labelOf(step.options, v)).join(' · ');
+const answerOf = (step: Step, form: ProfileInput, draft: Draft) => {
+  if (step.kind === 'workspace') {
+    return draft.tag ? `${draft.name} · ${labelOf(WORKSPACE_TAGS, draft.tag)}` : draft.name;
+  }
   if (step.kind === 'date') {
     return form.birthDate
       ? new Date(`${form.birthDate}T00:00:00`).toLocaleDateString('es-MX', {
@@ -73,7 +91,7 @@ const answerOf = (step: Step, form: ProfileInput) => {
         })
       : '';
   }
-  return labelOf(step.options, String(form[step.key]));
+  return labelOf(step.options, String(form[step.key as keyof ProfileInput]));
 };
 
 /** El registro ya devolvio el perfil con los defaults del backend: ese es el estado inicial. */
@@ -87,9 +105,10 @@ const profileOf = (user: User): ProfileInput => ({
 });
 
 export default function OnboardingScreen() {
-  const { user, finishOnboarding } = useAuth();
+  const { user, token, finishOnboarding } = useAuth();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<ProfileInput>(() => profileOf(user!));
+  const [draft, setDraft] = useState<Draft>({ name: '', tag: '' });
   const [error, setError] = useState('');
   const [fields, setFields] = useState<Record<string, string>>({});
   /** Lo que falta para poder avanzar. Es del paso actual, no del guardado. */
@@ -122,8 +141,8 @@ export default function OnboardingScreen() {
 
   const ready = !current
     ? true
-    : current.kind === 'multi'
-      ? form.focusAreas.length > 0
+    : current.kind === 'workspace'
+      ? draft.name.trim().length > 0 && draft.tag !== ''
       : current.kind === 'date'
         ? form.birthDate !== null
         : true;
@@ -137,24 +156,51 @@ export default function OnboardingScreen() {
       setNudge('');
       return setStep((s) => s + 1);
     }
-    setNudge(current?.kind === 'multi' ? 'Elige al menos uno para seguir.' : 'Revisa la fecha para seguir.');
+    if (current?.kind !== 'workspace') return setNudge('Revisa la fecha para seguir.');
+    setNudge(draft.name.trim() ? 'Elige de qué va para seguir.' : 'Ponle un nombre para seguir.');
   };
 
+  /**
+   * Guardar es DOS escrituras y su orden importa: primero el espacio, despues el perfil.
+   *
+   * `finishOnboarding` es lo que voltea el guard y desmonta esta pantalla, asi que tiene que ir al
+   * final — al reves, un fallo al crear el espacio dejaria a la persona ya dentro de la app con el
+   * error pintado sobre una pantalla que ya no existe. Y el perfil se guarda con el espacio nuevo YA
+   * activo: se entra a la app dentro de lo que acabas de crear, que es de lo que iba la pregunta.
+   */
   const save = async (withAlerts: boolean) => {
+    if (!token) return;
     setError('');
     setFields({});
     setLoading(true);
     try {
-      // Primero el permiso y despues el guardado: el guardado voltea el guard y desmonta esto.
       // Se llamaba `withPush` y era mentira: no hay push, y lo que se pide aqui es el permiso del
       // sistema, que es lo que necesitan los avisos locales.
       if (withAlerts) await askForNotifications();
-      await finishOnboarding(form);
+
+      const { workspace } = await workspacesApi.create(token, {
+        name: draft.name.trim(),
+        tag: draft.tag,
+        icon: iconForTag(draft.tag),
+        accent: form.accentColor,
+      });
+
+      await finishOnboarding({
+        ...form,
+        // El foco sale de la clasificacion en vez de una pregunta propia: ver el comentario de STEPS.
+        focusAreas: focusForTag(draft.tag),
+        activeWorkspaceId: workspace.id,
+      });
     } catch (e) {
       if (e instanceof ApiError) {
         setFields(e.fields);
-        // Si el API rechazo un campo, se vuelve a su pregunta en vez de dejar un error suelto.
-        const failed = STEPS.findIndex((s) => e.fields[s.key]);
+        /**
+         * A que pregunta volver. El alta del espacio rechaza por `name`, `tag`, `icon` o `accent`, y
+         * ninguna de esas es una llave de `Step` — `name` ademas es del espacio, no de la persona. Por
+         * eso las cuatro se resuelven a mano contra el paso 0 antes de buscar en `STEPS`.
+         */
+        const ofSpace = ['name', 'tag', 'icon'].some((k) => e.fields[k]);
+        const failed = ofSpace ? 0 : STEPS.findIndex((s) => e.fields[s.key]);
         if (failed >= 0) setStep(failed);
         // Y ahi el mensaje general se calla: el del campo ya dice lo mismo, mas concreto.
         setError(failed >= 0 ? '' : e.message);
@@ -187,7 +233,7 @@ export default function OnboardingScreen() {
             i > step ? null : (
               <View key={s.key} style={styles.pair}>
                 <Bubble text={s.ask} hint={i === step ? s.hint : undefined} />
-                {i < step && <Said text={answerOf(s, form)} tint={accent.soft} color={t.text} />}
+                {i < step && <Said text={answerOf(s, form, draft)} tint={accent.soft} color={t.text} />}
               </View>
             )
           )}
@@ -198,16 +244,34 @@ export default function OnboardingScreen() {
         <View style={[styles.answerZone, { backgroundColor: t.canvas, borderTopColor: t.line }]}>
           <FormError message={error || nudge} />
 
-          {current?.kind === 'multi' && (
+          {/*
+            El unico paso con dos controles, y por eso el unico que pide confirmar: el nombre se
+            teclea y la clasificacion se toca, asi que avanzar al elegir se llevaria por delante un
+            nombre a medio escribir.
+          */}
+          {current?.kind === 'workspace' && (
             <>
-              <Choice
-                options={current.options!}
-                value={form.focusAreas}
-                onChange={(v) => {
+              <BigField
+                label="Cómo se llama"
+                value={draft.name}
+                onChangeText={(v) => {
                   setNudge('');
-                  answer('focusAreas', v);
+                  setDraft((d) => ({ ...d, name: v }));
                 }}
-                max={current.max}
+                error={fields.name}
+                accent={accentName}
+                placeholder="La tesis, la mudanza…"
+                maxLength={40}
+                submitBehavior="blurAndSubmit"
+              />
+              <Choice
+                label="De qué va"
+                options={WORKSPACE_TAGS}
+                value={draft.tag}
+                onChange={(v: string) => {
+                  setNudge('');
+                  setDraft((d) => ({ ...d, tag: v }));
+                }}
                 accent={accentName}
               />
               <BigButton label="Seguir" onPress={advance} />
@@ -217,8 +281,8 @@ export default function OnboardingScreen() {
           {current?.kind === 'single' && (
             <Choice
               options={current.options!}
-              value={String(form[current.key])}
-              onChange={(v) => answerAndAdvance(current.key, v)}
+              value={String(form[current.key as keyof ProfileInput])}
+              onChange={(v) => answerAndAdvance(current.key as keyof ProfileInput, v)}
               accent={accentName}
             />
           )}
