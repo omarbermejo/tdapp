@@ -6,15 +6,16 @@ import { useFonts } from 'expo-font';
 import { Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Confetti } from '@/components/ui/confetti';
 import { hydratePreference } from '@/constants/scheme-store';
-import { useAccent, useNavTheme, useScheme, useTheme } from '@/constants/theme';
+import { useNavTheme, useScheme, useTheme } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/features/auth/auth-context';
 import { useReminders } from '@/features/notifications/use-reminders';
+import { Booting } from '@/features/cache/booting';
+import { warmup } from '@/features/cache/warmup';
 import { useWidgetSync } from '@/features/widgets/use-widget-sync';
 
 /**
@@ -37,9 +38,11 @@ SplashScreen.setOptions({ fade: true, duration: 260 });
  */
 const SPLASH_CAP_MS = 4000;
 
+/** Cuando la pantalla de arranque empieza a decir que algo va mal. Antes del tope, para llegar a tiempo. */
+const SLOW_MS = 2500;
+
 function RootNavigator() {
   const t = useTheme();
-  const olive = useAccent('olive').solid;
   const { stage, token, user, loading, celebrating, stopCelebrating } = useAuth();
   // El widget solo tiene sentido con la cuenta lista: antes no hay tareas que enseñar.
   useWidgetSync(token, stage === 'ready');
@@ -82,18 +85,37 @@ function RootNavigator() {
     void SplashScreen.hideAsync().catch(() => {});
   }, [ready]);
 
+  /**
+   * Calienta el cache con lo que el inicio va a pedir, en cuanto hay sesion.
+   *
+   * NO retiene el splash: se dispara y se olvida. Un splash que espera a la red se siente mas lento
+   * que uno corto seguido de una pantalla que carga, aunque el total sea el mismo. Para cuando el
+   * inicio monte, o los datos ya estan o siguen en vuelo — y en el segundo caso el hook comparte esa
+   * misma peticion en vez de abrir otra.
+   */
+  useEffect(() => {
+    if (token && stage === 'ready') warmup(token);
+  }, [token, stage]);
+
+  /**
+   * Si la espera se alarga, decirlo.
+   *
+   * El tope de seguridad ya esconde el splash a los cuatro segundos; esto enciende el aviso un poco
+   * antes para que la pantalla de arranque tenga algo que contar en vez de girar en silencio.
+   */
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (ready) return;
+    const id = setTimeout(() => setSlow(true), SLOW_MS);
+    return () => clearTimeout(id);
+  }, [ready]);
+
   useEffect(() => {
     const id = setTimeout(() => void SplashScreen.hideAsync().catch(() => {}), SPLASH_CAP_MS);
     return () => clearTimeout(id);
   }, []);
 
-  if (!ready) {
-    return (
-      <View style={[styles.loading, { backgroundColor: t.canvas }]}>
-        <ActivityIndicator size="large" color={olive} />
-      </View>
-    );
-  }
+  if (!ready) return <Booting slow={slow} />;
 
   /**
    * Los cuatro estados del alta son excluyentes, asi que solo hay una pantalla disponible a la
@@ -116,9 +138,6 @@ function RootNavigator() {
         <Stack.Protected guard={stage === 'ready'}>
           <Stack.Screen name="(app)" />
         </Stack.Protected>
-        {/* Banco de pruebas de la Isla Dinámica. Fuera de los guards y solo en desarrollo: se abre con
-            `xcrun simctl openurl booted "tdapp:///la-preview"` sin navegar ni estar logueado. */}
-        {__DEV__ && <Stack.Screen name="la-preview" />}
       </Stack>
       {/* Encima del navegador: el confeti sobrevive al cambio de grupo de rutas. */}
       {celebrating && <Confetti onDone={stopCelebrating} />}
@@ -158,10 +177,3 @@ export default function RootLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  loading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

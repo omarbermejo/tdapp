@@ -1,19 +1,14 @@
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
-import { ApiError, type Workspace } from '@/features/auth/api';
+import type { Workspace } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
+import { WARM, keyOf, patch } from '@/features/cache/store';
+import { useCached } from '@/features/cache/use-cached';
 
 import { workspacesApi } from './api';
 
-/**
- * `loaded` distingue "todavia no llego" de "no hay ninguno", y aqui esa diferencia es toda la
- * pantalla: con null se pinta el hueco callado y con `[]` el mensaje de "sin espacios todavia".
- *
- * No lleva un `for` como `use-tasks` o `use-streak` porque los espacios no son de un dia: son de la
- * cuenta. No hay dato viejo que descartar al cambiar de fecha.
- */
-type State = { workspaces: Workspace[] | null; error: string };
+/** La llave del cache. Vive aqui para que la precarga del arranque pueda pedir lo mismo. */
+export const workspacesKey = () => keyOf('workspaces');
 
 /** Pintar ya y traer la verdad. Lo mismo que `TaskMutations`, para lo que hay hoy. */
 export type WorkspaceMutations = {
@@ -27,36 +22,25 @@ export type WorkspaceMutations = {
  *
  * El `total`/`done` de cada uno lo cuenta el API en SQL, asi que esto es UNA peticion y no una por
  * espacio — que es lo que habria hecho falta contando tareas en el cliente.
+ *
+ * **Va por el cache, y aqui esa es la diferencia mas visible de toda la app**: este hook esta montado
+ * en CUATRO sitios a la vez (inicio, selector de espacios, anotar por pasos, ajustes). Antes eran
+ * cuatro `useState` con cuatro peticiones y cuatro copias que divergian — borrar un espacio en el
+ * selector dejaba a las otras tres mintiendo hasta el siguiente foco. Ahora es una sola copia y una
+ * sola peticion, y el `drop` de abajo repinta las cuatro en el mismo frame.
+ *
+ * La forma de retorno no cambia: los cuatro sitios de montaje siguen igual.
  */
 export function useWorkspaces() {
   const { token } = useAuth();
-  const [state, setState] = useState<State>({ workspaces: null, error: '' });
+  const key = token ? workspacesKey() : null;
 
-  const reload = useCallback(async () => {
-    if (!token) return;
-    try {
-      const { workspaces } = await workspacesApi.list(token);
-      setState({ workspaces, error: '' });
-    } catch (e) {
-      const error = e instanceof ApiError ? e.message : 'No pudimos traer tus espacios';
-      // Si ya habia espacios se quedan: un fallo no borra lo que se esta viendo.
-      setState((s) => ({ workspaces: s.workspaces, error }));
-    }
-  }, [token]);
-
-  // useFocusEffect y no useEffect: volver de /new-task o de /new-workspace tiene que repintar los
-  // anillos. La carga va dentro de una async para que el setState no sea sincrono con el efecto.
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-      (async () => {
-        if (cancelled) return;
-        await reload();
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, [reload])
+  const { data, error, reload } = useCached(
+    key,
+    () => workspacesApi.list(token!),
+    // WARM y no LIVE: el nombre, el icono y la clasificacion de un espacio no cambian nunca; lo unico
+    // que se mueve es su contador, y para eso ya esta la invalidacion al mutar una tarea.
+    WARM
   );
 
   /**
@@ -66,22 +50,28 @@ export function useWorkspaces() {
   const mutate = useMemo<Omit<WorkspaceMutations, 'reload'>>(
     () => ({
       drop: (workspace) => {
-        setState((s) => ({
-          ...s,
-          workspaces: s.workspaces?.filter((w) => w.id !== workspace.id) ?? null,
+        if (!key) return () => {};
+        patch<{ workspaces: Workspace[] }>(key, (old) => ({
+          workspaces: old.workspaces.filter((w) => w.id !== workspace.id),
         }));
         // Restaura en su sitio por `position`, que es el mismo orden que usa el API.
         return () =>
-          setState((s) => ({
-            ...s,
-            workspaces: s.workspaces
-              ? [...s.workspaces, workspace].sort((a, b) => a.position - b.position || a.id - b.id)
-              : null,
+          patch<{ workspaces: Workspace[] }>(key, (old) => ({
+            workspaces: [...old.workspaces, workspace].sort(
+              (a, b) => a.position - b.position || a.id - b.id
+            ),
           }));
       },
     }),
-    []
+    [key]
   );
 
-  return { workspaces: state.workspaces, error: state.error, reload, ...mutate };
+  return {
+    // null y no [] mientras no haya llegado: con null se pinta el hueco callado y con `[]` el
+    // mensaje de "sin espacios todavia". Esa diferencia es toda la pantalla del selector.
+    workspaces: data?.workspaces ?? null,
+    error,
+    reload,
+    ...mutate,
+  };
 }

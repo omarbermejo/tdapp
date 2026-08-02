@@ -79,11 +79,10 @@ export type FocusActivityProps = {
  * de vistas en primer plano, no una tarjeta. El unico color es el acento, y solo en la cuenta, el
  * icono y el punteo, igual que en la app, donde el color dice de que familia es el bloque.
  *
- * Se EXPORTA con nombre solo para el banco de pruebas (`app/la-preview.tsx`). En runtime esto no es
- * una funcion: el directive `'widget'` la sustituye por un string con su propio codigo fuente (ver
- * `babel-preset-expo/plugins/widgets-plugin`), y el preview lo rearma con `new Function` para pintar
- * las mismas secciones dentro de la app. Nada mas debe importarlo — quien quiera la actividad usa el
- * default.
+ * En runtime esto NO es una funcion: el directive `'widget'` la sustituye por un string con su propio
+ * codigo fuente (ver `babel-preset-expo/plugins/widgets-plugin`). Por eso se exporta tambien con
+ * nombre — hubo un banco de pruebas que lo rearmaba con `new Function` para pintar las cuatro
+ * presentaciones dentro de la app. Ese banco ya no existe; quien quiera la actividad usa el default.
  */
 export const FocusActivity = (props: FocusActivityProps, _environment: LiveActivityEnvironment) => {
   'widget';

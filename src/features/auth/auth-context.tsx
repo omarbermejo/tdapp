@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 
+import { reset as resetCache, setOwner } from '@/features/cache/store';
 import { clearReminders } from '@/features/notifications/reminders';
 import { syncTodayWidget } from '@/features/widgets/sync-today';
 
@@ -119,6 +120,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const start = useCallback(async (next: Session) => {
     await storage.set(next);
+    /*
+      Quien es la persona, para el cache. Va ANTES del `setSession` porque el render que sigue ya
+      puede leer del cache, y leerlo con el owner anterior devolveria datos de la cuenta de antes.
+    */
+    setOwner(next.user.id);
     setSession(next);
   }, []);
 
@@ -132,12 +138,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // sin que la app corra, asi que sin esto una cuenta cerrada seguiria recibiendolo hasta que
     // alguien desinstale la app. Cancela solo lo suyo, por prefijo.
     void clearReminders();
+    // El cache se va con la sesion: no puede quedar nada de esta cuenta ni en memoria ni en disco.
+    resetCache();
     await storage.clear();
     setSession(null);
   }, []);
 
   useEffect(() => {
     storage.get().then((cached) => {
+      // El owner ANTES de pintar: el primer render de `(app)` ya lee del cache, y sin owner leeria
+      // llaves de nadie. Es tambien lo que destapa el cache en disco para el arranque en frio.
+      if (cached) setOwner(cached.user.id);
       setSession(cached);
       setLoading(false);
       if (!cached) return;

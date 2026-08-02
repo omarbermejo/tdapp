@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 
 import type { AccentName } from '@/constants/theme';
+import { track } from '@/features/cache/meter';
 
 /** El simulador alcanza localhost; un celular real no. Reusamos el host del dev server de Expo. */
 const devHost = Constants.expoConfig?.hostUri?.split(':')[0];
@@ -329,12 +330,17 @@ export class ApiError extends Error {
  */
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let res: Response;
+  // El reloj para el medidor. Solo se usa en desarrollo; en release `track` sale de vacio.
+  const started = Date.now();
   try {
     res = await fetch(API_URL + path, {
       ...init,
       headers: { 'Content-Type': 'application/json', ...init.headers },
     });
   } catch {
+    // Un fallo de red costo el mismo viaje que una respuesta buena: si no se apuntara, un rato con
+    // mala cobertura pareceria barato en la tabla.
+    track(path, 'net', Date.now() - started);
     // La URL del servidor no es asunto de quien usa la app y en dev es la IP de la LAN:
     // se queda en la consola, que solo existe en desarrollo.
     if (__DEV__) console.warn(`[api] sin respuesta de ${API_URL}${path}`);
@@ -342,6 +348,9 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   }
 
   const data = await res.json().catch(() => ({}));
+  // Tambien cuando el servidor contesta 4xx o 5xx: el viaje se pago igual.
+  track(path, 'net', Date.now() - started);
+
   if (!res.ok) throw new ApiError(data.error ?? 'Algo salió mal', data.fields, res.status);
   return data as T;
 }
