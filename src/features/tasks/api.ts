@@ -50,6 +50,14 @@ export type NewTask = {
   workspaceId?: number | null;
   /** ISO con zona; usa localIso() o isoAt(). null lo desagenda. */
   dueAt?: string | null;
+  /**
+   * El dia LOCAL en que se cerro, 'YYYY-MM-DD'. Lo rellena `update` solo; no hay que pasarlo.
+   *
+   * Existe porque la racha cuenta el dia en que cerraste algo, y el servidor no puede deducirlo:
+   * `completed_at` es UTC, asi que cerrar a las 11 de la noche en Mexico caeria en el dia siguiente.
+   * Misma disciplina que `dueAt` — la fecha local la manda quien la vive.
+   */
+  completedOn?: string | null;
 };
 
 export type TaskQuery = {
@@ -144,14 +152,23 @@ export const tasksApi = {
     });
   },
 
-  /** PATCH de verdad: lo que no viene se conserva. Marcar hecha es { status: 'done' }. */
+  /**
+   * PATCH de verdad: lo que no viene se conserva. Marcar hecha es { status: 'done' }.
+   *
+   * El dia local del cierre se sella AQUI y no en el call site, por el mismo argumento que `andSync`:
+   * puesto en el cliente no se puede olvidar ninguno. Hoy solo hay un sitio que marca hecha, pero el
+   * que agregue el segundo lo hereda gratis — y olvidarlo no rompe nada visible, solo deja la racha
+   * clavada, que es justo el bug que esto arregla.
+   */
   update: (token: string, id: number, patch: NewTask) =>
     andSync(
       token,
       request<{ task: Task }>(`/tasks/${id}`, {
         method: 'PATCH',
         headers: bearer(token),
-        body: JSON.stringify(patch),
+        body: JSON.stringify(
+          patch.status === 'done' ? { completedOn: localDate(), ...patch } : patch
+        ),
       }),
       // Cerrar o reabrir mueve la llama, el mapa, la tira y el anillo del espacio. La fila en si ya
       // la parcheo quien la toco, asi que `tasks` sobra.

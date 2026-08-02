@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { ApiError, type Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
@@ -82,8 +82,16 @@ const mutators = (setState: React.Dispatch<React.SetStateAction<State>>) => ({
  * Sin `date` no pide nada: `list` ignora los filtros vacios y traeria TODAS las tareas del
  * usuario, que en la agenda de un dia seria mentira.
  *
- * ponytail: no hay cache entre dias — moverse por la tira vuelve a preguntar. Techo: si el
- * ir y venir se siente lento, aqui entra un Map de fecha -> tareas o un cache de verdad.
+ * **Recuerda los dias que ya viste**, y eso es lo que hace que moverse por la tira no parpadee.
+ *
+ * Antes, cambiar de dia ponia `fresh` en false: la lista se VACIABA y salia "Trayendo ese dia…"
+ * hasta que contestaba el servidor. Con la memoria, un dia ya visto se pinta en el mismo frame del
+ * toque y la peticion solo lo confirma por detras. De paso arregla la tardanza al entrar: volver a
+ * la agenda ya no espera a la red para enseñar algo.
+ *
+ * Es un `Map` por hook y no un cache de verdad a proposito: `/tasks?workspaceId` puede pesar ~180 KB
+ * (ver `MAX_ENTRY` en el store), asi que esto no se persiste ni se comparte entre pantallas — vive lo
+ * que vive la pantalla y se va con ella.
  */
 export function useTasks(date: string) {
   const { token } = useAuth();
@@ -100,10 +108,29 @@ export function useTasks(date: string) {
   // pintar en vez de quedarse un frame diciendo lo que no es.
   const key = `${date}:${space ?? ''}`;
 
+  /** Lo ultimo que se supo de cada dia. En un ref y no en estado: escribirlo no repinta nada. */
+  const seen = useRef(new Map<string, Task[]>());
+
+  /**
+   * Al cambiar de dia, si ya lo vimos se siembra el estado con lo que se sabia.
+   *
+   * `useLayoutEffect` y no `useEffect` porque corre ANTES de pintar: con el normal se colaria un
+   * frame con la lista vacia, que es exactamente el parpadeo que esto viene a quitar.
+   *
+   * Y se siembra el ESTADO en vez de pintar del mapa directamente para que los mutadores sigan
+   * valiendo: `patch` y `drop` escriben sobre `state`, asi que si el estado todavia apuntara al dia
+   * anterior, marcar una tarea en el dia recien abierto no haria nada visible.
+   */
+  useLayoutEffect(() => {
+    const remembered = seen.current.get(key);
+    if (remembered) setState({ for: key, tasks: remembered, error: '' });
+  }, [key]);
+
   const reload = useCallback(async () => {
     if (!token || !date) return;
     try {
       const { tasks } = await tasksApi.list(token, { date, workspaceId: space });
+      seen.current.set(key, tasks);
       setState({ for: key, tasks, error: '' });
     } catch (e) {
       const error = e instanceof ApiError ? e.message : 'No pudimos traer ese día';
@@ -134,6 +161,17 @@ export function useTasks(date: string) {
    * un instante de "cargando".
    */
   const fresh = state.for === key;
+
+  /**
+   * La memoria sigue a lo que se ve, no solo a lo que contesta el servidor.
+   *
+   * Sin esto, marcar una tarea y saltar a otro dia y volver antes de que llegue la confirmacion la
+   * enseñaria otra vez sin marcar: `patch` y `drop` escriben en el estado, y el mapa se habria
+   * quedado con la version de la ultima peticion.
+   */
+  useLayoutEffect(() => {
+    if (fresh && state.tasks) seen.current.set(key, state.tasks);
+  }, [fresh, state.tasks, key]);
 
   /**
    * Se arman con `useMemo` y no en el cuerpo: la fila los recibe como prop y los mete en las

@@ -427,7 +427,30 @@ export default function AppLayout() {
     <FocusModeProvider>
       <Tabs
         tabBar={(props) => <FloatingTabs {...props} />}
-        screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: t.canvas } }}
+        screenOptions={{
+          headerShown: false,
+          sceneStyle: { backgroundColor: t.canvas },
+          /**
+           * Cambiar de pestaña deja de ser un CORTE.
+           *
+           * El default de este navegador es `'none'`: la pantalla nueva aparece de golpe, sin nada
+           * que diga de donde vino. Era la unica transicion que le faltaba a la app — la pila ya
+           * empuja y las hojas ya suben.
+           *
+           * `'shift'` y no `'fade'`: las cuatro pestañas son HERMANAS y estan en un orden fijo, asi
+           * que la relacion entre ellas es de POSICION. Un desplazamiento corto hacia el lado del
+           * que vienes lo cuenta; un fundido diria "otra cosa" y perderia el orden. Es ademas el
+           * mismo idioma que la capsula, donde el resaltado esta a la izquierda o a la derecha.
+           *
+           * Con muelle y sin sobrepaso: `damping: 26` es el mismo de `DOCK`. Una pantalla que se
+           * pasa de largo y vuelve se lee como que se cargo mal, no como que llego.
+           */
+          animation: 'shift',
+          transitionSpec: {
+            animation: 'spring',
+            config: { damping: 26, stiffness: 220, mass: 0.9 },
+          },
+        }}
       />
     </FocusModeProvider>
   );
