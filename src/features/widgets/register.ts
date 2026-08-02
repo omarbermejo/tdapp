@@ -32,6 +32,7 @@ export async function registerWidgetLayouts() {
       import('@/widgets/capture-widget'),
       import('@/widgets/streak-widget'),
       import('@/widgets/focus-widget'),
+      import('@/widgets/heat-widget'),
     ]);
   } catch (e) {
     if (__DEV__) console.warn('[widget] layouts sin registrar', e);

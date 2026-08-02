@@ -105,6 +105,17 @@
               ],
               "contentMarginsDisabled": false,
               "android": null
+            },
+            {
+              "name": "HeatWidget",
+              "displayName": "Mapa de calor",
+              "description": "Tu trimestre, semana a semana.",
+              "supportedFamilies": [
+                "systemMedium",
+                "systemLarge"
+              ],
+              "contentMarginsDisabled": true,
+              "android": null
             }
           ]
         }

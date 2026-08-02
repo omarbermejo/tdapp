@@ -176,6 +176,29 @@ const TILES = {
     },
   },
   CaptureWidget: { file: 'capture-widget', props: { pending: 4, ...skin } },
+  /**
+   * El peor caso del mapa: los 119 dias con nivel, todas las columnas abriendo mes, y hoy en la
+   * ultima. Es el arbol mas grande de la app con diferencia —unos 150 nodos, diez veces cualquier
+   * otro— asi que si algo se atraganta con el volumen, se atraganta aqui.
+   */
+  HeatWidget: {
+    file: 'heat-widget',
+    props: {
+      levels: Array.from({ length: 119 }, (_, i) => i % 5),
+      weeks: 17,
+      steps: 4,
+      months: Array.from({ length: 17 }, (_, i) => (i % 4 === 0 ? 'ago' : '')),
+      todayIndex: 118,
+      total: 240,
+      busiest: 9,
+      palette: ['#f1ede0', '#e2e7d1', '#c5d0a3', '#88994f', '#606c38'],
+      paletteDark: ['#1f1f1f', '#394121', '#4c562c', '#606c38', '#88994f'],
+      future: '#ffffff',
+      futureDark: '#141414',
+      bg: '#ffffff',
+      bgDark: '#141414',
+    },
+  },
 };
 
 /**
@@ -242,4 +265,4 @@ for (const [name, tile] of Object.entries(TILES)) {
 }
 
 if (failures) process.exit(1);
-console.log('OK · las cuatro baldosas se dibujan en todas sus presentaciones');
+console.log('OK · las cinco baldosas se dibujan en todas sus presentaciones');

@@ -1,4 +1,7 @@
 import { accentInks, WIDGET_PAPER } from '@/constants/theme';
+import { QUARTER_HEAT, shiftDay } from '@/features/stats/grid';
+
+import { toHeatProps } from './sync-heat';
 import type { CaptureWidgetProps } from '@/widgets/capture-widget';
 import type { StreakWidgetProps } from '@/widgets/streak-widget';
 import { short, timeOf } from '@/widgets/shared';
@@ -109,7 +112,7 @@ export const toStreakProps = (streak: Streak, accent: string | null): StreakWidg
 export async function syncTodayWidget(token: string) {
   const date = localDate();
 
-  const [today, streak] = await Promise.all([
+  const [today, streak, stats] = await Promise.all([
     api.today(token, date).catch((error) => {
       if (__DEV__) console.warn('[widget] no se pudo traer el dia', error);
       return null;
@@ -118,6 +121,12 @@ export async function syncTodayWidget(token: string) {
       if (__DEV__) console.warn('[widget] no se pudo traer la racha', error);
       return null;
     }),
+    api
+      .stats(token, { date, from: shiftDay(date, -(QUARTER_HEAT.days - 1)) })
+      .catch((error) => {
+        if (__DEV__) console.warn('[widget] sin estadisticas', error);
+        return null;
+      }),
   ]);
 
   try {
@@ -179,6 +188,24 @@ export async function syncTodayWidget(token: string) {
         { date: new Date(nextMidnight().getTime() + 12 * 3_600_000), props },
       ]);
     }
+    /**
+     * El mapa se empuja SIEMPRE, tambien con `stats` en null — al reves que las otras dos ramas.
+     *
+     * `heatGrid(null, …)` devuelve la rejilla entera en ceros, asi que con el API caido la baldosa
+     * pinta un trimestre apagado, que es la forma correcta de decir "todavia no se". Saltarselo
+     * dejaria el layout SIN REGISTRAR, y un layout que nunca se importa es una baldosa en blanco
+     * para siempre — ver `register.ts`.
+     */
+    const { default: HeatWidget } = await import('@/widgets/heat-widget');
+    HeatWidget.updateTimeline([
+      { date: new Date(), props: toHeatProps(stats, date, today?.user.accentColor ?? null) },
+      // El ancla, por lo mismo que las otras: una timeline entera en el pasado quema el presupuesto
+      // de refrescos de WidgetKit y congela el widget mas, no menos.
+      {
+        date: new Date(nextMidnight().getTime() + 12 * 3_600_000),
+        props: toHeatProps(stats, date, today?.user.accentColor ?? null),
+      },
+    ]);
   } catch (error) {
     if (__DEV__) console.warn('[widget] no se pudo pintar', error);
   }
