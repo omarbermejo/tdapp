@@ -93,6 +93,13 @@ export type Task = {
   minutes: number | null;
   focusArea: string | null;
   /**
+   * La cara elegida a mano, o null para derivarla de la clasificacion como se ha hecho siempre.
+   *
+   * Es un slug de `assets/icons3d/`, no una imagen: los archivos viven en el bundle. Opcional
+   * mientras haya un API desplegado sin la columna.
+   */
+  icon?: string | null;
+  /**
    * El espacio de trabajo al que pertenece, o null si esta suelta.
    *
    * Opcional por el mismo motivo que los campos de `stageOf` mas abajo: mientras haya un API

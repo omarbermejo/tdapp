@@ -206,7 +206,7 @@ export default function HomeScreen() {
               <StreakFlame streak={streak.streak} accent={user.accentColor} />
               <NotificationBell accent={space?.accent ?? user.accentColor} />
             </View>
-            <PlusButton accent={space?.accent ?? user.accentColor} onPress={() => router.push('/new-task')} />
+            <PlusButton accent={space?.accent ?? user.accentColor} onPress={() => router.push('/new-task-steps')} />
           </View>
         </View>
 

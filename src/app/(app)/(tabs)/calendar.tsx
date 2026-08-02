@@ -199,7 +199,7 @@ export default function CalendarScreen() {
             <BigButton
               label="Agendar algo"
               accent={user.accentColor}
-              onPress={() => router.push('/new-task')}
+              onPress={() => router.push('/new-task-steps')}
             />
           </View>
         )}

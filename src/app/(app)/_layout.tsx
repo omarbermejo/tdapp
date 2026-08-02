@@ -111,6 +111,13 @@ export default function AppLayout() {
         navegador de `(tabs)`, y esta pantalla se monta encima en el Stack padre.
       */}
       <Stack.Screen name="notifications" />
+
+      {/*
+        Anotar por pasos. Hoja como `new-task`, y por el mismo argumento: es un parentesis sobre el
+        dia, no un destino. Cuatro pantallas seguidas siguen siendo UN gesto — el que empieza con el
+        "+" del inicio — y la hoja deja el dia visible detras todo el rato.
+      */}
+      <Stack.Screen name="new-task-steps" options={{ presentation: 'modal' }} />
     </Stack>
     </ActivityProvider>
   );

@@ -43,6 +43,8 @@ export type NewTask = {
   minutes?: number | null;
   status?: Task['status'];
   focusArea?: string | null;
+  /** El slug de `assets/icons3d/` elegido a mano. null lo deja derivarse de la clasificacion. */
+  icon?: string | null;
   /** El espacio de trabajo al que pertenece. null la deja suelta, sin borrarla. */
   workspaceId?: number | null;
   /** ISO con zona; usa localIso() o isoAt(). null lo desagenda. */
