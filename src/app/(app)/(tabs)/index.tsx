@@ -1,31 +1,32 @@
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { router } from "expo-router";
+import { useMemo, useState } from "react";
+import { RefreshControl, StyleSheet, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 
-import { Space, Type, useTheme } from '@/constants/theme';
-import { useAuth } from '@/features/auth/auth-context';
-import { QUARTER_HEAT, WORKSPACE_HEAT } from '@/features/stats/grid';
-import { HeatMap } from '@/features/stats/heat-map';
-import { useStats } from '@/features/stats/use-stats';
-import { StreakFlame } from '@/features/streak/streak-flame';
-import { useStreak } from '@/features/streak/use-streak';
-import { BacklogList } from '@/features/tasks/backlog-list';
-import { useLocalToday } from '@/features/tasks/day';
-import { NextUp } from '@/features/tasks/next-up';
-import { TodayList } from '@/features/tasks/today-list';
-import { useBacklog, useTasks } from '@/features/tasks/use-tasks';
-import { WeekStrip } from '@/features/tasks/week-strip';
-import { PlusButton, Workspaces } from '@/features/workspaces/workspaces';
-import { useWorkspaces } from '@/features/workspaces/use-workspaces';
-import { GreetingSwitch } from '@/components/ui/space-pill';
-import { useActiveSpace } from '@/features/workspaces/active-space';
-import { SpaceMembers } from '@/features/workspaces/space-members';
-import { useScreenPadding } from '@/hooks/use-screen-padding';
-import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
-import { NotificationBell } from '@/features/activity/notification-bell';
+import { ScreenGuard } from "@/components/ui/screen-guard";
+import { GreetingSwitch } from "@/components/ui/space-pill";
+import { StatusVeil, useScrollVeil } from "@/components/ui/status-veil";
+import { Space, Type, useTheme } from "@/constants/theme";
+import { NotificationBell } from "@/features/activity/notification-bell";
+import { useAuth } from "@/features/auth/auth-context";
+import { QUARTER_HEAT, WORKSPACE_HEAT } from "@/features/stats/grid";
+import { HeatMap } from "@/features/stats/heat-map";
+import { useStats } from "@/features/stats/use-stats";
+import { StreakFlame } from "@/features/streak/streak-flame";
+import { useStreak } from "@/features/streak/use-streak";
+import { BacklogList } from "@/features/tasks/backlog-list";
+import { useLocalToday } from "@/features/tasks/day";
+import { NextUp } from "@/features/tasks/next-up";
+import { TodayList } from "@/features/tasks/today-list";
+import { useBacklog, useTasks } from "@/features/tasks/use-tasks";
+import { WeekStrip } from "@/features/tasks/week-strip";
+import { useActiveSpace } from "@/features/workspaces/active-space";
+import { SpaceMembers } from "@/features/workspaces/space-members";
+import { useWorkspaces } from "@/features/workspaces/use-workspaces";
+import { PlusButton, Workspaces } from "@/features/workspaces/workspaces";
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
-import { TAB_DOCK } from './_layout';
+import { TAB_DOCK } from "./_layout";
 
 /** Solo el nombre de pila: "Hola, Omar Bermejo Osuna" no es como te llama nadie. */
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
@@ -37,17 +38,22 @@ const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
  * oeste de Greenwich devuelve el dia anterior.
  */
 const weekday = (date: string) => {
-  if (!date) return '';
-  const [y, m, d] = date.split('-').map(Number);
-  const label = new Date(y, m - 1, d).toLocaleDateString('es-MX', { weekday: 'long' });
+  if (!date) return "";
+  const [y, m, d] = date.split("-").map(Number);
+  const label = new Date(y, m - 1, d).toLocaleDateString("es-MX", {
+    weekday: "long",
+  });
   return label.charAt(0).toUpperCase() + label.slice(1);
 };
 
 /** '31 de julio'. Debajo del titulo, en la voz de los controles. */
 const longDate = (date: string) => {
-  if (!date) return '';
-  const [y, m, d] = date.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' });
+  if (!date) return "";
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("es-MX", {
+    day: "numeric",
+    month: "long",
+  });
 };
 
 /**
@@ -111,7 +117,7 @@ export default function HomeScreen() {
    * sobrevive a navegar porque la pestaña ya esta montada y se llega con `?date=`; aqui Hoy es siempre
    * el default y nadie enlaza a "el inicio viendo el jueves".
    */
-  const [selected, setSelected] = useState('');
+  const [selected, setSelected] = useState("");
   const day = useTasks(selected || today);
   const backlog = useBacklog(today);
   const workspaces = useWorkspaces();
@@ -135,29 +141,58 @@ export default function HomeScreen() {
 
   /** El mapa fecha -> cuantas agendadas, para la tira. `planned` cae en `done` si el API es viejo. */
   const load = useMemo(
-    () => new Map(stats.stats?.byDay.map((d) => [d.date, d.planned ?? d.done]) ?? []),
-    [stats.stats]
+    () =>
+      new Map(
+        stats.stats?.byDay.map((d) => [d.date, d.planned ?? d.done]) ?? [],
+      ),
+    [stats.stats],
   );
 
   /** Mientras una fila se arrastra, el scroll de la pantalla se apaga o pelea con el gesto. */
   const [dragging, setDragging] = useState(false);
 
-  // El aire va en el CONTENIDO y no en un SafeAreaView: así el scroll pasa por debajo de la barra de
+  /** Estado del pull-to-refresh */
+  const [refreshing, setRefreshing] = useState(false);
+
+  /** Función para recargar todos los datos cuando hace pull-to-refresh */
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        day.reload?.(),
+        backlog.reload?.(),
+        workspaces.reload?.(),
+        streak.reload?.(),
+        stats.reload?.(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // El air e va en el CONTENIDO y no en un SafeAreaView: así el scroll pasa por debajo de la barra de
   // estado en vez de cortarse contra ella. Ver `use-screen-padding`.
   const veil = useScrollVeil();
   const pad = useScreenPadding(TAB_DOCK);
 
   // El guard va DESPUES de los hooks: al cerrar sesion el user se vuelve null, y salir antes
   // dejaba a React con menos hooks que en el render anterior.
-  if (!user) return null;
+  if (!user) return <ScreenGuard />;
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
       <Animated.ScrollView
         {...veil.scrollProps}
-        contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: pad.top, paddingBottom: pad.bottom },
+        ]}
         scrollEnabled={!dragging}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         <View style={styles.head}>
           <View style={styles.greeting}>
             {/*
@@ -175,7 +210,10 @@ export default function HomeScreen() {
             <Text style={[Type.day, { color: t.text }]} numberOfLines={1}>
               {weekday(today)}
             </Text>
-            <Text style={[Type.label, { color: t.textMuted }]} numberOfLines={1}>
+            <Text
+              style={[Type.label, { color: t.textMuted }]}
+              numberOfLines={1}
+            >
               {longDate(today)}
             </Text>
             {/*
@@ -206,7 +244,10 @@ export default function HomeScreen() {
               <StreakFlame streak={streak.streak} accent={user.accentColor} />
               <NotificationBell accent={space?.accent ?? user.accentColor} />
             </View>
-            <PlusButton accent={space?.accent ?? user.accentColor} onPress={() => router.push('/new-task-steps')} />
+            <PlusButton
+              accent={space?.accent ?? user.accentColor}
+              onPress={() => router.push("/new-task-steps")}
+            />
           </View>
         </View>
 
@@ -270,10 +311,15 @@ const styles = StyleSheet.create({
    * `flex-start` y no `center`: la insignia se alinea con el saludo, arriba, en vez de flotar a media
    * altura de un titular de 50pt de interlineado.
    */
-  head: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: Space.md },
+  head: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: Space.md,
+  },
   // La racha y el "+", en columna: los dos miden 44 y apilados caben sin robarle ancho al saludo.
-  tools: { alignItems: 'flex-end', gap: Space.md },
-  status: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  tools: { alignItems: "flex-end", gap: Space.md },
+  status: { flexDirection: "row", alignItems: "center", gap: Space.sm },
   // El encabezado respira por dentro y no con el `gap` del scroll: las tres lineas son UNA cosa.
   greeting: { flex: 1, gap: Space.xs },
 });

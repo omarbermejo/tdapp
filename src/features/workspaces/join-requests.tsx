@@ -1,17 +1,17 @@
-import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 
-import { BigButton } from '@/components/ui/big-button';
-import { Card, Micro } from '@/components/ui/card';
-import { FormError } from '@/components/ui/form-error';
-import { Space, Type, useTheme } from '@/constants/theme';
-import { ApiError } from '@/features/auth/api';
-import { useAuth } from '@/features/auth/auth-context';
-import { useCached } from '@/features/cache/use-cached';
-import { LIVE, keyOf } from '@/features/cache/store';
-import { ProfileAvatar } from '@/features/profile/avatar';
+import { BigButton } from "@/components/ui/big-button";
+import { Card, Micro } from "@/components/ui/card";
+import { FormError } from "@/components/ui/form-error";
+import { Space, Type, useTheme } from "@/constants/theme";
+import { ApiError } from "@/features/auth/api";
+import { useAuth } from "@/features/auth/auth-context";
+import { LIVE, invalidate, keyOf } from "@/features/cache/store";
+import { useCached } from "@/features/cache/use-cached";
+import { ProfileAvatar } from "@/features/profile/avatar";
 
-import { requestsApi, type JoinRequest } from './api';
+import { requestsApi, type JoinRequest } from "./api";
 
 /**
  * Quién quiere entrar a un espacio tuyo, y las dos respuestas.
@@ -30,7 +30,7 @@ import { requestsApi, type JoinRequest } from './api';
 export function JoinRequests() {
   const { token } = useAuth();
   const t = useTheme();
-  const [problem, setProblem] = useState('');
+  const [problem, setProblem] = useState("");
   /** A quién se está respondiendo. Bloquea SU fila y no la lista: las demás siguen decidibles. */
   const [busy, setBusy] = useState<number | null>(null);
 
@@ -39,7 +39,11 @@ export function JoinRequests() {
     return requestsApi.list(token);
   }, [token]);
 
-  const { data, reload } = useCached(token ? keyOf('workspaces', 'requests') : null, fetcher, LIVE);
+  const { data, reload } = useCached(
+    token ? keyOf("workspaces", "requests") : null,
+    fetcher,
+    LIVE,
+  );
   const requests = data?.requests ?? [];
 
   /** Se pinta sola o no se pinta. Un "nadie ha pedido entrar" es una sección vacía cada día. */
@@ -47,13 +51,22 @@ export function JoinRequests() {
 
   const decide = async (item: JoinRequest, approve: boolean) => {
     if (!token) return;
-    setProblem('');
+    setProblem("");
     setBusy(item.person.id);
     try {
-      await requestsApi.decide(token, item.workspace.id, item.person.id, approve);
+      await requestsApi.decide(
+        token,
+        item.workspace.id,
+        item.person.id,
+        approve,
+      );
       await reload();
+      // Si se aprobó, también invalida el cache de workspaces para que se refresque la lista
+      if (approve) {
+        invalidate("workspaces");
+      }
     } catch (e) {
-      setProblem(e instanceof ApiError ? e.message : 'No se pudo responder');
+      setProblem(e instanceof ApiError ? e.message : "No se pudo responder");
     } finally {
       setBusy(null);
     }
@@ -72,7 +85,10 @@ export function JoinRequests() {
                 {item.person.name}
               </Text>
               {/* El espacio va DEBAJO del nombre: con varios espacios, "a cuál" es la mitad del dato. */}
-              <Text style={[Type.hint, { color: t.textMuted }]} numberOfLines={1}>
+              <Text
+                style={[Type.hint, { color: t.textMuted }]}
+                numberOfLines={1}
+              >
                 a {item.workspace.name}
               </Text>
             </View>
@@ -109,8 +125,8 @@ export function JoinRequests() {
 
 const styles = StyleSheet.create({
   row: { gap: Space.md },
-  who: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  who: { flexDirection: "row", alignItems: "center", gap: Space.md },
   name: { flex: 1, gap: 2 },
-  answers: { flexDirection: 'row', gap: Space.sm },
+  answers: { flexDirection: "row", gap: Space.sm },
   answer: { flex: 1 },
 });

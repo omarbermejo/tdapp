@@ -1,14 +1,15 @@
-import { useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { useLocalSearchParams } from "expo-router";
+import { StyleSheet, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 
-import { ScreenHeader } from '@/components/ui/screen-header';
-import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
-import { Space, Type, useTheme } from '@/constants/theme';
-import { useAuth } from '@/features/auth/auth-context';
-import { SpaceActions } from '@/features/workspaces/space-actions';
-import { useWorkspace } from '@/features/workspaces/use-workspace';
-import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { ScreenGuard } from "@/components/ui/screen-guard";
+import { ScreenHeader } from "@/components/ui/screen-header";
+import { StatusVeil, useScrollVeil } from "@/components/ui/status-veil";
+import { Space, Type, useTheme } from "@/constants/theme";
+import { useAuth } from "@/features/auth/auth-context";
+import { SpaceActions } from "@/features/workspaces/space-actions";
+import { useWorkspace } from "@/features/workspaces/use-workspace";
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
 /**
  * Configurar un espacio: quién entra, cómo se ve, y borrarlo.
@@ -33,16 +34,20 @@ export default function WorkspaceSettingsScreen() {
 
   // El guard va DESPUES de los hooks: al borrar el espacio, `space.workspace` se vuelve null con
   // esta pantalla todavia montada.
-  if (!user) return null;
+  if (!user) return <ScreenGuard />;
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
       <Animated.ScrollView
         {...veil.scrollProps}
-        contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: pad.top, paddingBottom: pad.bottom },
+        ]}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
-        <ScreenHeader back title={space.workspace?.name ?? 'El espacio'} />
+        showsVerticalScrollIndicator={false}
+      >
+        <ScreenHeader back title={space.workspace?.name ?? "El espacio"} />
 
         {space.missing ? (
           <Text style={[Type.body, { color: t.textMuted }]}>

@@ -1,27 +1,32 @@
-import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown, FadeOut, FadeOutDown } from 'react-native-reanimated';
+import { router } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated, {
+    FadeIn,
+    FadeInDown,
+    FadeOut,
+    FadeOutDown,
+} from "react-native-reanimated";
 
-import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
-import { ProgressRing } from '@/components/ui/progress-ring';
+import { Icon3D, Icon3DSize, type Icon3DName } from "@/components/ui/icon3d";
+import { ProgressRing } from "@/components/ui/progress-ring";
 import {
-  Motion,
-  Radius,
-  Space,
-  Touch,
-  Type,
-  useAccent,
-  useShadow,
-  useTheme,
-  type AccentName,
-} from '@/constants/theme';
-import type { Workspace } from '@/features/auth/api';
-import { useAuth } from '@/features/auth/auth-context';
-import { useActiveSpace } from '@/features/workspaces/active-space';
-import { useWorkspaces } from '@/features/workspaces/use-workspaces';
-import { usePressScale } from '@/hooks/use-press-scale';
-import { useScreenPadding } from '@/hooks/use-screen-padding';
-import { goBackOrHome } from '@/features/nav/go-back';
+    Motion,
+    Radius,
+    Space,
+    Touch,
+    Type,
+    useAccent,
+    useShadow,
+    useTheme,
+    type AccentName,
+} from "@/constants/theme";
+import type { Workspace } from "@/features/auth/api";
+import { useAuth } from "@/features/auth/auth-context";
+import { goBackOrHome } from "@/features/nav/go-back";
+import { useActiveSpace } from "@/features/workspaces/active-space";
+import { useWorkspaces } from "@/features/workspaces/use-workspaces";
+import { usePressScale } from "@/hooks/use-press-scale";
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
 /** Las filas salen escalonadas, como el panel del "+". Tope a 6: una lista larga no puede tardar. */
 const rowIn = (index: number) =>
@@ -33,7 +38,7 @@ const VEIL_IN = FadeIn.duration(Motion.enter);
 const VEIL_OUT = FadeOut.duration(Motion.exit);
 
 /** El icono del modo general. `home-chrome` es la casa en verde, la misma de la pestaña de Hoy. */
-const ALL_ICON: Icon3DName = 'home-chrome';
+const ALL_ICON: Icon3DName = "home-chrome";
 
 /**
  * El selector de espacio, encima de la pantalla que sea.
@@ -52,17 +57,16 @@ export default function SpacesScreen() {
   const { user, setActiveSpace } = useAuth();
   const active = useActiveSpace();
   const { workspaces } = useWorkspaces();
-  const shadow = useShadow('floating');
+  const shadow = useShadow("floating");
   const pad = useScreenPadding(Space.xxl);
 
   const close = () => goBackOrHome();
 
   /**
-   * Entrar a un espacio: se activa, se cierra la hoja, y se ABRE su pantalla.
+   * Entrar a un espacio: solo abre su pantalla si es un espacio DIFERENTE del actualmente activo.
    *
-   * Antes solo se activaba y la repintada de la pantalla de atras era todo el acuse. Con dos
-   * espacios eso bastaba; con varios no: elegir uno y quedarte en el inicio deja el trabajo de
-   * "¿y como va este?" a un segundo viaje que casi nadie hace. Elegir un espacio ES entrar en el.
+   * Si presionas un espacio que ya está activo, simplemente se cierra la hoja sin navegar. Esto
+   * evita abrir la pantalla de detalles cuando solo estás seleccionando/confirmando el espacio actual.
    *
    * El modo general (`null`) NO abre nada: no hay pantalla de "todo", el inicio ya lo es.
    *
@@ -70,6 +74,10 @@ export default function SpacesScreen() {
    * atras desde el detalle la reabriria en vez de volver al inicio.
    */
   const enter = (space: Workspace | null) => {
+    // Abrir la pantalla del espacio PRIMERO, si existe
+    if (space) router.push(`/workspace/${space.id}`);
+
+    // Luego actualizar el espacio activo
     void setActiveSpace(
       space && {
         id: space.id,
@@ -77,13 +85,14 @@ export default function SpacesScreen() {
         icon: space.icon,
         accent: space.accent,
         tag: space.tag ?? null,
-      }
+      },
     );
+
+    // Y finalmente cerrar el modal
     close();
-    if (space) router.push(`/workspace/${space.id}`);
   };
 
-  if (!user) return null;
+  if (!user) return <ScreenGuard />;
 
   return (
     <View style={styles.screen}>
@@ -104,11 +113,14 @@ export default function SpacesScreen() {
       <Animated.View
         entering={FadeInDown.duration(Motion.enter)}
         exiting={ROW_OUT}
-        style={[styles.sheet, { backgroundColor: t.surface }, shadow]}>
+        style={[styles.sheet, { backgroundColor: t.surface }, shadow]}
+      >
         {/* El asa: dice "esto se arrastra" sin escribirlo. */}
         <View style={[styles.grabber, { backgroundColor: t.line }]} />
 
-        <Text style={[Type.section, styles.title, { color: t.text }]}>¿En qué estás?</Text>
+        <Text style={[Type.section, styles.title, { color: t.text }]}>
+          ¿En qué estás?
+        </Text>
 
         {/*
           El aire de abajo va en el CONTENIDO del scroll y no en la hoja: puesto en la hoja, con la
@@ -118,7 +130,8 @@ export default function SpacesScreen() {
         <ScrollView
           contentContainerStyle={{ paddingBottom: pad.bottom }}
           showsVerticalScrollIndicator={false}
-          style={styles.list}>
+          style={styles.list}
+        >
           <SpaceRow
             icon={ALL_ICON}
             name="Todo"
@@ -134,7 +147,11 @@ export default function SpacesScreen() {
               key={space.id}
               icon={space.icon as Icon3DName}
               name={space.name}
-              hint={space.total === 0 ? 'Sin tareas todavía' : `${space.done} de ${space.total}`}
+              hint={
+                space.total === 0
+                  ? "Sin tareas todavía"
+                  : `${space.done} de ${space.total}`
+              }
               accent={space.accent}
               on={active?.id === space.id}
               index={i + 1}
@@ -153,7 +170,7 @@ export default function SpacesScreen() {
             index={(workspaces?.length ?? 0) + 1}
             onPress={() => {
               close();
-              router.push('/new-workspace');
+              router.push("/new-workspace");
             }}
           />
           <Action
@@ -163,7 +180,7 @@ export default function SpacesScreen() {
             index={(workspaces?.length ?? 0) + 2}
             onPress={() => {
               close();
-              router.push('/join-workspace');
+              router.push("/join-workspace");
             }}
           />
         </ScrollView>
@@ -209,7 +226,8 @@ function SpaceRow({
         onPressOut={press.onPressOut}
         // El elegido se tiñe: es la misma doble señal de la tira de la semana, relleno para "aqui
         // estas" y nada para el resto.
-        style={[styles.row, on && { backgroundColor: tint.soft }]}>
+        style={[styles.row, on && { backgroundColor: tint.soft }]}
+      >
         <Icon3D name={icon} size={Icon3DSize.lg} />
         <View style={styles.rowText}>
           <Text style={[Type.label, { color: t.text }]} numberOfLines={1}>
@@ -221,7 +239,13 @@ function SpaceRow({
         </View>
         {/* El anillo solo donde significa algo: "Todo" no tiene un progreso que enseñar. */}
         {total !== undefined && total > 0 && (
-          <ProgressRing done={done ?? 0} total={total} accent={accent} size={32} stroke={3} />
+          <ProgressRing
+            done={done ?? 0}
+            total={total}
+            accent={accent}
+            size={32}
+            stroke={3}
+          />
         )}
       </Pressable>
     </Animated.View>
@@ -253,9 +277,13 @@ function Action({
         onPress={onPress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
-        style={styles.row}>
+        style={styles.row}
+      >
         <Icon3D name={icon} size={Icon3DSize.md} />
-        <Text style={[Type.label, styles.rowText, { color: t.text }]} numberOfLines={1}>
+        <Text
+          style={[Type.label, styles.rowText, { color: t.text }]}
+          numberOfLines={1}
+        >
           {label}
         </Text>
       </Pressable>
@@ -267,8 +295,8 @@ const GRABBER = 36;
 
 const styles = StyleSheet.create({
   // La hoja se pega abajo: sale del pulgar, no del centro de la pantalla.
-  screen: { flex: 1, justifyContent: 'flex-end' },
-  veil: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+  screen: { flex: 1, justifyContent: "flex-end" },
+  veil: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
   // El color sale de `t.scrim`, que ya existe en los tokens y cambia con el esquema: en claro es un
   // verde oscuro translucido y en oscuro un negro mas denso. Ningun hex fuera de theme.ts.
   veilTouch: { flex: 1 },
@@ -279,10 +307,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     // Tope al 80%: con muchos espacios la hoja no puede tapar la pantalla entera, o deja de leerse
     // como algo que esta ENCIMA de donde estabas.
-    maxHeight: '80%',
+    maxHeight: "80%",
   },
-  grabber: { alignSelf: 'center', width: GRABBER, height: 4, borderRadius: Radius.pill },
-  title: { paddingHorizontal: Space.sm, paddingTop: Space.md, paddingBottom: Space.sm },
+  grabber: {
+    alignSelf: "center",
+    width: GRABBER,
+    height: 4,
+    borderRadius: Radius.pill,
+  },
+  title: {
+    paddingHorizontal: Space.sm,
+    paddingTop: Space.md,
+    paddingBottom: Space.sm,
+  },
   /**
    * `flexShrink: 1` NO es redundante, y su ausencia era un bug de verdad.
    *
@@ -296,8 +333,8 @@ const styles = StyleSheet.create({
    */
   list: { flexGrow: 0, flexShrink: 1 },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Space.md,
     minHeight: Touch.button,
     borderRadius: Radius.md,

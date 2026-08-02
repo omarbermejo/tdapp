@@ -1,16 +1,17 @@
-import { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { useEffect } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 
-import { BigButton } from '@/components/ui/big-button';
-import { ScreenHeader } from '@/components/ui/screen-header';
-import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
-import { JoinRequests } from '@/features/workspaces/join-requests';
-import { RESHAPE, Space, Type, useTheme } from '@/constants/theme';
-import { useActivity } from '@/features/activity/activity-context';
-import { EmptyActivity, EventRow } from '@/features/activity/event-row';
-import { useAuth } from '@/features/auth/auth-context';
-import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { BigButton } from "@/components/ui/big-button";
+import { ScreenGuard } from "@/components/ui/screen-guard";
+import { ScreenHeader } from "@/components/ui/screen-header";
+import { StatusVeil, useScrollVeil } from "@/components/ui/status-veil";
+import { RESHAPE, Space, Type, useTheme } from "@/constants/theme";
+import { useActivity } from "@/features/activity/activity-context";
+import { EmptyActivity, EventRow } from "@/features/activity/event-row";
+import { useAuth } from "@/features/auth/auth-context";
+import { JoinRequests } from "@/features/workspaces/join-requests";
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
 /** A cuantos px del final se pide la siguiente pagina. Antes de tocar fondo, para que no se note. */
 const NEAR_END = 320;
@@ -30,7 +31,8 @@ export default function NotificationsScreen() {
   const { user } = useAuth();
   const t = useTheme();
   const veil = useScrollVeil();
-  const { events, loading, error, next, reload, more, markRead } = useActivity();
+  const { events, loading, error, next, reload, more, markRead } =
+    useActivity();
   const pad = useScreenPadding(Space.breath);
 
   /**
@@ -42,7 +44,7 @@ export default function NotificationsScreen() {
   }, [markRead]);
 
   // El guard va DESPUES de todos los hooks: al cerrar sesion el user se vuelve null.
-  if (!user) return null;
+  if (!user) return <ScreenGuard />;
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
@@ -50,16 +52,24 @@ export default function NotificationsScreen() {
         {...veil.scrollProps}
         onScroll={veil.scrollProps.onScroll}
         onMomentumScrollEnd={(e) => {
-          const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-          const left = contentSize.height - contentOffset.y - layoutMeasurement.height;
+          const { contentOffset, contentSize, layoutMeasurement } =
+            e.nativeEvent;
+          const left =
+            contentSize.height - contentOffset.y - layoutMeasurement.height;
           if (left < NEAR_END) more();
         }}
-        contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
-        showsVerticalScrollIndicator={false}>
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: pad.top, paddingBottom: pad.bottom },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <ScreenHeader back title="Novedades" />
 
         {loading && !events.length && (
-          <Text style={[Type.body, { color: t.textMuted }]}>Trayendo lo que pasó…</Text>
+          <Text style={[Type.body, { color: t.textMuted }]}>
+            Trayendo lo que pasó…
+          </Text>
         )}
 
         {/* Un fallo con la lista ya en pantalla no borra la pantalla: se avisa y se sigue leyendo. */}
@@ -94,7 +104,11 @@ export default function NotificationsScreen() {
           ))}
         </Animated.View>
 
-        {!!next && <Text style={[Type.hint, styles.more, { color: t.textMuted }]}>Cargando más…</Text>}
+        {!!next && (
+          <Text style={[Type.hint, styles.more, { color: t.textMuted }]}>
+            Cargando más…
+          </Text>
+        )}
       </Animated.ScrollView>
 
       <StatusVeil scrollY={veil.scrollY} />
@@ -107,5 +121,5 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: Space.xl, gap: Space.lg },
   list: { gap: Space.xs },
   message: { gap: Space.md, paddingVertical: Space.md },
-  more: { textAlign: 'center', paddingVertical: Space.md },
+  more: { textAlign: "center", paddingVertical: Space.md },
 });

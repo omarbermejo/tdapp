@@ -1,33 +1,43 @@
-import Settings from 'lucide-react-native/icons/settings';
-import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
+import { router, useLocalSearchParams } from "expo-router";
+import Settings from "lucide-react-native/icons/settings";
+import { StyleSheet, Text, View } from "react-native";
+import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
 
-import { BackButton } from '@/components/ui/back-button';
-import { HeaderAction } from '@/components/ui/screen-header';
-import { BigButton } from '@/components/ui/big-button';
-import { Card, Micro, SectionHeader } from '@/components/ui/card';
-import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
-import { ProgressRing } from '@/components/ui/progress-ring';
-import { Motion, RESHAPE, Space, Type, useAccent, useTheme } from '@/constants/theme';
-import { FOCUS_AREAS } from '@/features/auth/options';
-import { WORKSPACE_HEAT } from '@/features/stats/grid';
-import { HeatMap } from '@/features/stats/heat-map';
-import { useStats } from '@/features/stats/use-stats';
-import { useLocalToday } from '@/features/tasks/day';
-import { TaskRow } from '@/features/tasks/task-row';
-import { useWorkspaceTasks } from '@/features/tasks/use-tasks';
-import { useWorkspace } from '@/features/workspaces/use-workspace';
-import { useScreenPadding } from '@/hooks/use-screen-padding';
-import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
-import { goBackOrHome } from '@/features/nav/go-back';
+import { BackButton } from "@/components/ui/back-button";
+import { BigButton } from "@/components/ui/big-button";
+import { Card, Micro, SectionHeader } from "@/components/ui/card";
+import { Icon3D, Icon3DSize, type Icon3DName } from "@/components/ui/icon3d";
+import { ProgressRing } from "@/components/ui/progress-ring";
+import { HeaderAction } from "@/components/ui/screen-header";
+import { StatusVeil, useScrollVeil } from "@/components/ui/status-veil";
+import {
+    Motion,
+    RESHAPE,
+    Space,
+    Type,
+    useAccent,
+    useTheme,
+} from "@/constants/theme";
+import { NotificationBell } from "@/features/activity/notification-bell";
+import { FOCUS_AREAS } from "@/features/auth/options";
+import { goBackOrHome } from "@/features/nav/go-back";
+import { WORKSPACE_HEAT } from "@/features/stats/grid";
+import { HeatMap } from "@/features/stats/heat-map";
+import { useStats } from "@/features/stats/use-stats";
+import { useLocalToday } from "@/features/tasks/day";
+import { TaskRow } from "@/features/tasks/task-row";
+import { useWorkspaceTasks } from "@/features/tasks/use-tasks";
+import { useWorkspace } from "@/features/workspaces/use-workspace";
+import { useScreenPadding } from "@/hooks/use-screen-padding";
 
 const ROW_EXIT = FadeOut.duration(Motion.exit);
 const rowEntering = (index: number) =>
   FadeInDown.delay(Math.min(index, 6) * Motion.step).duration(Motion.enter);
 
 const focusLabel = (value: string | null) =>
-  value ? (FOCUS_AREAS.find((o) => o.value === value)?.label ?? value) : 'Sin foco';
+  value
+    ? (FOCUS_AREAS.find((o) => o.value === value)?.label ?? value)
+    : "Sin foco";
 
 /** 'N h M min' desde minutos. Un total en minutos crudos deja de decir nada pasadas dos horas. */
 const hours = (minutes: number) => {
@@ -71,41 +81,50 @@ export default function WorkspaceScreen() {
   const tint = useAccent(accent);
 
   const tasks = list.tasks ?? [];
-  const pending = tasks.filter((task) => task.status === 'pending');
-  const done = tasks.filter((task) => task.status === 'done');
+  const pending = tasks.filter((task) => task.status === "pending");
+  const done = tasks.filter((task) => task.status === "done");
 
   /** El reparto por foco, de mas a menos. Es lo mas cercano a "por quien" mientras no haya gente. */
-  const byFocus = [...new Map(
-    tasks.reduce<[string, number][]>((acc, task) => {
-      const key = task.focusArea ?? '';
-      const found = acc.find(([k]) => k === key);
-      if (found) found[1] += 1;
-      else acc.push([key, 1]);
-      return acc;
-    }, [])
-  )].sort((a, b) => b[1] - a[1]);
+  const byFocus = [
+    ...new Map(
+      tasks.reduce<[string, number][]>((acc, task) => {
+        const key = task.focusArea ?? "";
+        const found = acc.find(([k]) => k === key);
+        if (found) found[1] += 1;
+        else acc.push([key, 1]);
+        return acc;
+      }, []),
+    ),
+  ].sort((a, b) => b[1] - a[1]);
 
   return (
     <View style={[styles.screen, { backgroundColor: t.canvas }]}>
       <Animated.ScrollView
         {...veil.scrollProps}
-        contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
-        showsVerticalScrollIndicator={false}>
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: pad.top, paddingBottom: pad.bottom },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Flecha y no cruz: esto es un push, se vuelve atras. */}
         {/*
-          La cabecera: volver y configurar. El engrane solo si lo administras — `SpaceActions`
-          devolvia null para un miembro, pero un boton que abre una pantalla vacia es peor que no
-          estar. Aqui la condicion se ve, y ahi es donde tiene que verse.
+          La cabecera: volver, campana y configurar. El engrane solo si lo administras.
         */}
         <View style={styles.topBar}>
           <BackButton />
-          {space.workspace?.isOwner && (
-            <HeaderAction
-              label="Configurar el espacio"
-              icon={Settings}
-              onPress={() => router.push(`/workspace/${workspaceId}/settings`)}
-            />
-          )}
+          <View style={styles.actions}>
+            <NotificationBell accent={accent ?? "forest"} />
+            {space.workspace?.isOwner && (
+              <HeaderAction
+                label="Configurar el espacio"
+                icon={Settings}
+                onPress={() =>
+                  router.push(`/workspace/${workspaceId}/settings`)
+                }
+              />
+            )}
+          </View>
         </View>
 
         {space.missing ? (
@@ -114,21 +133,30 @@ export default function WorkspaceScreen() {
             se borro es una promesa que no se puede cumplir.
           */
           <View style={styles.gone}>
-            <Text style={[Type.title, { color: t.text }]}>Este espacio ya no existe</Text>
+            <Text style={[Type.title, { color: t.text }]}>
+              Este espacio ya no existe
+            </Text>
             <Text style={[Type.body, { color: t.textMuted }]}>
               Se borró, y sus tareas siguen donde estaban. No se perdió nada.
             </Text>
-            <BigButton label="Volver" variant="outline" onPress={goBackOrHome} />
+            <BigButton
+              label="Volver"
+              variant="outline"
+              onPress={goBackOrHome}
+            />
           </View>
         ) : (
           <>
             <View style={styles.head}>
               <Icon3D
-                name={(space.workspace?.icon ?? 'work') as Icon3DName}
+                name={(space.workspace?.icon ?? "work") as Icon3DName}
                 size={Icon3DSize.hero}
               />
-              <Text style={[Type.display, styles.name, { color: t.text }]} numberOfLines={2}>
-                {space.workspace?.name ?? ''}
+              <Text
+                style={[Type.display, styles.name, { color: t.text }]}
+                numberOfLines={2}
+              >
+                {space.workspace?.name ?? ""}
               </Text>
             </View>
 
@@ -148,10 +176,14 @@ export default function WorkspaceScreen() {
                 />
                 <View style={styles.numbers}>
                   <Text style={[Type.metric, { color: t.text }]}>
-                    {space.workspace?.done ?? 0} de {space.workspace?.total ?? 0}
+                    {space.workspace?.done ?? 0} de{" "}
+                    {space.workspace?.total ?? 0}
                   </Text>
                   <Text style={[Type.body, { color: t.textMuted }]}>
-                    {line(space.workspace?.total ?? 0, space.workspace?.done ?? 0)}
+                    {line(
+                      space.workspace?.total ?? 0,
+                      space.workspace?.done ?? 0,
+                    )}
                   </Text>
                 </View>
               </View>
@@ -167,7 +199,12 @@ export default function WorkspaceScreen() {
                 }
               />
               {/* El MISMO mapa del inicio, acotado a este espacio por su hook. */}
-              <HeatMap stats={stats} today={today} accent={accent} spec={WORKSPACE_HEAT} />
+              <HeatMap
+                stats={stats}
+                today={today}
+                accent={accent}
+                spec={WORKSPACE_HEAT}
+              />
             </View>
 
             {byFocus.length > 0 && (
@@ -176,7 +213,14 @@ export default function WorkspaceScreen() {
                 <Card>
                   {byFocus.map(([focus, count]) => (
                     <View key={focus} style={styles.split}>
-                      <Text style={[Type.label, styles.splitLabel, { color: t.text }]} numberOfLines={1}>
+                      <Text
+                        style={[
+                          Type.label,
+                          styles.splitLabel,
+                          { color: t.text },
+                        ]}
+                        numberOfLines={1}
+                      >
                         {focusLabel(focus || null)}
                       </Text>
                       {/*
@@ -187,15 +231,28 @@ export default function WorkspaceScreen() {
                         sin color. Con el riel en el tinte claro del acento, la barra y su fondo son la
                         misma familia y el color del espacio se ve de verdad.
                       */}
-                      <View style={[styles.track, { backgroundColor: tint.soft }]}>
+                      <View
+                        style={[styles.track, { backgroundColor: tint.soft }]}
+                      >
                         <View
                           style={[
                             styles.bar,
-                            { backgroundColor: tint.solid, width: `${(count / byFocus[0][1]) * 100}%` },
+                            {
+                              backgroundColor: tint.solid,
+                              width: `${(count / byFocus[0][1]) * 100}%`,
+                            },
                           ]}
                         />
                       </View>
-                      <Text style={[Type.label, styles.splitCount, { color: t.textMuted }]}>{count}</Text>
+                      <Text
+                        style={[
+                          Type.label,
+                          styles.splitCount,
+                          { color: t.textMuted },
+                        ]}
+                      >
+                        {count}
+                      </Text>
                     </View>
                   ))}
                 </Card>
@@ -209,19 +266,28 @@ export default function WorkspaceScreen() {
               />
 
               {list.loading && !list.tasks && (
-                <Text style={[Type.body, { color: t.textMuted }]}>Trayendo las tareas…</Text>
+                <Text style={[Type.body, { color: t.textMuted }]}>
+                  Trayendo las tareas…
+                </Text>
               )}
 
               {!!list.error && !list.tasks && (
                 <>
-                  <Text style={[Type.body, { color: t.textMuted }]}>{list.error}</Text>
-                  <BigButton label="Reintentar" variant="ghost" onPress={list.reload} />
+                  <Text style={[Type.body, { color: t.textMuted }]}>
+                    {list.error}
+                  </Text>
+                  <BigButton
+                    label="Reintentar"
+                    variant="ghost"
+                    onPress={list.reload}
+                  />
                 </>
               )}
 
               {!!list.tasks && tasks.length === 0 && (
                 <Text style={[Type.body, { color: t.textMuted }]}>
-                  Todavía no hay nada aquí. Lo que anotes en este espacio sale en esta lista.
+                  Todavía no hay nada aquí. Lo que anotes en este espacio sale
+                  en esta lista.
                 </Text>
               )}
 
@@ -232,8 +298,15 @@ export default function WorkspaceScreen() {
                   key={task.id}
                   layout={RESHAPE}
                   entering={rowEntering(i)}
-                  exiting={ROW_EXIT}>
-                  <TaskRow task={task} accent={accent} mutate={list} showDay showTime={false} />
+                  exiting={ROW_EXIT}
+                >
+                  <TaskRow
+                    task={task}
+                    accent={accent}
+                    mutate={list}
+                    showDay
+                    showTime={false}
+                  />
                 </Animated.View>
               ))}
             </View>
@@ -248,29 +321,40 @@ export default function WorkspaceScreen() {
 
 /** La linea que acompaña al numero, y que NUNCA repite el numero. El tono de `day-card`. */
 const line = (total: number, done: number) => {
-  if (total === 0) return 'Sin tareas todavía. Anota una y este espacio arranca.';
+  if (total === 0)
+    return "Sin tareas todavía. Anota una y este espacio arranca.";
   const left = total - done;
-  if (left === 0) return 'Espacio cerrado. Ya no debes nada aquí.';
-  if (done === 0) return 'Nada cerrado todavía. Empieza por la más chica.';
-  return left === 1 ? 'Falta una.' : `Faltan ${left}.`;
+  if (left === 0) return "Espacio cerrado. Ya no debes nada aquí.";
+  if (done === 0) return "Nada cerrado todavía. Empieza por la más chica.";
+  return left === 1 ? "Falta una." : `Faltan ${left}.`;
 };
 
 const styles = StyleSheet.create({
   /** Volver a la izquierda y el engrane a la derecha, como en el perfil. */
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  /** Campana y engrane juntos a la derecha. */
+  actions: { flexDirection: "row", alignItems: "center", gap: Space.md },
   screen: { flex: 1 },
   content: { paddingHorizontal: Space.xl, gap: Space.xl },
   // El icono y el nombre son UNA cosa: respiran por dentro, no con el gap de la pantalla.
   head: { gap: Space.sm },
   name: { marginTop: Space.xs },
   block: { gap: Space.md },
-  progress: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
+  progress: { flexDirection: "row", alignItems: "center", gap: Space.lg },
   numbers: { flex: 1, gap: Space.xs },
-  split: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  split: { flexDirection: "row", alignItems: "center", gap: Space.md },
   // Ancho fijo para que las barras arranquen todas en la misma vertical y se puedan comparar.
   splitLabel: { width: 92 },
-  track: { flex: 1, height: 10, borderRadius: 999, overflow: 'hidden' },
-  bar: { height: '100%', borderRadius: 999 },
-  splitCount: { minWidth: 24, textAlign: 'right', fontVariant: ['tabular-nums'] },
+  track: { flex: 1, height: 10, borderRadius: 999, overflow: "hidden" },
+  bar: { height: "100%", borderRadius: 999 },
+  splitCount: {
+    minWidth: 24,
+    textAlign: "right",
+    fontVariant: ["tabular-nums"],
+  },
   gone: { gap: Space.md, paddingTop: Space.breath },
 });
