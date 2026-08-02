@@ -1,5 +1,6 @@
 import { AccessoryWidgetBackground, HStack, Image, Text, VStack, ZStack } from '@expo/ui/swift-ui';
 import {
+  containerBackground,
   font,
   foregroundColor,
   lineLimit,
@@ -33,6 +34,9 @@ export type FocusWidgetProps = {
   /** Los dos pasos del acento; cual se usa lo decide el esquema en que se dibuja. */
   tint: string;
   tintDark: string;
+  /** El papel de la baldosa, un paso por esquema. Sale de `WIDGET_PAPER` en la app. */
+  bg: string;
+  bgDark: string;
 };
 
 /**
@@ -72,9 +76,28 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
    * todo color, asi que asumirlo es correcto.
    */
   const full = (environment.widgetRenderingMode ?? 'fullColor') === 'fullColor';
-  const ink = full ? (environment.colorScheme === 'dark' ? props.tintDark : props.tint) : undefined;
+  const dark = environment.colorScheme === 'dark';
+  const ink = full ? (dark ? props.tintDark : props.tint) : undefined;
   const paint = ink ? [foregroundColor(ink)] : [];
 
+  /**
+   * El fondo del contenedor, y **sin esto el widget NO SE DIBUJA**: desde iOS 17 iOS sustituye por
+   * una tarjeta blanca que dice «Please adopt containerBackground API» a todo widget que no declare
+   * su papel. El porque largo esta en `today-widget`, que tiene el mismo bug y la misma causa.
+   *
+   * En las tres familias `accessory*` va 'clear': ahi el fondo lo pone el sistema — y en el circular
+   * es literalmente el `AccessoryWidgetBackground` que ya lleva dentro.
+   *
+   * El `||` con colores CON NOMBRE es el suelo para `placeholder(in:)`, que entra sin props: una
+   * baldosa sin fondo es justo la que iOS tacha. Los hex del tema viven en `theme.ts` y llegan por
+   * props; aqui solo hace falta que nunca sea vacio.
+   */
+  const paper = containerBackground(
+    circular || rectangular || inline
+      ? 'clear'
+      : (dark ? props.bgDark : props.bg) || (dark ? 'black' : 'white'),
+    'widget'
+  );
 
   /**
    * Pantalla siempre encendida (iPhone 14 Pro y posteriores): el sistema baja el brillo y pide que las
@@ -136,17 +159,17 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
   if (!props.live) {
     if (circular) {
       return (
-        <ZStack modifiers={[open]}>
+        <ZStack modifiers={[open, paper]}>
           <AccessoryWidgetBackground />
           <Image systemName="timer" size={22} color={ink} />
         </ZStack>
       );
     }
     if (inline) {
-      return <Text modifiers={[open]}>Sin bloque</Text>;
+      return <Text modifiers={[open, paper]}>Sin bloque</Text>;
     }
     return (
-      <VStack spacing={rectangular ? 2 : 6} modifiers={[open]}>
+      <VStack spacing={rectangular ? 2 : 6} modifiers={[open, paper]}>
         {glyph(rectangular ? 13 : 20)}
         <Text
           modifiers={[
@@ -163,7 +186,7 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
   // --- el aro de la pantalla de bloqueo ---
   if (circular) {
     return (
-      <ZStack modifiers={[open]}>
+      <ZStack modifiers={[open, paper]}>
         {/* El fondo traslucido del sistema: sin el, el reloj flota sobre el fondo de pantalla. */}
         <AccessoryWidgetBackground />
         {/*
@@ -196,7 +219,7 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
      * baldosa: sin el, el bloque se encoge a su ancho ideal y el sistema lo centra dentro del widget.
      */
     return (
-      <VStack alignment="leading" spacing={1} modifiers={[open]}>
+      <VStack alignment="leading" spacing={1} modifiers={[open, paper]}>
         <HStack spacing={4}>
           {glyph(12)}
           <Text modifiers={[font({ size: 12, weight: 'semibold' }), lineLimit(1)]}>
@@ -214,7 +237,7 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
   if (inline) {
     // Una sola linea junto a la hora del bloqueo: no cabe nada mas que el reloj.
     return (
-      <HStack spacing={4} modifiers={[open]}>
+      <HStack spacing={4} modifiers={[open, paper]}>
         {glyph(12)}
         {countdown(13)}
       </HStack>
@@ -223,7 +246,7 @@ const FocusWidget = (props: FocusWidgetProps, environment: WidgetEnvironment) =>
 
   // --- pantalla de inicio (systemSmall) ---
   return (
-    <VStack spacing={6} modifiers={[open]}>
+    <VStack spacing={6} modifiers={[open, paper]}>
       <HStack spacing={5}>
         {glyph(12)}
         <Text

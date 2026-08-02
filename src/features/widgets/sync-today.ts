@@ -1,4 +1,4 @@
-import { accentInks } from '@/constants/theme';
+import { accentInks, WIDGET_PAPER } from '@/constants/theme';
 import type { CaptureWidgetProps } from '@/widgets/capture-widget';
 import type { StreakWidgetProps } from '@/widgets/streak-widget';
 import { short, timeOf } from '@/widgets/shared';
@@ -15,6 +15,15 @@ export const localDate = () => {
 
 /** Cuantas pendientes se listan en el widget grande. Tres: mas seria la lista que el widget evita. */
 const SOON = 3;
+
+/**
+ * El papel, tal como lo esperan los props de un widget. Lo comparten los tres de este archivo.
+ *
+ * No es opcional: un widget que no declara su fondo con `containerBackground` no se dibuja desde
+ * iOS 17 (ver `WIDGET_PAPER` en theme.ts). Va aqui y no en el layout porque los hex del tema no
+ * cruzan al proceso de la extension — viajan como dato, igual que el acento.
+ */
+const paper = { bg: WIDGET_PAPER.light, bgDark: WIDGET_PAPER.dark };
 
 /**
  * La proxima medianoche LOCAL, que es cuando el dia de hoy deja de ser hoy.
@@ -44,12 +53,13 @@ export const toWidgetProps = (today: Today): TodayWidgetProps => {
     soonTimes: soon.slice(0, SOON).map((task) => timeOf(task.dueAt)),
     tint: inks.light,
     tintDark: inks.dark,
+    ...paper,
   };
 };
 
 export const toCaptureProps = (today: Today): CaptureWidgetProps => {
   const inks = accentInks(today.user.accentColor);
-  return { pending: today.counts.pending, tint: inks.light, tintDark: inks.dark };
+  return { pending: today.counts.pending, tint: inks.light, tintDark: inks.dark, ...paper };
 };
 
 /**
@@ -69,6 +79,7 @@ export const toStreakProps = (streak: Streak, accent: string | null): StreakWidg
     todayIndex: streak.week.findIndex((day) => day.date === streak.date),
     tint: inks.light,
     tintDark: inks.dark,
+    ...paper,
   };
 };
 

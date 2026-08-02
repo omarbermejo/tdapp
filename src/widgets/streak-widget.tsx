@@ -1,5 +1,13 @@
 import { Circle, HStack, Text, VStack } from '@expo/ui/swift-ui';
-import { font, foregroundColor, frame, lineLimit, opacity, widgetURL } from '@expo/ui/swift-ui/modifiers';
+import {
+  containerBackground,
+  font,
+  foregroundColor,
+  frame,
+  lineLimit,
+  opacity,
+  widgetURL,
+} from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
 export type StreakWidgetProps = {
@@ -18,6 +26,9 @@ export type StreakWidgetProps = {
   todayIndex: number;
   tint: string;
   tintDark: string;
+  /** El papel de la baldosa, un paso por esquema. Sale de `WIDGET_PAPER` en la app. */
+  bg: string;
+  bgDark: string;
 };
 
 /**
@@ -54,6 +65,13 @@ const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) 
       todayIndex: -1,
       tint: '',
       tintDark: '',
+      /**
+       * El suelo del papel son colores CON NOMBRE y no los tokens: `placeholder(in:)` entra sin
+       * props, y una baldosa sin fondo es justo la que iOS tacha (ver `paper` mas abajo). Los hex
+       * del tema viven en `theme.ts` y llegan por props; aqui solo hace falta que nunca sea vacio.
+       */
+      bg: 'white',
+      bgDark: 'black',
     },
     props
   );
@@ -72,9 +90,21 @@ const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) 
    * llega y solo existe pantalla de inicio a todo color.
    */
   const full = (environment.widgetRenderingMode ?? 'fullColor') === 'fullColor';
-  const ink = full ? (environment.colorScheme === 'dark' ? p.tintDark : p.tint) : undefined;
+  const dark = environment.colorScheme === 'dark';
+  const ink = full ? (dark ? p.tintDark : p.tint) : undefined;
   const paint = ink ? [foregroundColor(ink)] : [];
 
+  /**
+   * El fondo del contenedor, y **sin esto el widget NO SE DIBUJA**: desde iOS 17 iOS sustituye por
+   * una tarjeta blanca que dice «Please adopt containerBackground API» a todo widget que no declare
+   * su papel. El porque largo esta en `today-widget`, que tiene el mismo bug y la misma causa.
+   *
+   * En las `accessory*` va 'clear': ahi el fondo lo pone el sistema.
+   */
+  const paper = containerBackground(
+    rectangular || inline ? 'clear' : dark ? p.bgDark : p.bg,
+    'widget'
+  );
 
   /** Pantalla siempre encendida: el sistema baja el brillo y pide apagar las formas macizas. */
   const dim = environment.isLuminanceReduced ? 0.55 : 1;
@@ -83,7 +113,7 @@ const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) 
   const open = widgetURL('tdapp:///');
 
   if (inline) {
-    return <Text modifiers={[open]}>{`Racha: ${label}`}</Text>;
+    return <Text modifiers={[open, paper]}>{`Racha: ${label}`}</Text>;
   }
 
   /**
@@ -122,7 +152,7 @@ const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) 
      * baldosa: sin el, el bloque se encoge a su ancho ideal y el sistema lo centra dentro del widget.
      */
     return (
-      <VStack alignment="leading" spacing={2} modifiers={[open]}>
+      <VStack alignment="leading" spacing={2} modifiers={[open, paper]}>
         <Text modifiers={[font({ size: 12, weight: 'semibold' }), lineLimit(1)]}>
           {`RACHA · ${label}`}
         </Text>
@@ -135,7 +165,7 @@ const StreakWidget = (props: StreakWidgetProps, environment: WidgetEnvironment) 
   const small = family === 'systemSmall';
 
   return (
-    <VStack spacing={small ? 6 : 8} modifiers={[open]}>
+    <VStack spacing={small ? 6 : 8} modifiers={[open, paper]}>
       <Text
         modifiers={[
           font({ size: 11, weight: 'semibold' }),

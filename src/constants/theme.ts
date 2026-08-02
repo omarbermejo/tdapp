@@ -447,6 +447,29 @@ export function accentInks(name?: string | null): { light: string; dark: string 
 }
 
 /**
+ * El papel de una baldosa de la pantalla de INICIO, en sus dos esquemas.
+ *
+ * No es cosmética y no es opcional: desde iOS 17 un widget que no declara su fondo con
+ * `containerBackground` NO SE DIBUJA — iOS pinta en su lugar una tarjeta blanca que dice
+ * «Please adopt containerBackground API». Los cuatro widgets salían así en un teléfono real.
+ *
+ * Es `surface` y no `canvas` porque una baldosa es una TARJETA: se apoya sobre el fondo de pantalla,
+ * igual que las de la app se apoyan sobre el papel. En claro los dos son el mismo blanco, pero en
+ * oscuro `canvas` es negro puro y la baldosa desaparecería contra un fondo de pantalla oscuro.
+ *
+ * Viaja como PROP y no se importa desde el layout: el layout se evalúa en el proceso de la
+ * extensión, donde este módulo no existe (arrastra `useColorScheme` de react-native). Es la misma
+ * puerta que `accentInks`, y por eso la regla de «ningún hex fuera de theme.ts» sigue en pie.
+ *
+ * En las familias `accessory*` no se usa: ahí el fondo lo pone el sistema y quien pinte el suyo tapa
+ * el fondo de pantalla. Esa decisión la toma el layout, que es el único que sabe en qué familia está.
+ */
+export const WIDGET_PAPER: { light: string; dark: string } = {
+  light: TOKENS.light.surface,
+  dark: TOKENS.dark.surface,
+};
+
+/**
  * Las sombras solo existen en claro: en oscuro una sombra negra sobre fondo oscuro no se ve, y lo
  * que separa es el escalón de luz de `surface`.
  *

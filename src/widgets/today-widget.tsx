@@ -1,5 +1,13 @@
 import { Capsule, HStack, Spacer, Text, VStack } from '@expo/ui/swift-ui';
-import { font, foregroundColor, frame, lineLimit, opacity, widgetURL } from '@expo/ui/swift-ui/modifiers';
+import {
+  containerBackground,
+  font,
+  foregroundColor,
+  frame,
+  lineLimit,
+  opacity,
+  widgetURL,
+} from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
 /**
@@ -26,6 +34,9 @@ export type TodayWidgetProps = {
   /** Los dos pasos del acento; cual se usa lo decide el esquema en que se dibuja el widget. */
   tint: string;
   tintDark: string;
+  /** El papel de la baldosa, un paso por esquema. Sale de `WIDGET_PAPER` en la app. */
+  bg: string;
+  bgDark: string;
 };
 
 /**
@@ -70,6 +81,13 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
       soonTimes: [],
       tint: '',
       tintDark: '',
+      /**
+       * El suelo del papel son colores CON NOMBRE y no los tokens: `placeholder(in:)` entra sin
+       * props, y una baldosa sin fondo es justo la que iOS tacha (ver `paper` mas abajo). Los hex
+       * del tema viven en `theme.ts` y llegan por props; aqui solo hace falta que nunca sea vacio.
+       */
+      bg: 'white',
+      bgDark: 'black',
     },
     props
   );
@@ -90,9 +108,32 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
    * llega y solo existe pantalla de inicio a todo color.
    */
   const full = (environment.widgetRenderingMode ?? 'fullColor') === 'fullColor';
-  const ink = full ? (environment.colorScheme === 'dark' ? p.tintDark : p.tint) : undefined;
+  const dark = environment.colorScheme === 'dark';
+  const ink = full ? (dark ? p.tintDark : p.tint) : undefined;
   const paint = ink ? [foregroundColor(ink)] : [];
 
+  /**
+   * El fondo del contenedor, y **sin esto el widget NO SE DIBUJA**.
+   *
+   * Desde iOS 17 declarar el fondo con `containerBackground` es obligatorio: es lo que le deja al
+   * sistema quitarlo para StandBy y para la pantalla de bloqueo. El widget que no lo hace se
+   * sustituye por una tarjeta blanca que dice «Please adopt containerBackground API» — las cuatro
+   * baldosas salian asi en un telefono real, y no se veia en el simulador porque la galeria pinta
+   * un preview, no la baldosa de verdad.
+   *
+   * Se decide por FAMILIA y no por `widgetRenderingMode`, al reves que el acento: en la pantalla de
+   * inicio TEÑIDA el modo es 'accented' pero sigue siendo una baldosa y sigue necesitando su papel
+   * (iOS lo desatura y le aplica el tinte del usuario, que es lo que hace cualquier widget nativo).
+   * En las `accessory*` va 'clear': ahi el fondo lo pone el sistema y un color propio taparia el
+   * fondo de pantalla.
+   *
+   * Va en el nodo RAIZ de cada rama, no en uno de dentro: el modifier tiñe el contenedor que lo
+   * encierra, y el contenedor es el widget entero.
+   */
+  const paper = containerBackground(
+    rectangular || inline ? 'clear' : dark ? p.bgDark : p.bg,
+    'widget'
+  );
 
   /** Pantalla siempre encendida: el sistema baja el brillo y pide apagar las formas macizas. */
   const dim = environment.isLuminanceReduced ? 0.55 : 1;
@@ -104,7 +145,11 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
   const open = widgetURL('tdapp:///');
 
   if (inline) {
-    return <Text modifiers={[open]}>{total === 0 ? 'Nada hoy' : `${p.done}/${total} · ${headline}`}</Text>;
+    return (
+      <Text modifiers={[open, paper]}>
+        {total === 0 ? 'Nada hoy' : `${p.done}/${total} · ${headline}`}
+      </Text>
+    );
   }
 
   /**
@@ -139,7 +184,7 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
      * baldosa: sin el, el bloque se encoge a su ancho ideal y el sistema lo centra dentro del widget.
      */
     return (
-      <VStack alignment="leading" spacing={2} modifiers={[open]}>
+      <VStack alignment="leading" spacing={2} modifiers={[open, paper]}>
         <Text modifiers={[font({ size: 12, weight: 'semibold' }), lineLimit(1)]}>
           {total === 0 ? 'NADA HOY' : `${p.done}/${total}`}
         </Text>
@@ -151,7 +196,7 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
 
   // --- pantalla de inicio ---
   return (
-    <VStack spacing={6} modifiers={[open]}>
+    <VStack spacing={6} modifiers={[open, paper]}>
       <HStack>
         <Text
           modifiers={[
