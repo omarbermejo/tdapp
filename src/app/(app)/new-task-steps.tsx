@@ -1,7 +1,6 @@
-import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, FadeOutUp, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 
 import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
@@ -12,7 +11,7 @@ import { FormError } from '@/components/ui/form-error';
 import { Icon3D, Icon3DSize } from '@/components/ui/icon3d';
 import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
 import { StepDots } from '@/components/ui/step-dots';
-import { Motion, Radius, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
+import { Motion, RESHAPE, Radius, Space, Touch, Type, useAccent, useTheme } from '@/constants/theme';
 import { ApiError } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { FOCUS_AREAS } from '@/features/auth/options';
@@ -25,15 +24,17 @@ import {
   iconForArea,
   type Draft,
 } from '@/features/tasks/task-wizard';
+import { useActiveSpaceId } from '@/features/workspaces/active-space';
 import { useWorkspaces } from '@/features/workspaces/use-workspaces';
 import { usePressScale } from '@/hooks/use-press-scale';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { goBackOrHome } from '@/features/nav/go-back';
 
 /** Lo que el confeti se queda antes de volver al inicio. Ver el mismo numero en `new-task`. */
 const CONFIRM_MS = 1100;
 
 /** Las horas que se ofrecen. Las mismas que el formulario corto, para no tener dos catalogos. */
-const HOURS = ['07', '09', '12', '15', '18', '20', '22'];
+const HOURS = ['07', '09', '12', '15', '18', '20', '22', '23'];
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -42,6 +43,10 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
  *
  * Si ya no queda hora en punto hoy, arranca en mañana con la primera — es lo que evita que anotar a
  * las 22:00 con los defaults cree una tarea para HOY a las 07:00, ya vencida.
+ *
+ * `HOURS` llega hasta las 23 justo por esto: con el tope en 22, anotar a las 22:15 mandaba la tarea
+ * a MAÑANA, donde no sale en el inicio — y eso se leia como que no se habia guardado. Ahora el salto
+ * solo ocurre pasadas las 23:00, que es cuando mañana de verdad es la respuesta correcta.
  */
 const initialWhen = () => {
   const now = new Date();
@@ -83,10 +88,13 @@ export default function NewTaskStepsScreen() {
 
   const [step, setStep] = useState(0);
   const [when] = useState(initialWhen);
+  const spaceId = useActiveSpaceId();
   const [draft, setDraft] = useState<Draft>(() => ({
     icon: null,
     title: '',
-    workspaceId: null,
+    // El espacio activo, no null: con un espacio puesto, `useTasks` filtra por `workspaceId` y una
+    // tarea suelta caeria fuera del filtro y no apareceria nunca. El paso 2 lo deja cambiar.
+    workspaceId: spaceId ?? null,
     focusArea: '',
     date: when.date,
     hour: when.hour,
@@ -113,7 +121,7 @@ export default function NewTaskStepsScreen() {
 
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
 
-  const back = () => (step === 0 ? router.back() : setStep((s) => s - 1));
+  const back = () => (step === 0 ? goBackOrHome() : setStep((s) => s - 1));
   const next = () => setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1));
 
   const create = async () => {
@@ -133,7 +141,7 @@ export default function NewTaskStepsScreen() {
       setDone(true);
       // El confeti se queda un momento y luego vuelve solo: hacerte tocar "listo" despues de
       // celebrar convierte la celebracion en un tramite.
-      setTimeout(() => router.back(), CONFIRM_MS);
+      setTimeout(goBackOrHome, CONFIRM_MS);
     } catch (e) {
       setError(e instanceof ApiError ? (Object.values(e.fields)[0] ?? e.message) : 'No pudimos crearla');
     } finally {
@@ -164,7 +172,7 @@ export default function NewTaskStepsScreen() {
           `layout` para que el bloque de abajo suba y baje sin saltar cuando cambia de alto entre
           pasos. Lineal y no muelle: un rebote empuja el boton de continuar bajo el pulgar.
         */}
-        <Animated.View layout={LinearTransition.duration(Motion.enter)} style={styles.stage}>
+        <Animated.View layout={RESHAPE} style={styles.stage}>
           {step === 0 && (
             <Step ask="¿Qué hay que hacer?" hint="Ponle nombre y una cara.">
               <BigField

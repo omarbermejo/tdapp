@@ -14,7 +14,10 @@
       "bundleIdentifier": "com.tdapp.tdapp",
       "usesAppleSignIn": true,
       "icon": "./assets/brand/icon.png",
-      "appleTeamId": "BXQ4VVHV9L"
+      "appleTeamId": "BXQ4VVHV9L",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Para leer el código QR de una invitación a un espacio de trabajo."
+      }
     },
     "android": {
       "package": "com.tdapp.tdapp",
@@ -101,6 +104,17 @@
                 "accessoryInline"
               ],
               "contentMarginsDisabled": false,
+              "android": null
+            },
+            {
+              "name": "HeatWidget",
+              "displayName": "Mapa de calor",
+              "description": "Tu trimestre, semana a semana.",
+              "supportedFamilies": [
+                "systemMedium",
+                "systemLarge"
+              ],
+              "contentMarginsDisabled": true,
               "android": null
             }
           ]

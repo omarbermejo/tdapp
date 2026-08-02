@@ -3,8 +3,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { Micro } from '@/components/ui/card';
+import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
 import { Radius, Space, Type, useShadow, useTheme } from '@/constants/theme';
 import type { TaskCounts } from '@/features/auth/api';
+import { useWorkspaces } from '@/features/workspaces/use-workspaces';
 import { usePressScale } from '@/hooks/use-press-scale';
 
 /**
@@ -71,21 +73,69 @@ function TasksCard({ counts }: { counts: TaskCounts['counts'] | null }) {
 /**
  * Mis espacios.
  *
- * NO es pulsable, y eso es la decision: un boton que no lleva a ningun sitio miente. El borde
- * punteado usa el token `dashed`, que el sistema define literalmente como "el hueco por llenar", asi
- * que dice "esto viene" sin prometer un toque que no existe.
+ * Decia "Pronto" detras de un borde punteado, con el argumento de que "un boton que no lleva a
+ * ningun sitio miente". Ese argumento **ya no aplica**: `/spaces` existe, es la hoja "¿En que
+ * estas?", y trae dentro crear un espacio y unirse con un codigo. Hay destino honesto para los tres
+ * estados, asi que la mitad vuelve a ser papel — el par tiene que MEDIR y PESAR igual, y una mitad
+ * de papel junto a una mitad de hueco ya no tiene razon de ser.
+ *
+ * `useWorkspaces` se monta aqui SIN coste de red: va por el cache y ya esta montado en cuatro sitios
+ * mas, asi que esta es la quinta copia de la misma peticion, no una peticion mas.
+ *
+ * Los ICONOS y no los nombres. La identidad de un espacio es su glifo (ver `workspace-card`), y a
+ * media fila cuatro nombres se elidirian a dos letras cada uno. El nombre viaja en el
+ * `accessibilityLabel`, que es donde de verdad hace falta.
  */
 function SpacesCard() {
   const t = useTheme();
+  const shadow = useShadow();
+  const press = usePressScale({ to: 0.97 });
+  const { workspaces } = useWorkspaces();
+
+  /** null = todavia no llego; [] = no tienes ninguno. Se dicen distinto a proposito. */
+  const shown = workspaces?.slice(0, MAX_ICONS) ?? [];
+  const extra = (workspaces?.length ?? 0) - shown.length;
 
   return (
-    <View style={[styles.half, styles.card, styles.empty, { borderColor: t.dashed }]}>
-      <Micro>Mis espacios</Micro>
-      <Text style={[Type.body, { color: t.textMuted }]}>Pronto</Text>
-      <Text style={[Type.hint, { color: t.textMuted }]}>Para separar el trabajo de lo tuyo.</Text>
-    </View>
+    <Animated.View style={[styles.half, press.style]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={
+          workspaces?.length
+            ? `Mis espacios: ${workspaces.map((w) => w.name).join(', ')}`
+            : 'Mis espacios'
+        }
+        onPress={() => router.push('/spaces')}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        style={[styles.card, { backgroundColor: t.surface }, shadow]}>
+        <Micro>Mis espacios</Micro>
+        {/* Mismo criterio que `TasksCard`: sin dato se deja el hueco, nunca un 0 que luego cambia. */}
+        <Text style={[Type.metric, { color: t.text }]}>
+          {workspaces?.length ? workspaces.length : ' '}
+        </Text>
+
+        {workspaces === null ? (
+          <Text style={[Type.hint, { color: t.textMuted }]}>Contando…</Text>
+        ) : workspaces.length === 0 ? (
+          <Text style={[Type.hint, { color: t.textMuted }]}>
+            Ninguno todavía · Toca para crear el primero
+          </Text>
+        ) : (
+          <View style={styles.icons}>
+            {shown.map((workspace) => (
+              <Icon3D key={workspace.id} name={workspace.icon as Icon3DName} size={Icon3DSize.sm} />
+            ))}
+            {extra > 0 && <Text style={[Type.micro, { color: t.textMuted }]}>+{extra}</Text>}
+          </View>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
+
+/** Cuantos glifos caben en media fila sin apretarse. El resto se cuenta con un `+N`. */
+const MAX_ICONS = 4;
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: Space.md },
@@ -98,6 +148,6 @@ const styles = StyleSheet.create({
     // error de maquetado y no como una diferencia de contenido.
     minHeight: 132,
   },
-  // Sin fondo y sin sombra: no es papel, es el sitio donde va a haber papel.
-  empty: { borderWidth: 2, borderStyle: 'dashed', justifyContent: 'flex-start' },
+  /** La fila de glifos ocupa el mismo renglon que la linea de apoyo de `TasksCard`. */
+  icons: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
 });

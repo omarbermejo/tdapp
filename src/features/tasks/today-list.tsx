@@ -1,10 +1,10 @@
 import { Image } from 'expo-image';
 import { Alert, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOut, ReduceMotion } from 'react-native-reanimated';
 
 import { BigButton } from '@/components/ui/big-button';
 import { SectionHeader } from '@/components/ui/card';
-import { Motion, Space, Type, useTheme } from '@/constants/theme';
+import { Motion, RESHAPE, Space, Type, useTheme } from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 
@@ -21,7 +21,6 @@ import type { useTasks } from './use-tasks';
  * el salto es un corte de un frame. Instancia unica y fuera del render porque cambiar la
  * referencia del prop `layout` en cada render vuelve a registrar la animacion en el nativo.
  */
-const ROW_LAYOUT = LinearTransition.springify().damping(22).stiffness(240);
 
 /** Borrar tampoco corta: la fila se apaga y las de abajo suben con ROW_LAYOUT. */
 const ROW_EXIT = FadeOut.duration(Motion.exit);
@@ -207,7 +206,7 @@ export function TodayList({
       {done.map((task, i) => (
         <Animated.View
           key={task.id}
-          layout={ROW_LAYOUT}
+          layout={RESHAPE}
           entering={rowEntering(pending.length + i)}
           exiting={ROW_EXIT}
           style={styles.doneRow}>

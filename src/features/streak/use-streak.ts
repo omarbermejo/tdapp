@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 
 import { ApiError, api, type Streak } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
+import { useRevalidate } from '@/features/cache/use-revalidate';
 
 /**
  * `for` es el dia al que pertenece lo guardado, y por eso vive DENTRO del estado. Arranca en null y
@@ -51,6 +52,13 @@ export function useStreak(date: string) {
   );
 
   const fresh = state.for === date;
+
+  /**
+   * Y sin salir de la pantalla: una mutacion caduca el dominio y esto vuelve a pedir en el sitio.
+   * Es lo que hace que la llama se mueva al cerrar una tarea en el inicio, donde no hay cambio de foco
+   * que dispare el efecto de arriba.
+   */
+  useRevalidate('streak', reload);
 
   return {
     streak: fresh ? state.streak : null,

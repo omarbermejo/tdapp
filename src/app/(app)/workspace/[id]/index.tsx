@@ -1,13 +1,15 @@
+import Settings from 'lucide-react-native/icons/settings';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 
 import { BackButton } from '@/components/ui/back-button';
+import { HeaderAction } from '@/components/ui/screen-header';
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro, SectionHeader } from '@/components/ui/card';
 import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
 import { ProgressRing } from '@/components/ui/progress-ring';
-import { Motion, Space, Type, useAccent, useTheme } from '@/constants/theme';
+import { Motion, RESHAPE, Space, Type, useAccent, useTheme } from '@/constants/theme';
 import { FOCUS_AREAS } from '@/features/auth/options';
 import { WORKSPACE_HEAT } from '@/features/stats/grid';
 import { HeatMap } from '@/features/stats/heat-map';
@@ -18,8 +20,8 @@ import { useWorkspaceTasks } from '@/features/tasks/use-tasks';
 import { useWorkspace } from '@/features/workspaces/use-workspace';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
+import { goBackOrHome } from '@/features/nav/go-back';
 
-const ROW_LAYOUT = LinearTransition.springify().damping(22).stiffness(240);
 const ROW_EXIT = FadeOut.duration(Motion.exit);
 const rowEntering = (index: number) =>
   FadeInDown.delay(Math.min(index, 6) * Motion.step).duration(Motion.enter);
@@ -90,7 +92,21 @@ export default function WorkspaceScreen() {
         contentContainerStyle={[styles.content, { paddingTop: pad.top, paddingBottom: pad.bottom }]}
         showsVerticalScrollIndicator={false}>
         {/* Flecha y no cruz: esto es un push, se vuelve atras. */}
-        <BackButton />
+        {/*
+          La cabecera: volver y configurar. El engrane solo si lo administras — `SpaceActions`
+          devolvia null para un miembro, pero un boton que abre una pantalla vacia es peor que no
+          estar. Aqui la condicion se ve, y ahi es donde tiene que verse.
+        */}
+        <View style={styles.topBar}>
+          <BackButton />
+          {space.workspace?.isOwner && (
+            <HeaderAction
+              label="Configurar el espacio"
+              icon={Settings}
+              onPress={() => router.push(`/workspace/${workspaceId}/settings`)}
+            />
+          )}
+        </View>
 
         {space.missing ? (
           /*
@@ -102,7 +118,7 @@ export default function WorkspaceScreen() {
             <Text style={[Type.body, { color: t.textMuted }]}>
               Se borró, y sus tareas siguen donde estaban. No se perdió nada.
             </Text>
-            <BigButton label="Volver" variant="outline" onPress={() => router.back()} />
+            <BigButton label="Volver" variant="outline" onPress={goBackOrHome} />
           </View>
         ) : (
           <>
@@ -151,7 +167,7 @@ export default function WorkspaceScreen() {
                 }
               />
               {/* El MISMO mapa del inicio, acotado a este espacio por su hook. */}
-              <HeatMap stats={stats} today={today} accent={accent ?? 'olive'} spec={WORKSPACE_HEAT} />
+              <HeatMap stats={stats} today={today} accent={accent} spec={WORKSPACE_HEAT} />
             </View>
 
             {byFocus.length > 0 && (
@@ -214,7 +230,7 @@ export default function WorkspaceScreen() {
               {[...pending, ...done].map((task, i) => (
                 <Animated.View
                   key={task.id}
-                  layout={ROW_LAYOUT}
+                  layout={RESHAPE}
                   entering={rowEntering(i)}
                   exiting={ROW_EXIT}>
                   <TaskRow task={task} accent={accent} mutate={list} showDay showTime={false} />
@@ -240,6 +256,8 @@ const line = (total: number, done: number) => {
 };
 
 const styles = StyleSheet.create({
+  /** Volver a la izquierda y el engrane a la derecha, como en el perfil. */
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   screen: { flex: 1 },
   content: { paddingHorizontal: Space.xl, gap: Space.xl },
   // El icono y el nombre son UNA cosa: respiran por dentro, no con el gap de la pantalla.

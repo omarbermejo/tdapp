@@ -1,7 +1,7 @@
-import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { Radius, Touch, Type, useShadow, useTheme } from '@/constants/theme';
+import { goBackOrHome } from '@/features/nav/go-back';
 
 /**
  * Circulo de papel con la flecha: el mismo gesto de volver en toda la pila de auth.
@@ -16,7 +16,7 @@ export function BackButton({ onPress, close }: { onPress?: () => void; close?: b
 
   return (
     <Pressable
-      onPress={onPress ?? (() => router.back())}
+      onPress={onPress ?? goBackOrHome}
       hitSlop={12}
       accessibilityRole="button"
       accessibilityLabel={close ? 'Cerrar' : 'Atrás'}

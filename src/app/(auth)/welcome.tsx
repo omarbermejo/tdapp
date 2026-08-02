@@ -19,7 +19,7 @@ const STICKER_RATIO = 139 / 129;
  */
 export default function WelcomeScreen() {
   const t = useTheme();
-  const olive = useAccent('olive');
+  const olive = useAccent();
   const google = useGoogleSignIn();
 
   return (

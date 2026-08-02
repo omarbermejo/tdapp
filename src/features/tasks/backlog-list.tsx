@@ -1,15 +1,14 @@
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeOut, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeOut } from 'react-native-reanimated';
 
 import { SectionHeader } from '@/components/ui/card';
-import { Motion, Space, Type, useTheme } from '@/constants/theme';
+import { Motion, RESHAPE, Space, Type, useTheme } from '@/constants/theme';
 import type { Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 
 import { TaskRow } from './task-row';
 import type { useBacklog } from './use-tasks';
 
-const ROW_LAYOUT = LinearTransition.springify().damping(22).stiffness(240);
 const ROW_EXIT = FadeOut.duration(Motion.exit);
 
 /**
@@ -42,7 +41,7 @@ export function BacklogList({ backlog }: { backlog: ReturnType<typeof useBacklog
       <SectionHeader title="Antes de hoy" hint={hint(overdue.length, undated.length)} />
 
       {ordered.map((task) => (
-        <Animated.View key={task.id} layout={ROW_LAYOUT} exiting={ROW_EXIT}>
+        <Animated.View key={task.id} layout={RESHAPE} exiting={ROW_EXIT}>
           {/*
             Con dia y SIN hora. La meta de la fila cabe en tres segmentos a una linea, y aqui son
             cuatro: el cuarto se cortaba a medias ("31 jul · 25 min · Creatividad · 5:0…"), que es

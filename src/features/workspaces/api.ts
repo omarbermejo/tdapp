@@ -1,3 +1,4 @@
+import { invalidate, type Domain } from '@/features/cache/store';
 import {
   bearer,
   request,
@@ -28,7 +29,20 @@ export type NewWorkspace = {
  *
  * Lo que SI cambia el widget es borrar un espacio, porque sus tareas se quedan sueltas — pero eso no
  * altera el dia de hoy ni las horas, solo a que proyecto pertenecen, y el widget no pinta el proyecto.
+ *
+ * Todo eso sigue en pie. Lo que le FALTABA a este razonamiento es el cache: el widget no cambia, pero
+ * la lista de espacios EN PANTALLA si deja de ser cierta. De ahi `andInvalidate`, que es el hermano
+ * flaco de `andSync` — sin token, sin widget y sin avisos, solo caducar lo que dejo de valer.
+ *
+ * Sin el, crear un espacio no lo enseñaba hasta reiniciar la app: `useWorkspaces` va por cache con
+ * politica `WARM`, o sea cinco minutos, y volver al inicio daba acierto de cache.
  */
+const andInvalidate = async <T>(work: Promise<T>, ...stale: Domain[]): Promise<T> => {
+  const result = await work;
+  invalidate(...stale);
+  return result;
+};
+
 export const workspacesApi = {
   list: (token: string) =>
     request<{ workspaces: Workspace[] }>('/workspaces', { headers: bearer(token) }),
@@ -38,23 +52,36 @@ export const workspacesApi = {
     request<{ workspace: Workspace }>(`/workspaces/${id}`, { headers: bearer(token) }),
 
   create: (token: string, input: NewWorkspace) =>
-    request<{ workspace: Workspace }>('/workspaces', {
-      method: 'POST',
-      headers: bearer(token),
-      body: JSON.stringify(input),
-    }),
+    andInvalidate(
+      request<{ workspace: Workspace }>('/workspaces', {
+        method: 'POST',
+        headers: bearer(token),
+        body: JSON.stringify(input),
+      }),
+      'workspaces'
+    ),
 
   /** PATCH de verdad: lo que no viene se conserva. */
   update: (token: string, id: number, patch: NewWorkspace) =>
-    request<{ workspace: Workspace }>(`/workspaces/${id}`, {
-      method: 'PATCH',
-      headers: bearer(token),
-      body: JSON.stringify(patch),
-    }),
+    andInvalidate(
+      request<{ workspace: Workspace }>(`/workspaces/${id}`, {
+        method: 'PATCH',
+        headers: bearer(token),
+        body: JSON.stringify(patch),
+      }),
+      'workspaces'
+    ),
 
   /** Las tareas del espacio SOBREVIVEN, sueltas: el API las deja con workspaceId en null. */
   remove: (token: string, id: number) =>
-    request<void>(`/workspaces/${id}`, { method: 'DELETE', headers: bearer(token) }),
+    andInvalidate(
+      request<void>(`/workspaces/${id}`, { method: 'DELETE', headers: bearer(token) }),
+      // Sus tareas se quedan SUELTAS: cambian de dueño en la lista del dia, y el mapa acotado al
+      // espacio deja de existir.
+      'workspaces',
+      'tasks',
+      'stats'
+    ),
 
   /** Quien esta dentro. Lo pueden ver los miembros, no solo el dueño. */
   members: (token: string, id: number) =>
@@ -70,8 +97,41 @@ export const workspacesApi = {
  * comparten sus rutas.
  *
  * Ninguna pasa por `andSync` — el docblock de `workspacesApi` ya argumenta por que: un espacio no sale
- * en el widget ni tiene hora que avisar.
+ * en el widget ni tiene hora que avisar. Pero `join` SI caduca el cache: entrar a un espacio cambia
+ * lo que tienes en pantalla. Crear y revocar codigos no, porque ningun hook cacheado pinta
+ * invitaciones.
  */
+/**
+ * Quien ha pedido entrar a algo mio, y la respuesta.
+ *
+ * Aparte de `workspacesApi` y de `invitesApi` porque es de un tercer actor: aqui el sujeto no es el
+ * espacio ni la invitacion, es la PERSONA que espera. Y su lista no se pide por espacio sino de
+ * golpe — la pantalla de novedades pregunta "¿alguien quiere entrar a algo mio?".
+ */
+export const requestsApi = {
+  list: (token: string) =>
+    request<{ requests: JoinRequest[] }>('/workspaces/requests', { headers: bearer(token) }),
+
+  decide: (token: string, workspaceId: number, personId: number, approve: boolean) =>
+    andInvalidate(
+      request<{ approved: boolean }>(`/workspaces/${workspaceId}/requests/${personId}`, {
+        method: 'POST',
+        headers: bearer(token),
+        body: JSON.stringify({ approve }),
+      }),
+      // Aprobar suma un miembro al espacio; rechazar no cambia nada del espacio pero si la lista de
+      // solicitudes, que no esta cacheada. Invalidar de mas aqui cuesta un GET y evita un anillo viejo.
+      'workspaces'
+    ),
+};
+
+/** Una solicitud pendiente, ya resuelta a persona y espacio por el API. */
+export type JoinRequest = {
+  person: Member;
+  workspace: { id: number; name: string };
+  askedAt: string;
+};
+
 export const invitesApi = {
   /**
    * Crea un codigo. Del dueño.
@@ -106,8 +166,21 @@ export const invitesApi = {
 
   /** Entra. El codigo es de un solo uso: despues de esto ya no vale. */
   join: (token: string, code: string) =>
-    request<{ workspace: { id: number; name: string; icon: string; accent: Workspace['accent'] } }>(
-      '/workspaces/join',
-      { method: 'POST', headers: bearer(token), body: JSON.stringify({ code }) }
+    andInvalidate(
+      request<{
+        workspace: { id: number; name: string; icon: string; accent: Workspace['accent'] };
+        /**
+         * `false` cuando el codigo era ABIERTO: no entraste, dejaste una solicitud que el dueño
+         * tiene que aprobar. Un codigo atado a un correo si entra directo y devuelve `true`.
+         */
+        joined: boolean;
+      }>(
+        '/workspaces/join',
+        { method: 'POST', headers: bearer(token), body: JSON.stringify({ code }) }
+      ),
+      // Entrar a un espacio gana uno en la lista y cambia todo lo que estaba acotado a el.
+      'workspaces',
+      'tasks',
+      'stats'
     ),
 };

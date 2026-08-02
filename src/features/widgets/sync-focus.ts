@@ -1,3 +1,4 @@
+import { WIDGET_PAPER } from '@/constants/theme';
 import type { FocusWidgetProps } from '@/widgets/focus-widget';
 
 /**
@@ -31,6 +32,17 @@ export type FocusSnapshot = {
   tintDark: string;
 };
 
+/**
+ * El papel de la baldosa. Se pone AQUI y no en `FocusSnapshot` a proposito: el snapshot es lo que
+ * sabe la pantalla del cronometro del BLOQUE, y lo comparte con la Live Activity — que se dibuja
+ * sobre el material del sistema y no tiene papel que elegir. El fondo es cosa de quien pinta una
+ * baldosa, o sea de este archivo.
+ *
+ * Y no es opcional: un widget que no declara su fondo con `containerBackground` no se dibuja desde
+ * iOS 17 (ver `WIDGET_PAPER` en theme.ts).
+ */
+const paper = { bg: WIDGET_PAPER.light, bgDark: WIDGET_PAPER.dark };
+
 async function push(entries: { date: Date; props: FocusWidgetProps }[]) {
   try {
     const { default: FocusWidget } = await import('@/widgets/focus-widget');
@@ -60,7 +72,7 @@ async function push(entries: { date: Date; props: FocusWidgetProps }[]) {
  * abrio y empujo otra.
  */
 export const showFocusWidget = (block: FocusSnapshot) => {
-  const live: FocusWidgetProps = { live: true, ...block };
+  const live: FocusWidgetProps = { live: true, ...block, ...paper };
   const idle: FocusWidgetProps = { ...live, live: false };
   const now = Date.now();
   const entries = [{ date: new Date(now), props: live }];
@@ -95,6 +107,7 @@ export const clearFocusWidget = (inks: { tint: string; tintDark: string }) =>
         done: 0,
         rounds: 0,
         ...inks,
+        ...paper,
       },
     },
   ]);

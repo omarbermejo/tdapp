@@ -11,7 +11,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Confetti } from '@/components/ui/confetti';
 import { hydratePreference } from '@/constants/scheme-store';
-import { useNavTheme, useScheme, useTheme } from '@/constants/theme';
+import { AccentContext, useNavTheme, useScheme, useTheme } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/features/auth/auth-context';
 import { useReminders } from '@/features/notifications/use-reminders';
 import { Booting } from '@/features/cache/booting';
@@ -145,8 +145,30 @@ function RootNavigator() {
   );
 }
 
+/**
+ * El color de la app, ya con la sesión delante.
+ *
+ * Existe SOLO por el orden. `ThemeProvider` envolvía a `AuthProvider`, así que `useNavTheme` corría
+ * fuera del alcance de la sesión y su `primary` estaba cableado a olive; y `useAccent()` no tenía
+ * de dónde sacar el color de la persona. Bajándolo un nivel, el tema del navegador y el acento por
+ * defecto salen los dos del mismo sitio y en el mismo render.
+ *
+ * `StatusBar` se queda arriba, en `RootLayout`: depende del esquema del aparato, no de quién entró.
+ */
+function Tinted() {
+  const { user } = useAuth();
+  const accent = user?.accentColor ?? null;
+
+  return (
+    <AccentContext value={accent}>
+      <ThemeProvider value={useNavTheme(accent)}>
+        <RootNavigator />
+      </ThemeProvider>
+    </AccentContext>
+  );
+}
+
 export default function RootLayout() {
-  const navTheme = useNavTheme();
   // La barra de estado se invierte con el esquema: iconos oscuros sobre papel, claros sobre tinta.
   const scheme = useScheme();
 
@@ -167,12 +189,10 @@ export default function RootLayout() {
     // En iOS RNGH parcha la root view y los gestos cuelan sin esto; en Android no: sin esta
     // raiz el swipe de las filas no recibe ni un evento.
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={navTheme}>
-        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-        <AuthProvider>
-          <RootNavigator />
-        </AuthProvider>
-      </ThemeProvider>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <AuthProvider>
+        <Tinted />
+      </AuthProvider>
     </GestureHandlerRootView>
   );
 }

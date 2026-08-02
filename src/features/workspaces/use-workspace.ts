@@ -5,6 +5,7 @@ import { ApiError, type Workspace } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 
 import { workspacesApi } from './api';
+import { useRevalidate } from '@/features/cache/use-revalidate';
 
 /**
  * `for` es el espacio al que pertenece lo guardado. Arranca en null por lo mismo que en `use-streak`:
@@ -57,6 +58,13 @@ export function useWorkspace(id: number) {
   );
 
   const fresh = state.for === id;
+
+  /**
+   * Y sin salir de la pantalla: una mutacion caduca el dominio y esto vuelve a pedir en el sitio.
+   * Es lo que hace que el anillo del espacio se mueva al cerrar una tarea en el inicio, donde no hay cambio de foco
+   * que dispare el efecto de arriba.
+   */
+  useRevalidate('workspaces', reload);
 
   return {
     workspace: fresh ? state.workspace : null,

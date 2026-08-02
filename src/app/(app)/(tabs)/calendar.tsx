@@ -34,6 +34,7 @@ import { useActiveSpace } from '@/features/workspaces/active-space';
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 import { TAB_DOCK } from './_layout';
+import { useDock } from '@/features/nav/dock';
 
 /** Dos semanas hacia adelante. Mas que eso ya no es "que viene", es un archivo. */
 const DAYS = 14;
@@ -84,8 +85,15 @@ export default function CalendarScreen() {
    * sobre el canvas limpio seria una banda gris sin razon; aparece cuando algo pasa detras.
    */
   const scrollY = useSharedValue(0);
+  /**
+   * Esta pantalla NO usa `useScrollVeil` —tiene su propio velo, que separa una barra FIJA de la
+   * lista— asi que tampoco heredaba el apartado de la capsula al bajar. Se cablea a mano aqui: es el
+   * unico sitio de la app donde hace falta, y por eso vale la pena decirlo en vez de generalizar.
+   */
+  const dock = useDock();
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
+    dock.onScroll(e.contentOffset.y);
   });
   // La altura real de los controles: define cuanto aire necesita la lista para no nacer tapada.
   const [headHeight, setHeadHeight] = useState(0);

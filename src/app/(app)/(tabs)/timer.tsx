@@ -5,7 +5,6 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeOut,
-  LinearTransition,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -21,6 +20,7 @@ import { Confetti } from '@/components/ui/confetti';
 import { Bud } from '@/components/ui/stem';
 import {
   Motion,
+  RESHAPE,
   Space,
   Type,
   accentInks,
@@ -319,7 +319,11 @@ export default function TimerScreen() {
     beat.set(withSequence(withTiming(1.03, { duration: Motion.exit / 2 }), withSpring(1, BEAT)));
   }, [minute, still, pom.running, beat]);
 
-  const fallback: AccentName = user?.accentColor ?? 'olive';
+  /**
+   * El acento de esta pantalla cuando la tarea no aporta uno. `undefined` y no `'olive'`: asi cae en
+   * el heredado, que ya ES el de la persona — escribir el fallback aqui lo congelaba en oliva.
+   */
+  const fallback = user?.accentColor;
   /**
    * El color dice en qué bloque estás sin que haya que leer la etiqueta.
    *
@@ -329,7 +333,7 @@ export default function TimerScreen() {
    *
    * El hook va aquí arriba con los demás: debajo del guard de `user` sería un hook condicional.
    */
-  const accent: AccentName = pom.phase === 'focus' ? accentForFocus(task ? focusOf(task) : null, fallback) : 'clay';
+  const accent: AccentName | undefined = pom.phase === 'focus' ? accentForFocus(task ? focusOf(task) : null, fallback) : 'clay';
   const tint = useAccent(accent);
 
   /**
@@ -541,7 +545,7 @@ export default function TimerScreen() {
             </View>
           )}
 
-          <Animated.View layout={animate ? LinearTransition : undefined} style={styles.stack}>
+          <Animated.View layout={RESHAPE} style={styles.stack}>
             {editable ? (
               <DialPicker minutes={pom.focusMinutes} onChange={pom.setFocusMinutes}>
                 {face}
@@ -630,7 +634,7 @@ export default function TimerScreen() {
             <Animated.View
               entering={animate ? FadeIn.duration(Motion.enter) : undefined}
               exiting={animate ? FadeOut.duration(Motion.exit) : undefined}
-              layout={animate ? LinearTransition : undefined}>
+              layout={RESHAPE}>
               <Card>
                 {day.tasks === null && day.loading ? (
                   <>

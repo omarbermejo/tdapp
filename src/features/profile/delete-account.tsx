@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Alert, StyleSheet, Text } from 'react-native';
-import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
@@ -72,11 +72,11 @@ export function DeleteAccount({ user }: { user: User }) {
         }}
       />
 
-      {/* Mismo par que los paneles de `profile-fields`: entra desde abajo y se retira por donde vino. */}
+      {/* Solo entrada, igual que los paneles de `profile-fields`: sin el reacomodo de la Card, una
+          salida animada quedaria dibujada fuera de ella. Ver el docstring de `IN` alli. */}
       {open && (
         <Animated.View
           entering={FadeInDown.duration(Motion.enter)}
-          exiting={FadeOutDown.duration(Motion.exit)}
           style={styles.panel}>
           <Text style={[Type.hint, { color: t.textMuted }]}>
             Se van tus tareas, tu racha y lo que sé de ti. No hay forma de recuperarlo.

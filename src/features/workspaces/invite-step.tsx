@@ -5,6 +5,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
 import { Micro } from '@/components/ui/card';
+import { Qr } from '@/components/ui/qr';
 import { FormError } from '@/components/ui/form-error';
 import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
 import {
@@ -26,6 +27,7 @@ import { usePressScale } from '@/hooks/use-press-scale';
 
 import { invitesApi } from './api';
 import { useCollaborators } from './use-collaborators';
+import { inviteLink, shareText } from './invite-link';
 
 /** El codigo se lee de tres en tres: seis caracteres seguidos se dictan mal por telefono. */
 const grouped = (code: string) => `${code.slice(0, 3)} ${code.slice(3)}`;
@@ -89,9 +91,13 @@ export function InviteStep({ workspace, accent }: { workspace: Workspace; accent
     const code = open ?? (await invite('open'));
     if (!code) return;
     setOpen(code);
-    await Share.share({
-      message: `Te invito a "${workspace.name}" en tdapp. Tu código es ${code.code} y vence en 7 días.`,
-    }).catch(() => {});
+    /*
+      El mensaje lleva el ENLACE y el codigo, en ese orden y con el nombre del espacio delante.
+      El nombre primero porque es lo unico que dice de que va esto — un mensaje que empieza con un
+      enlace opaco se lee como spam. Y el codigo al final, en claro, para quien abra el mensaje en un
+      aparato sin la app: sigue pudiendo teclearlo.
+    */
+    await Share.share({ message: shareText(workspace.name, code.code) }).catch(() => {});
   };
 
   const byEmail = async () => {
@@ -160,6 +166,22 @@ export function InviteStep({ workspace, accent }: { workspace: Workspace; accent
             ))}
           </View>
         </Animated.View>
+      )}
+
+      {/*
+        El QR, solo cuando ya hay codigo. Antes de generarlo no hay nada que codificar, y un cuadro
+        gris de relleno prometeria un escaneo que no existe.
+
+        Codifica el MISMO enlace que se comparte, no el codigo pelado: asi la camara del sistema lo
+        reconoce como enlace y abre la app sola, sin que la otra persona tenga que buscar "unirme".
+      */}
+      {open && (
+        <View style={styles.qr}>
+          <Qr value={inviteLink(open.code)} size={QR_SIZE} />
+          <Text style={[Type.hint, styles.qrHint, { color: t.textMuted }]}>
+            O que lo escaneen desde su teléfono.
+          </Text>
+        </View>
       )}
 
       <FormError message={error} />
@@ -296,7 +318,15 @@ function PersonRow({
   );
 }
 
+/**
+ * 200pt de lado. Es el minimo con el que la camara de otro telefono engancha a un palmo de
+ * distancia: por debajo, los modulos de un QR de version 3 caen a menos de 6pt y el enfoque falla.
+ */
+const QR_SIZE = 200;
+
 const styles = StyleSheet.create({
+  qr: { alignItems: 'center', gap: Space.sm },
+  qrHint: { textAlign: 'center' },
   wrap: { gap: Space.xl },
   code: {
     borderRadius: Radius.lg,

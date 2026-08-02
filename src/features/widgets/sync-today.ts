@@ -1,4 +1,7 @@
-import { accentInks } from '@/constants/theme';
+import { accentInks, WIDGET_PAPER } from '@/constants/theme';
+import { QUARTER_HEAT, shiftDay } from '@/features/stats/grid';
+
+import { toHeatProps } from './sync-heat';
 import type { CaptureWidgetProps } from '@/widgets/capture-widget';
 import type { StreakWidgetProps } from '@/widgets/streak-widget';
 import { short, timeOf } from '@/widgets/shared';
@@ -16,6 +19,27 @@ export const localDate = () => {
 /** Cuantas pendientes se listan en el widget grande. Tres: mas seria la lista que el widget evita. */
 const SOON = 3;
 
+/**
+ * El papel, tal como lo esperan los props de un widget. Lo comparten los tres de este archivo.
+ *
+ * No es opcional: un widget que no declara su fondo con `containerBackground` no se dibuja desde
+ * iOS 17 (ver `WIDGET_PAPER` en theme.ts). Va aqui y no en el layout porque los hex del tema no
+ * cruzan al proceso de la extension — viajan como dato, igual que el acento.
+ */
+const paper = { bg: WIDGET_PAPER.light, bgDark: WIDGET_PAPER.dark };
+
+/**
+ * La proxima medianoche LOCAL, que es cuando el dia de hoy deja de ser hoy.
+ *
+ * `setHours(24, ...)` y no sumar 86_400_000: con cambio de horario un dia no dura 24 horas, y en el
+ * de octubre el widget se quedaria una hora enseñando el dia de ayer.
+ */
+const nextMidnight = () => {
+  const at = new Date();
+  at.setHours(24, 0, 0, 0);
+  return at;
+};
+
 /** Aplana la respuesta a props primitivas: es lo unico que cruza al proceso del widget. */
 export const toWidgetProps = (today: Today): TodayWidgetProps => {
   const inks = accentInks(today.user.accentColor);
@@ -32,12 +56,13 @@ export const toWidgetProps = (today: Today): TodayWidgetProps => {
     soonTimes: soon.slice(0, SOON).map((task) => timeOf(task.dueAt)),
     tint: inks.light,
     tintDark: inks.dark,
+    ...paper,
   };
 };
 
 export const toCaptureProps = (today: Today): CaptureWidgetProps => {
   const inks = accentInks(today.user.accentColor);
-  return { pending: today.counts.pending, tint: inks.light, tintDark: inks.dark };
+  return { pending: today.counts.pending, tint: inks.light, tintDark: inks.dark, ...paper };
 };
 
 /**
@@ -57,6 +82,7 @@ export const toStreakProps = (streak: Streak, accent: string | null): StreakWidg
     todayIndex: streak.week.findIndex((day) => day.date === streak.date),
     tint: inks.light,
     tintDark: inks.dark,
+    ...paper,
   };
 };
 
@@ -86,7 +112,7 @@ export const toStreakProps = (streak: Streak, accent: string | null): StreakWidg
 export async function syncTodayWidget(token: string) {
   const date = localDate();
 
-  const [today, streak] = await Promise.all([
+  const [today, streak, stats] = await Promise.all([
     api.today(token, date).catch((error) => {
       if (__DEV__) console.warn('[widget] no se pudo traer el dia', error);
       return null;
@@ -95,6 +121,12 @@ export async function syncTodayWidget(token: string) {
       if (__DEV__) console.warn('[widget] no se pudo traer la racha', error);
       return null;
     }),
+    api
+      .stats(token, { date, from: shiftDay(date, -(QUARTER_HEAT.days - 1)) })
+      .catch((error) => {
+        if (__DEV__) console.warn('[widget] sin estadisticas', error);
+        return null;
+      }),
   ]);
 
   try {
@@ -103,15 +135,77 @@ export async function syncTodayWidget(token: string) {
         import('@/widgets/today-widget'),
         import('@/widgets/capture-widget'),
       ]);
-      TodayWidget.updateSnapshot(toWidgetProps(today));
-      CaptureWidget.updateSnapshot(toCaptureProps(today));
+      /*
+        Tres entradas y no una, y esa es la diferencia entre un widget vivo y uno congelado.
+
+        `updateSnapshot` es literalmente `updateTimeline([{ ahora, props }])`, y WidgetKit la sirve
+        con `policy: .atEnd`: con una sola entrada ya en el PASADO, vuelve a pedir la timeline,
+        recibe la misma entrada vieja y repinta igual. Nada envejece solo — ni el cambio de dia a
+        medianoche. `sync-focus` ya resolvio esto y lo argumento por escrito; Today y Capture no
+        heredaron el patron.
+
+        A medianoche se ponen en CERO: el dia cambio, y enseñar el de ayer es peor que enseñar vacio.
+        La entrada de +12h es el ancla — una timeline entera en el pasado quema el presupuesto de
+        refrescos de WidgetKit, o sea que congela el widget MAS, no menos.
+      */
+      const midnight = nextMidnight();
+      const anchor = new Date(midnight.getTime() + 12 * 3_600_000);
+      /** El dia siguiente, todavia sin pedir: cero tareas y ningun titular, con el mismo acento. */
+      const empty: TodayWidgetProps = {
+        ...toWidgetProps(today),
+        nextTitle: '',
+        nextTime: '',
+        pending: 0,
+        done: 0,
+        running: '',
+        soonTitles: [],
+        soonTimes: [],
+      };
+
+      TodayWidget.updateTimeline([
+        { date: new Date(), props: toWidgetProps(today) },
+        { date: midnight, props: empty },
+        { date: anchor, props: empty },
+      ]);
+      CaptureWidget.updateTimeline([
+        { date: new Date(), props: toCaptureProps(today) },
+        { date: midnight, props: { ...toCaptureProps(today), pending: 0 } },
+        { date: anchor, props: { ...toCaptureProps(today), pending: 0 } },
+      ]);
     }
 
     if (streak) {
       const { default: StreakWidget } = await import('@/widgets/streak-widget');
       // Sin `today` el acento cae en el default de `accentInks`, que es el mismo olive de la app.
-      StreakWidget.updateSnapshot(toStreakProps(streak, today?.user.accentColor ?? null));
+      const props = toStreakProps(streak, today?.user.accentColor ?? null);
+      /*
+        La racha NO se pone en cero a medianoche, a diferencia de las otras dos: el API es explicito
+        en que hoy sin cerrar nada no la rompe. Solo necesita el ancla futura para que WidgetKit no
+        se quede reintentando contra una timeline entera en el pasado.
+      */
+      StreakWidget.updateTimeline([
+        { date: new Date(), props },
+        { date: new Date(nextMidnight().getTime() + 12 * 3_600_000), props },
+      ]);
     }
+    /**
+     * El mapa se empuja SIEMPRE, tambien con `stats` en null — al reves que las otras dos ramas.
+     *
+     * `heatGrid(null, …)` devuelve la rejilla entera en ceros, asi que con el API caido la baldosa
+     * pinta un trimestre apagado, que es la forma correcta de decir "todavia no se". Saltarselo
+     * dejaria el layout SIN REGISTRAR, y un layout que nunca se importa es una baldosa en blanco
+     * para siempre — ver `register.ts`.
+     */
+    const { default: HeatWidget } = await import('@/widgets/heat-widget');
+    HeatWidget.updateTimeline([
+      { date: new Date(), props: toHeatProps(stats, date, today?.user.accentColor ?? null) },
+      // El ancla, por lo mismo que las otras: una timeline entera en el pasado quema el presupuesto
+      // de refrescos de WidgetKit y congela el widget mas, no menos.
+      {
+        date: new Date(nextMidnight().getTime() + 12 * 3_600_000),
+        props: toHeatProps(stats, date, today?.user.accentColor ?? null),
+      },
+    ]);
   } catch (error) {
     if (__DEV__) console.warn('[widget] no se pudo pintar', error);
   }

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
+import { registerWidgetLayouts } from './register';
 import { syncTodayWidget } from './sync-today';
 
 /**
@@ -12,6 +13,17 @@ import { syncTodayWidget } from './sync-today';
  * mismo, y iOS ademas decide cuando dejarnos correr.
  */
 export function useWidgetSync(token: string | null, enabled: boolean) {
+  /**
+   * Registrar los layouts va APARTE y SIN condiciones, y esa es toda la gracia.
+   *
+   * El sync de abajo necesita token y sesion lista; el registro no necesita nada, y sin el la
+   * extension no tiene ni siquiera QUE pintar. Un usuario sin red, o recien instalado, o que nunca
+   * abrio el cronometro, se encontraba baldosas vacias — ver `registerWidgetLayouts`.
+   */
+  useEffect(() => {
+    void registerWidgetLayouts();
+  }, []);
+
   useEffect(() => {
     if (!token || !enabled) return;
 

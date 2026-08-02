@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
@@ -13,7 +13,14 @@ import { Motion, Radius, Space, Type, useAccent, useTheme } from '@/constants/th
 import { ApiError, type InvitePreview } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { invitesApi } from '@/features/workspaces/api';
+import { codeFromLink } from '@/features/workspaces/invite-link';
+import { CAN_SCAN } from '@/features/workspaces/can-scan';
+
 import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { goBackOrHome } from '@/features/nav/go-back';
+
+/** Se carga al tocar "Escanear", no al montar la pantalla. Ver el comentario de abajo. */
+const QrScanner = lazy(() => import('@/features/workspaces/qr-scanner'));
 
 /** Lo que la palomita se queda antes de irse. El mismo numero que `new-task` y `new-workspace`. */
 const CONFIRM_MS = 700;
@@ -44,10 +51,23 @@ export default function JoinWorkspaceScreen() {
   // Arriba `Space.lg` pelado: la hoja ya nace por debajo de la barra de estado. Ver `new-task`.
   const pad = useScreenPadding(Space.xxl);
 
-  const [code, setCode] = useState('');
+  /**
+   * El codigo puede llegar de tres sitios: tecleado, escaneado, o en el ENLACE que abrio la app.
+   *
+   * `?code=` es lo que hace que tocar la invitacion en WhatsApp caiga directo en la vista previa del
+   * espacio en vez de en un campo vacio, que es justo la friccion que el enlace viene a quitar.
+   */
+  const link = useLocalSearchParams<{ code?: string }>();
+  const [code, setCode] = useState(() => codeFromLink(link.code ?? '') ?? '');
+  /** Ya se comprobo el codigo del enlace. Sin esto el efecto lo reintentaria en cada render. */
+  const asked = useRef(false);
+  /** El escaner esta abierto. */
+  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  /** Se pidio entrar y falta que aprueben. Cambia lo que dice la confirmacion. */
+  const [pending, setPending] = useState(false);
 
   /**
    * La salida vive en un efecto y no dentro de `join`: asi el timer se cancela con la pantalla y un
@@ -55,11 +75,11 @@ export default function JoinWorkspaceScreen() {
    */
   useEffect(() => {
     if (!done) return;
-    const timer = setTimeout(() => router.back(), CONFIRM_MS);
+    const timer = setTimeout(goBackOrHome, CONFIRM_MS);
     return () => clearTimeout(timer);
   }, [done]);
 
-  const check = async (typed: string) => {
+  const check = useCallback(async (typed: string) => {
     if (!token) return;
     setBusy(true);
     setError('');
@@ -70,17 +90,30 @@ export default function JoinWorkspaceScreen() {
     } finally {
       setBusy(false);
     }
-  };
+  }, [token]);
+
+  /** El del enlace se comprueba solo, una vez. Tocar la invitacion ya es la intencion. */
+  useEffect(() => {
+    if (asked.current || !code || code.length < 6 || !token) return;
+    asked.current = true;
+    void check(code);
+  }, [code, token, check]);
 
   const join = async () => {
     if (!token || !found) return;
     setBusy(true);
     setError('');
     try {
-      const { workspace } = await invitesApi.join(token, code);
-      // Entrar a un espacio es ENTRAR: se activa solo. Volver al inicio y tener que elegirlo a mano
-      // seria pedir dos veces lo mismo.
-      await setActiveSpace({ ...workspace, tag: null });
+      const { workspace, joined } = await invitesApi.join(token, code);
+      /**
+       * Con un codigo ABIERTO no se entra: queda una solicitud que el dueño aprueba. Activar el
+       * espacio ahi seria mentir — la app lo pintaria como tuyo y el API no te dejaria ver nada.
+       *
+       * Con uno NOMINAL si se entra, y entonces se activa solo: volver al inicio y tener que
+       * elegirlo a mano seria pedir dos veces lo mismo.
+       */
+      if (joined) await setActiveSpace({ ...workspace, tag: null });
+      setPending(!joined);
       setDone(true);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'No pudimos entrar');
@@ -126,6 +159,16 @@ export default function JoinWorkspaceScreen() {
                 onPress={join}
                 accent={found.workspace.accent}
               />
+              {/*
+                Con un codigo abierto no entras: pides entrar. Decirlo AQUI y no en un toast es lo
+                que evita que alguien cierre la pantalla creyendo que ya esta dentro y luego no
+                encuentre el espacio en su lista.
+              */}
+              {pending && (
+                <Text style={[Type.hint, styles.pending, { color: t.textMuted }]}>
+                  Le avisé a quien lo administra. Entras en cuanto diga que sí.
+                </Text>
+              )}
               <BigButton
                 label="No es este"
                 variant="ghost"
@@ -169,10 +212,43 @@ export default function JoinWorkspaceScreen() {
                 accent={accent}
                 disabled={code.length < 6}
               />
+
+              {/*
+                Escanear es la via CORTA y por eso va debajo del campo y en ghost, no encima: quien
+                llega aqui con el codigo ya tecleado no tiene que esquivar un boton de camara.
+
+                Y solo si el binario trae la camara: un boton que abre una pantalla que revienta es
+                peor que no tenerlo. Ver `CAN_SCAN`.
+              */}
+              {CAN_SCAN && (
+                <BigButton
+                  label="Escanear un código"
+                  variant="ghost"
+                  accent={accent}
+                  onPress={() => setScanning(true)}
+                />
+              )}
             </>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/*
+        `lazy` y no un import normal: asi `expo-camera` no se evalua hasta que alguien toca escanear.
+        Con el import arriba, montar esta pantalla en un binario sin la camara la tumbaba entera.
+      */}
+      {scanning && (
+        <Suspense fallback={null}>
+        <QrScanner
+          onClose={() => setScanning(false)}
+          onFound={(scanned) => {
+            setScanning(false);
+            setCode(scanned);
+            void check(scanned);
+          }}
+        />
+        </Suspense>
+      )}
     </View>
   );
 }
@@ -188,6 +264,7 @@ const line = (found: InvitePreview) => {
 };
 
 const styles = StyleSheet.create({
+  pending: { textAlign: 'center' },
   screen: { flex: 1 },
   content: { paddingHorizontal: Space.xl, gap: Space.xl },
   head: { gap: Space.xs },

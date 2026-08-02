@@ -181,9 +181,21 @@ function Band({
         const before = previous?.dueAt ? minutesOf(previous.dueAt) : null;
         const inGap = before !== null && at !== null && isToday && minutes > before && minutes <= at;
 
+        /**
+         * Dos tareas a la MISMA hora son un bloque, no dos momentos.
+         *
+         * Sin esto pasaban las dos cosas que hacian ilegible la escala: la hora se repetia en cada
+         * fila —tres "12:00" seguidos dejan de ser una escala y pasan a ser ruido— y entre segmento
+         * y segmento se colaba un `Gap` de cero minutos, que pinta su riel en `t.line` y partia la
+         * franja de color en guiones grises.
+         */
+        const joined = at !== null && at === before;
+        const nextAt = tasks[i + 1]?.dueAt ? minutesOf(tasks[i + 1].dueAt!) : null;
+
         return (
           <View key={task.id}>
-            {before !== null && at !== null && (
+            {/* Solo si de verdad hay tiempo entre las dos: un hueco de cero minutos no es un hueco. */}
+            {before !== null && at !== null && at > before && (
               <Gap
                 span={at - before}
                 now={inGap ? (minutes - before) / (at - before) : null}
@@ -191,7 +203,14 @@ function Band({
                 fallback={fallback}
               />
             )}
-            <Slot task={task} fallback={fallback} mutate={mutate} index={order.get(task.id) ?? i} />
+            <Slot
+              task={task}
+              fallback={fallback}
+              mutate={mutate}
+              index={order.get(task.id) ?? i}
+              joined={joined}
+              continues={nextAt !== null && nextAt === at}
+            />
           </View>
         );
       })}
@@ -205,12 +224,18 @@ function Slot({
   fallback,
   mutate,
   index,
+  joined,
+  continues,
 }: {
   task: Task;
   fallback: AccentName;
   /** Pintar ya, quitar ya, y traer la verdad. Un prop en vez de tres de paso. */
   mutate: TaskMutations;
   index: number;
+  /** Va a la misma hora que la de arriba: no repite el rotulo y el riel llega pegado. */
+  joined: boolean;
+  /** La de abajo va a su misma hora: el riel sigue hacia abajo sin cortarse. */
+  continues: boolean;
 }) {
   const t = useTheme();
   const accent = accentForFocus(focusOf(task), fallback);
@@ -223,8 +248,9 @@ function Slot({
       // exige. 70ms entre filas alcanza para leer el orden sin que se sienta lento.
       entering={FadeInDown.delay(index * Motion.step).duration(Motion.enter)}
       style={styles.row}>
+      {/* El hueco se reserva igual cuando no se pinta: si no, la tarjeta se correria a la izquierda. */}
       <Text style={[Type.label, styles.hour, { color: task.dueAt ? t.text : t.textMuted }]}>
-        {hourLabel(task.dueAt)}
+        {joined ? '' : hourLabel(task.dueAt)}
       </Text>
 
       {/*
@@ -233,7 +259,15 @@ function Slot({
         sirve para leer en que se fue el dia. Se apaga, no se va.
       */}
       <View style={styles.railSlot}>
-        <View style={[styles.segment, { backgroundColor: done ? tint.soft : tint.solid }]} />
+        <View
+          style={[
+            styles.segment,
+            // Sin aire por donde el riel continua: los tramos de una misma hora se leen como uno.
+            joined && styles.segmentAbove,
+            continues && styles.segmentBelow,
+            { backgroundColor: done ? tint.soft : tint.solid },
+          ]}
+        />
       </View>
 
       <View style={styles.body}>
@@ -313,7 +347,22 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   hour: { width: HOUR_W, textAlign: 'right' },
   railSlot: { width: GUTTER * 2, alignItems: 'center', alignSelf: 'stretch' },
-  segment: { width: RAIL, flex: 1, borderRadius: Radius.pill, marginVertical: Space.xs },
+  /**
+   * El aire de la fila vive AQUI, en el margen del riel, y no en un `gap` del contenedor.
+   *
+   * Es lo que deja que dos tareas de la misma hora se peguen —`segmentAbove` y `segmentBelow` lo
+   * quitan por ese lado— mientras dos horas distintas se separan. Un `gap` uniforme del padre las
+   * separaria a todas por igual y el riel volveria a partirse en guiones.
+   *
+   * Sube de `xs` a `sm`: con cuatro puntos las tarjetas casi se tocaban y un dia con diez cosas se
+   * leia como un muro. Ocho por lado son dieciseis entre tarjeta y tarjeta, que es donde una lista
+   * larga deja de verse saturada sin que quepan menos cosas en pantalla de las que caben.
+   */
+  segment: { width: RAIL, flex: 1, borderRadius: Radius.pill, marginVertical: Space.sm },
+  /** Continua el de arriba: sin aire y sin redondear por ese lado. */
+  segmentAbove: { marginTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 },
+  /** Sigue hacia el de abajo: igual por el otro extremo. */
+  segmentBelow: { marginBottom: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
   body: { flex: 1 },
 
   gap: { position: 'relative', justifyContent: 'center' },

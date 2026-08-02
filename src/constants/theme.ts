@@ -1,6 +1,6 @@
 // expo-router lleva react-navigation dentro y reexporta su tipo de tema.
 import type { Theme as NavigationTheme } from 'expo-router';
-import { useSyncExternalStore } from 'react';
+import { createContext, use, useSyncExternalStore } from 'react';
 import { useColorScheme, type TextStyle } from 'react-native';
 
 import { deriveRamp, isHex, normalizeHex } from './color';
@@ -387,9 +387,32 @@ export function useTheme(): Tokens {
   return TOKENS[useScheme()];
 }
 
-/** Tolera acentos viejos o vacíos guardados en la base: nunca deja la UI sin color. */
+/**
+ * El acento POR DEFECTO de todo lo que no pide uno: el que la persona eligió en su perfil.
+ *
+ * Es la mitad que le faltaba a `useAccent`. La función siempre fue pura —(nombre, esquema)— así que
+ * cada componente tenía que recibir el color por prop, y CUARENTA sitios se olvidaron y cayeron en
+ * el `'olive'` de la firma. El color elegido no llegaba ni al botón sólido.
+ *
+ * Es un string y no un objeto a propósito: la identidad del valor de contexto es la del acento, así
+ * que un render del proveedor que no cambie el color no repinta a ningún consumidor.
+ *
+ * Vive aquí y no en `features/auth` porque quien lo LEE es `useAccent`; quien lo escribe (la sesión)
+ * es cosa del layout raíz. React 19 permite usar el contexto como proveedor directo, que es el mismo
+ * patrón que ya usa `AuthContext`.
+ */
+export const AccentContext = createContext<string | null>(null);
+
+/**
+ * Tolera acentos viejos o vacíos guardados en la base: nunca deja la UI sin color.
+ *
+ * Sin argumento devuelve el de la SESIÓN. Con `||` y no `??`: un string vacío guardado en la base
+ * tiene que caer al del contexto igual que `undefined` — `resolve` ya tolera lo desconocido, pero
+ * `''` no puede GANARLE al contexto.
+ */
 export function useAccent(name?: string | null): Accent {
-  return resolve(useScheme(), name);
+  const inherited = use(AccentContext);
+  return resolve(useScheme(), name || inherited);
 }
 
 /**
@@ -422,6 +445,69 @@ export function accentOnDark(name?: string | null): string {
 export function accentInks(name?: string | null): { light: string; dark: string } {
   return { light: resolve('light', name).ink, dark: resolve('dark', name).ink };
 }
+
+/**
+ * Los DOS extremos de la rampa del acento, por esquema. Tampoco es un hook.
+ *
+ * `accentInks` da un solo paso legible y eso basta para texto. El mapa de calor necesita el
+ * DEGRADADO entero — de la celda con una cosa a la celda llena — y esos son `soft` y `solid`.
+ *
+ * Existe para el widget: alli la rampa hay que cocinarla aqui y mandarla ya hecha, porque el layout
+ * corre en un JSContext pelado dentro de la extension y no puede resolver un acento. Es la misma
+ * puerta que `accentInks`, y por eso la regla de "ningun hex fuera de theme.ts" sigue en pie.
+ */
+export function accentRamp(name?: string | null): {
+  soft: string;
+  solid: string;
+  softDark: string;
+  solidDark: string;
+} {
+  const light = resolve('light', name);
+  const dark = resolve('dark', name);
+  return { soft: light.soft, solid: light.solid, softDark: dark.soft, solidDark: dark.solid };
+}
+
+/**
+ * Los dos neutros del mapa de calor en un widget: el dia sin nada y el dia que TODAVIA no llega.
+ *
+ * Son distintos a proposito y por la misma razon que en la app (`heat-map.tsx`): un dia vacio del
+ * pasado dice "aqui no hiciste nada" y uno futuro dice "todavia no", y pintarlos igual convierte la
+ * mitad derecha del mapa en un reproche.
+ */
+export const HEAT_NEUTRAL: {
+  empty: string;
+  emptyDark: string;
+  future: string;
+  futureDark: string;
+} = {
+  empty: TOKENS.light.sunken,
+  emptyDark: TOKENS.dark.sunken,
+  future: TOKENS.light.surface,
+  futureDark: TOKENS.dark.surface,
+};
+
+/**
+ * El papel de una baldosa de la pantalla de INICIO, en sus dos esquemas.
+ *
+ * No es cosmética y no es opcional: desde iOS 17 un widget que no declara su fondo con
+ * `containerBackground` NO SE DIBUJA — iOS pinta en su lugar una tarjeta blanca que dice
+ * «Please adopt containerBackground API». Los cuatro widgets salían así en un teléfono real.
+ *
+ * Es `surface` y no `canvas` porque una baldosa es una TARJETA: se apoya sobre el fondo de pantalla,
+ * igual que las de la app se apoyan sobre el papel. En claro los dos son el mismo blanco, pero en
+ * oscuro `canvas` es negro puro y la baldosa desaparecería contra un fondo de pantalla oscuro.
+ *
+ * Viaja como PROP y no se importa desde el layout: el layout se evalúa en el proceso de la
+ * extensión, donde este módulo no existe (arrastra `useColorScheme` de react-native). Es la misma
+ * puerta que `accentInks`, y por eso la regla de «ningún hex fuera de theme.ts» sigue en pie.
+ *
+ * En las familias `accessory*` no se usa: ahí el fondo lo pone el sistema y quien pinte el suyo tapa
+ * el fondo de pantalla. Esa decisión la toma el layout, que es el único que sabe en qué familia está.
+ */
+export const WIDGET_PAPER: { light: string; dark: string } = {
+  light: TOKENS.light.surface,
+  dark: TOKENS.dark.surface,
+};
 
 /**
  * Las sombras solo existen en claro: en oscuro una sombra negra sobre fondo oscuro no se ve, y lo
@@ -468,14 +554,21 @@ const SHADOWS = {
   },
 } as const;
 
-/** Para que el navegador (fondos de transición, gestos) use el mismo papel que la app. */
-export function useNavTheme(): NavigationTheme {
+/**
+ * Para que el navegador (fondos de transición, gestos) use el mismo papel y el mismo acento.
+ *
+ * El acento entra POR PARÁMETRO y no con `useAccent()`, aunque parezca el camino obvio: quien llama
+ * a este hook es el MISMO componente que provee `AccentContext`, y un componente no puede consumir
+ * su propio proveedor. Antes esto ni se planteaba porque `primary` estaba cableado a olive — y lo
+ * estaba porque `ThemeProvider` envolvía a `AuthProvider`, así que aquí no había sesión que leer.
+ */
+export function useNavTheme(accent?: string | null): NavigationTheme {
   const scheme = useScheme();
   const t = TOKENS[scheme];
   return {
     dark: scheme === 'dark',
     colors: {
-      primary: ACCENTS[scheme].olive.solid,
+      primary: resolve(scheme, accent).solid,
       background: t.canvas,
       card: t.surface,
       text: t.text,
@@ -544,6 +637,23 @@ export const Motion = {
    */
   confirm: { damping: 12, stiffness: 320 },
 } as const;
+
+/**
+ * El reacomodo del layout, APAGADO.
+ *
+ * Era `LinearTransition` en `Card` y en otras nueve piezas: al abrir un panel la caja crecia en
+ * 220ms y todo lo que venia despues bajaba con ella. Sobre el papel es lo elegante; en la mano es
+ * que la pantalla se ARRASTRA debajo del dedo justo cuando acabas de tocar algo, y el contenido que
+ * querias leer llega tarde. La decision es que la caja cambie de tamaño en el mismo frame del toque.
+ *
+ * Va como constante y no borrando el prop en once sitios por dos razones: se vuelve a encender en
+ * una linea, y mientras este apagada nadie puede reintroducir la mitad del patron sin verla aqui.
+ *
+ * Lo que NO se apago, porque no es esto: el rebote del chip al elegir (`choice.tsx`) y el circulo
+ * que viaja en la tira de la semana (`week-strip.tsx`). Ninguno de los dos es una animacion de
+ * layout — son la respuesta al toque, y esa se queda.
+ */
+export const RESHAPE = undefined;
 
 /**
  * Cuatro roles, tres familias.

@@ -198,8 +198,44 @@ export function reset() {
   }
 }
 
-export const keyOf = (...parts: (string | number | null | undefined)[]) =>
-  `${owner}|${parts.map((p) => p ?? '').join('|')}`;
+/**
+ * Los cuatro dominios de datos de la app. Es un tipo CERRADO y no `string` a proposito:
+ * `invalidate('strek')` no fallaria nunca — no encontraria entradas, no despertaria a nadie, y el
+ * bug seria una pantalla que no se actualiza, que es justo el que estamos arreglando.
+ */
+export type Domain = 'tasks' | 'workspaces' | 'streak' | 'stats';
+
+/** El dominio de una llave. `2|workspaces` → 'workspaces'. Ver `keyOf`. */
+export const domainOf = (key: string) => key.split('|')[1] as Domain;
+
+export const keyOf = (domain: Domain, ...parts: (string | number | null | undefined)[]) =>
+  `${owner}|${[domain, ...parts].map((p) => p ?? '').join('|')}`;
+
+/**
+ * Cuantas veces se ha invalidado cada dominio. Monotono y para siempre.
+ *
+ * Es el canal que le faltaba al cache: `invalidate` marcaba las entradas como vencidas, pero eso
+ * solo lo ven los hooks que GUARDAN algo aqui — y de los once hooks de datos de la app, diez usan
+ * `useState` y no escriben ni una entrada. Un contador por dominio si les llega, porque no depende
+ * de que exista la llave.
+ *
+ * `reset()` NO lo limpia: un contador que vuelve a cero al cambiar de cuenta se leeria como "algo
+ * cambio" y dispararia una peticion de mas al entrar.
+ */
+const revisions = new Map<Domain, number>();
+const revisionListeners = new Map<Domain, Set<() => void>>();
+
+export const revisionOf = (domain: Domain): number => revisions.get(domain) ?? 0;
+
+export function subscribeRevision(domain: Domain, listener: () => void): () => void {
+  const set = revisionListeners.get(domain) ?? new Set();
+  set.add(listener);
+  revisionListeners.set(domain, set);
+  return () => {
+    set.delete(listener);
+    if (!set.size) revisionListeners.delete(domain);
+  };
+}
 
 /** Lectura sincrona, pensada para el render. `undefined` = nunca se ha guardado. */
 export function read<T>(key: string): T | undefined {
@@ -250,18 +286,29 @@ export function patch<T>(key: string, updater: (old: T) => T) {
 }
 
 /**
- * Marca como vencido lo que empiece por `prefix`, y refresca SOLO lo que alguien tenga en pantalla.
+ * Declara viejo todo lo de estos dominios. Es LO QUE FALTABA: estaba escrito desde el principio y
+ * no tenia ni una llamada en todo el repo, y de ahi salian los tres sintomas —la tarea nueva que no
+ * aparece, el espacio nuevo que no aparece, y la racha que no se mueve al cerrar algo.
  *
- * Marca en vez de borrar: borrar dejaria en blanco las pantallas montadas. Y el filtro por
- * suscriptores es la mitad del ahorro — hoy `andSync` dispara tres GET sin preguntar si alguien esta
- * mirando. Lo que nadie mira se revalida cuando lo miren.
+ * Hace dos cosas, y las dos hacen falta:
+ *
+ * 1. **Marca las entradas como vencidas** (`at = 0`). Eso alcanza a `useCached`, el unico hook que
+ *    guarda aqui. Marca en vez de borrar: borrar dejaria en blanco las pantallas montadas.
+ * 2. **Sube la revision del dominio.** Eso alcanza a los DIEZ hooks que no guardan nada — la racha,
+ *    las stats, las tres listas de tareas. Sin esto, `invalidate` no los tocaba ni de lejos.
+ *
+ * Lo que ya NO hace: emitir por llave. Era codigo muerto — `read()` devuelve la misma referencia de
+ * `entry.data`, asi que `useSyncExternalStore` no ve cambio y no repinta. Lo que cambio es la EDAD,
+ * no el dato, y eso viaja por el canal de revisiones.
  */
-export function invalidate(prefix: string) {
-  const full = `${owner}|${prefix}`;
-  for (const [key, entry] of entries) {
-    if (!key.startsWith(full)) continue;
-    entry.at = 0;
-    if (listeners.has(key)) emit(key);
+export function invalidate(...domains: Domain[]) {
+  for (const domain of domains) {
+    const prefix = `${owner}|${domain}`;
+    for (const [key, entry] of entries) {
+      if (key.startsWith(prefix)) entry.at = 0;
+    }
+    revisions.set(domain, revisionOf(domain) + 1);
+    revisionListeners.get(domain)?.forEach((listener) => listener());
   }
 }
 
