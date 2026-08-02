@@ -35,7 +35,7 @@ import { useAuth } from '@/features/auth/auth-context';
  */
 export default function ForgotScreen() {
   const t = useTheme();
-  const tint = useAccent('olive').ink;
+  const tint = useAccent().ink;
   const { resetPassword } = useAuth();
   const input = useRef<OtpInputRef>(null);
 

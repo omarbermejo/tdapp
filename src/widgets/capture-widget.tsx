@@ -1,5 +1,5 @@
 import { HStack, Image, Link, Text, VStack } from '@expo/ui/swift-ui';
-import { font, foregroundColor, lineLimit } from '@expo/ui/swift-ui/modifiers';
+import { containerBackground, font, foregroundColor, lineLimit } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
 /**
@@ -13,6 +13,9 @@ export type CaptureWidgetProps = {
   pending: number;
   tint: string;
   tintDark: string;
+  /** El papel de la baldosa, un paso por esquema. Sale de `WIDGET_PAPER` en la app. */
+  bg: string;
+  bgDark: string;
 };
 
 /**
@@ -45,7 +48,26 @@ const CaptureWidget = (props: CaptureWidgetProps, environment: WidgetEnvironment
    * llega y solo existe pantalla de inicio a todo color.
    */
   const full = (environment.widgetRenderingMode ?? 'fullColor') === 'fullColor';
-  const ink = full ? (environment.colorScheme === 'dark' ? props.tintDark : props.tint) : undefined;
+  const dark = environment.colorScheme === 'dark';
+  const ink = full ? (dark ? props.tintDark : props.tint) : undefined;
+
+  /**
+   * El fondo del contenedor, y **sin esto el widget NO SE DIBUJA**: desde iOS 17 iOS sustituye por
+   * una tarjeta blanca que dice «Please adopt containerBackground API» a todo widget que no declare
+   * su papel. El porque largo esta en `today-widget`, que tiene el mismo bug y la misma causa.
+   *
+   * Va en el `Link`, que aqui ES la raiz: el modifier tiñe el contenedor que lo encierra, y el
+   * contenedor es la baldosa entera. En `accessoryInline` va 'clear' — esa presentacion es una linea
+   * de texto junto al reloj del bloqueo, sin baldosa que pintar.
+   *
+   * El `||` con colores CON NOMBRE es el suelo para `placeholder(in:)`, que entra sin props: una
+   * baldosa sin fondo es justo la que iOS tacha. Los hex del tema viven en `theme.ts` y llegan por
+   * props; aqui solo hace falta que nunca sea vacio.
+   */
+  const paper = containerBackground(
+    inline ? 'clear' : (dark ? props.bgDark : props.bg) || (dark ? 'black' : 'white'),
+    'widget'
+  );
 
   /**
    * `Link` envuelve TODO el widget, no solo el texto: en un widget de pantalla de inicio el area de
@@ -55,11 +77,11 @@ const CaptureWidget = (props: CaptureWidgetProps, environment: WidgetEnvironment
    * 'tdapp://new-task' dejaria 'new-task' como host y la ruta vacia.
    */
   if (inline) {
-    return <Link destination="tdapp:///new-task" label="Anotar algo" />;
+    return <Link destination="tdapp:///new-task" label="Anotar algo" modifiers={[paper]} />;
   }
 
   return (
-    <Link destination="tdapp:///new-task">
+    <Link destination="tdapp:///new-task" modifiers={[paper]}>
       <VStack spacing={8}>
         <Image systemName="square.and.pencil" size={26} color={ink} />
 

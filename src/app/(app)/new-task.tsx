@@ -25,6 +25,7 @@ import { ApiError, type Task } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { FOCUS_AREAS } from '@/features/auth/options';
 import { isoAt, localDate, tasksApi } from '@/features/tasks/api';
+import { useActiveSpaceId } from '@/features/workspaces/active-space';
 
 import { useScreenPadding } from '@/hooks/use-screen-padding';
 
@@ -145,6 +146,12 @@ const CONFIRM_MS = 700;
  */
 export default function NewTaskScreen() {
   const { user, token } = useAuth();
+  /**
+   * El espacio donde va la tarea. Este formulario NUNCA mandaba el campo, ni como null: con un
+   * espacio activo, `useTasks` filtra por `workspaceId` y la tarea recien creada caia FUERA del
+   * filtro — o sea que se creaba bien y no aparecia nunca. Se leia como "no se guardo".
+   */
+  const spaceId = useActiveSpaceId();
   const t = useTheme();
   const accent = user?.accentColor;
   const tint = useAccent(accent);
@@ -206,7 +213,13 @@ export default function NewTaskScreen() {
    */
   useEffect(() => {
     if (!done) return;
-    const timer = setTimeout(() => router.replace('/'), CONFIRM_MS);
+    /*
+      `dismissTo` y no `replace`. `replace` sobre una pila que YA tiene `(tabs)` no vuelve a el:
+      mete un SEGUNDO navegador de pestañas en el historial, con el inicio de detras todavia montado
+      y con datos viejos — y el gesto de atras reabria ese. `dismissTo` es la API exacta para "vuelve
+      a esa ruta de la pila", que es lo que `new-task-steps` ya consigue con `router.back()`.
+    */
+    const timer = setTimeout(() => router.dismissTo('/'), CONFIRM_MS);
     return () => clearTimeout(timer);
   }, [done]);
 
@@ -256,6 +269,7 @@ export default function NewTaskScreen() {
         // Vacio va como null: es el "no lo decidi" que deja mandar al tamaño.
         minutes: exactMinutes ? Number(exactMinutes) : null,
         focusArea: focus || null,
+        workspaceId: spaceId,
         // isoAt y no toISOString(): en ISO UTC una tarea de la noche se va al dia siguiente.
         dueAt: isoAt(
           date,

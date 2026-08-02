@@ -5,6 +5,7 @@ import { ApiError } from '@/features/auth/api';
 
 import { track } from './meter';
 import {
+  domainOf,
   isStale,
   read,
   readError,
@@ -14,6 +15,7 @@ import {
   subscribeError,
   type Policy,
 } from './store';
+import { useRevalidate } from './use-revalidate';
 
 /**
  * Leer algo del servidor, con lo guardado por delante.
@@ -82,6 +84,16 @@ export function useCached<T>(
       };
     }, [key, policy, run])
   );
+
+  /**
+   * Y lo que el foco no cubre: una mutacion mientras sigues en la misma pantalla.
+   *
+   * Sin esta linea, crear un espacio y volver al inicio NO lo enseñaria: `invalidate` deja la
+   * entrada con `at = 0`, pero eso solo se nota en el siguiente `useFocusEffect` — y con la politica
+   * `WARM` de 5 minutos el inicio seguia sirviendo la lista de antes. Es literalmente el sintoma que
+   * se reporto.
+   */
+  useRevalidate(key ? domainOf(key) : null, run);
 
   return {
     data,

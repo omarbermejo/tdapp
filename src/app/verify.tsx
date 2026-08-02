@@ -25,7 +25,7 @@ export default function VerifyScreen() {
   const [error, setError] = useState('');
 
   const th = useTheme();
-  const tint = useAccent('olive').ink;
+  const tint = useAccent().ink;
 
   const submit = async (code: string) => {
     setError('');

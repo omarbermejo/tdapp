@@ -1,5 +1,13 @@
 import { Capsule, HStack, Spacer, Text, VStack } from '@expo/ui/swift-ui';
-import { font, foregroundColor, frame, lineLimit, opacity, widgetURL } from '@expo/ui/swift-ui/modifiers';
+import {
+  containerBackground,
+  font,
+  foregroundColor,
+  frame,
+  lineLimit,
+  opacity,
+  widgetURL,
+} from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
 /**
@@ -26,6 +34,9 @@ export type TodayWidgetProps = {
   /** Los dos pasos del acento; cual se usa lo decide el esquema en que se dibuja el widget. */
   tint: string;
   tintDark: string;
+  /** El papel de la baldosa, un paso por esquema. Sale de `WIDGET_PAPER` en la app. */
+  bg: string;
+  bgDark: string;
 };
 
 /**
@@ -46,6 +57,41 @@ export type TodayWidgetProps = {
 const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) => {
   'widget';
 
+  /**
+   * Los props, con suelo. **Sin esto la baldosa sale EN BLANCO**, y fue el bug reportado.
+   *
+   * `TimelineProvider.placeholder(in:)` pasa `props: nil`, y `EntryView` evalua con `{}` — o sea que
+   * la galeria de widgets y todo arranque en frio entran por aqui sin datos. `p.nextTitle.length`
+   * lanzaba un TypeError, `evaluateLayout` devolvia un RedBox... y `DynamicView.swift` solo mapea
+   * `RedBoxView` dentro de `#if DEBUG`. En Release cae en `default: EmptyView()`: baldosa vacia, sin
+   * un solo log que lo delate.
+   *
+   * `Object.assign` y no spread por costumbre: babel baja `{...a, ...b}` a esto igualmente, y aqui lo
+   * que se serializa es el fuente — cuanto menos azucar, menos superficie para que el transpilador
+   * meta un helper de modulo que la extension no tiene.
+   */
+  const p: TodayWidgetProps = Object.assign(
+    {
+      nextTitle: '',
+      nextTime: '',
+      pending: 0,
+      done: 0,
+      running: '',
+      soonTitles: [],
+      soonTimes: [],
+      tint: '',
+      tintDark: '',
+      /**
+       * El suelo del papel son colores CON NOMBRE y no los tokens: `placeholder(in:)` entra sin
+       * props, y una baldosa sin fondo es justo la que iOS tacha (ver `paper` mas abajo). Los hex
+       * del tema viven en `theme.ts` y llegan por props; aqui solo hace falta que nunca sea vacio.
+       */
+      bg: 'white',
+      bgDark: 'black',
+    },
+    props
+  );
+
   const family = environment.widgetFamily;
   const small = family === 'systemSmall';
   const large = family === 'systemLarge';
@@ -62,21 +108,48 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
    * llega y solo existe pantalla de inicio a todo color.
    */
   const full = (environment.widgetRenderingMode ?? 'fullColor') === 'fullColor';
-  const ink = full ? (environment.colorScheme === 'dark' ? props.tintDark : props.tint) : undefined;
+  const dark = environment.colorScheme === 'dark';
+  const ink = full ? (dark ? p.tintDark : p.tint) : undefined;
   const paint = ink ? [foregroundColor(ink)] : [];
 
+  /**
+   * El fondo del contenedor, y **sin esto el widget NO SE DIBUJA**.
+   *
+   * Desde iOS 17 declarar el fondo con `containerBackground` es obligatorio: es lo que le deja al
+   * sistema quitarlo para StandBy y para la pantalla de bloqueo. El widget que no lo hace se
+   * sustituye por una tarjeta blanca que dice «Please adopt containerBackground API» — las cuatro
+   * baldosas salian asi en un telefono real, y no se veia en el simulador porque la galeria pinta
+   * un preview, no la baldosa de verdad.
+   *
+   * Se decide por FAMILIA y no por `widgetRenderingMode`, al reves que el acento: en la pantalla de
+   * inicio TEÑIDA el modo es 'accented' pero sigue siendo una baldosa y sigue necesitando su papel
+   * (iOS lo desatura y le aplica el tinte del usuario, que es lo que hace cualquier widget nativo).
+   * En las `accessory*` va 'clear': ahi el fondo lo pone el sistema y un color propio taparia el
+   * fondo de pantalla.
+   *
+   * Va en el nodo RAIZ de cada rama, no en uno de dentro: el modifier tiñe el contenedor que lo
+   * encierra, y el contenedor es el widget entero.
+   */
+  const paper = containerBackground(
+    rectangular || inline ? 'clear' : dark ? p.bgDark : p.bg,
+    'widget'
+  );
 
   /** Pantalla siempre encendida: el sistema baja el brillo y pide apagar las formas macizas. */
   const dim = environment.isLuminanceReduced ? 0.55 : 1;
 
-  const total = props.done + props.pending;
-  const hasNext = props.nextTitle.length > 0;
+  const total = p.done + p.pending;
+  const hasNext = p.nextTitle.length > 0;
   // Lo que corre gana a lo que sigue: si hay cronometro, ESO es en lo que estas.
-  const headline = props.running || (hasNext ? props.nextTitle : 'Nada pendiente');
+  const headline = p.running || (hasNext ? p.nextTitle : 'Nada pendiente');
   const open = widgetURL('tdapp:///');
 
   if (inline) {
-    return <Text modifiers={[open]}>{total === 0 ? 'Nada hoy' : `${props.done}/${total} · ${headline}`}</Text>;
+    return (
+      <Text modifiers={[open, paper]}>
+        {total === 0 ? 'Nada hoy' : `${p.done}/${total} · ${headline}`}
+      </Text>
+    );
   }
 
   /**
@@ -93,7 +166,7 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
             key={i}
             modifiers={[
               frame({ height }),
-              opacity((i < props.done ? 1 : 0.22) * dim),
+              opacity((i < p.done ? 1 : 0.22) * dim),
               foregroundColor(ink ?? 'secondary'),
             ]}
           />
@@ -111,9 +184,9 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
      * baldosa: sin el, el bloque se encoge a su ancho ideal y el sistema lo centra dentro del widget.
      */
     return (
-      <VStack alignment="leading" spacing={2} modifiers={[open]}>
+      <VStack alignment="leading" spacing={2} modifiers={[open, paper]}>
         <Text modifiers={[font({ size: 12, weight: 'semibold' }), lineLimit(1)]}>
-          {total === 0 ? 'NADA HOY' : `${props.done}/${total}`}
+          {total === 0 ? 'NADA HOY' : `${p.done}/${total}`}
         </Text>
         <Text modifiers={[font({ size: 14, weight: 'semibold' }), lineLimit(1)]}>{headline}</Text>
         {total > 0 && bar(4, 8)}
@@ -123,7 +196,7 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
 
   // --- pantalla de inicio ---
   return (
-    <VStack spacing={6} modifiers={[open]}>
+    <VStack spacing={6} modifiers={[open, paper]}>
       <HStack>
         <Text
           modifiers={[
@@ -131,7 +204,7 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
             foregroundColor('secondary'),
             lineLimit(1),
           ]}>
-          {props.running ? 'AHORA' : 'LO QUE SIGUE'}
+          {p.running ? 'AHORA' : 'LO QUE SIGUE'}
         </Text>
         <Spacer />
         {!small && total > 0 && (
@@ -141,7 +214,7 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
               lineLimit(1),
               ...paint,
             ]}>
-            {`${props.done}/${total}`}
+            {`${p.done}/${total}`}
           </Text>
         )}
       </HStack>
@@ -161,11 +234,11 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
       {total > 0 && bar(small ? 5 : 6, 8)}
 
       <Text modifiers={[font({ size: 13 }), foregroundColor('secondary'), lineLimit(1)]}>
-        {props.running
+        {p.running
           ? 'Cronómetro corriendo'
           : hasNext
-            ? props.nextTime
-            : `${props.done} hechas hoy`}
+            ? p.nextTime
+            : `${p.done} hechas hoy`}
       </Text>
 
       {/*
@@ -173,7 +246,7 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
         enseñar UNA cosa, y una lista de tres compite con el titular. En el grande sobra el espacio y
         entonces si ayuda a saber que viene despues.
       */}
-      {large && props.soonTitles.length > 0 && (
+      {large && p.soonTitles.length > 0 && (
         <VStack spacing={4}>
           <Text
             modifiers={[
@@ -183,7 +256,7 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
             ]}>
             DESPUÉS
           </Text>
-          {props.soonTitles.map((title, i) => (
+          {p.soonTitles.map((title, i) => (
             <HStack key={i} spacing={8}>
               <Text modifiers={[font({ size: 14, weight: 'medium' }), lineLimit(1)]}>{title}</Text>
               <Spacer />
@@ -193,7 +266,7 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
                   foregroundColor('secondary'),
                   lineLimit(1),
                 ]}>
-                {props.soonTimes[i]}
+                {p.soonTimes[i]}
               </Text>
             </HStack>
           ))}

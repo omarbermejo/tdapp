@@ -1,10 +1,10 @@
 import { Alert, StyleSheet, Text, View } from 'react-native';
-import Animated, { LinearTransition } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
 import { BigButton } from '@/components/ui/big-button';
 import { Card, Micro } from '@/components/ui/card';
 import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
-import { Motion, Space, Type, useTheme } from '@/constants/theme';
+import { RESHAPE, Space, Type, useTheme } from '@/constants/theme';
 import type { Workspace } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { useActiveSpace } from '@/features/workspaces/active-space';
@@ -12,7 +12,6 @@ import { workspacesApi } from '@/features/workspaces/api';
 import { useWorkspaces } from '@/features/workspaces/use-workspaces';
 
 /** La fila se va y las que quedan suben sin salto. La misma transicion que usa `Card`. */
-const RESIZE = LinearTransition.duration(Motion.enter);
 
 /** Cuantas tareas se quedan sueltas al borrarlo. Es lo que hay que decir antes de preguntar. */
 const loose = (total: number) =>
@@ -89,7 +88,7 @@ export function OwnedSpaces() {
       </Text>
 
       {mine.map((workspace) => (
-        <Animated.View key={workspace.id} layout={RESIZE} style={styles.row}>
+        <Animated.View key={workspace.id} layout={RESHAPE} style={styles.row}>
           <Icon3D name={workspace.icon as Icon3DName} size={Icon3DSize.sm} />
           <View style={styles.label}>
             <Text style={[Type.body, { color: t.text }]} numberOfLines={1}>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { HEX, isHex, normalizeHex } from '@/constants/color';
 import {
@@ -98,7 +98,6 @@ export function AccentPicker({
       {open && (
         <Animated.View
           entering={FadeInDown.duration(Motion.enter)}
-          exiting={FadeOutDown.duration(Motion.exit)}
           style={[styles.field, { backgroundColor: t.sunken }]}>
           {/* La almohadilla la pone la app: nadie deberia tener que acordarse de escribirla. */}
           <Text style={[Type.title, { color: t.textMuted }]}>#</Text>
@@ -112,6 +111,12 @@ export function AccentPicker({
             autoCapitalize="none"
             autoCorrect={false}
             maxLength={6}
+            /*
+              Enfocarse solo es lo que trae el campo por encima del teclado: el auto-scroll nativo de
+              iOS lo dispara el FOCO, no el montaje. Y ademas es lo que se quiere — tocaste "Otro"
+              porque vas a teclear.
+            */
+            autoFocus
             keyboardType="ascii-capable"
             accessibilityLabel="Color en hexadecimal"
           />

@@ -32,7 +32,23 @@ export const avatarOf = (value?: string | null): Avatar3DName | null =>
  * Vive en `features/profile` y no en `components/ui` porque conoce `User`; `Avatar3D`, que solo sabe
  * de imagenes, si es de `ui`.
  */
-export function ProfileAvatar({ user, size = Avatar3DSize.md }: { user: Face; size?: number }) {
+export function ProfileAvatar({
+  user,
+  size = Avatar3DSize.md,
+  bg,
+}: {
+  user: Face;
+  size?: number;
+  /**
+   * El relleno del respaldo, cuando `accent.soft` no vale.
+   *
+   * Existe por un sitio concreto: la pestaña de Perfil de la barra. Ahi el resaltado de la pestaña
+   * activa YA es `accent.soft`, asi que una inicial sobre ese mismo tinte desaparece justo cuando
+   * esta seleccionada. Es un parche de contraste, no una perilla de estilo — por eso no acepta el
+   * acento entero, solo el color de fondo.
+   */
+  bg?: string;
+}) {
   const t = useTheme();
   const accent = useAccent(user.accentColor);
   const name = avatarOf(user.avatar);
@@ -43,7 +59,7 @@ export function ProfileAvatar({ user, size = Avatar3DSize.md }: { user: Face; si
     <View
       style={[
         styles.initial,
-        { width: size, height: size, backgroundColor: accent.soft },
+        { width: size, height: size, backgroundColor: bg ?? accent.soft },
       ]}>
       {/* El tamaño de la letra sale del circulo: la inicial ocupa siempre la misma proporcion. */}
       <Text style={[Type.section, { color: t.text, fontSize: size * 0.4, lineHeight: size * 0.5 }]}>

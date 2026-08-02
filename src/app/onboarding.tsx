@@ -1,99 +1,102 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AccentPicker } from '@/components/ui/accent-picker';
+import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
 import { BigField } from '@/components/ui/big-field';
-import { Choice, type Option } from '@/components/ui/choice';
+import { Micro } from '@/components/ui/card';
+import { Choice } from '@/components/ui/choice';
 import { DateField } from '@/components/ui/date-field';
 import { FormError } from '@/components/ui/form-error';
+import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
+import { ProgressRing } from '@/components/ui/progress-ring';
 import { StepDots } from '@/components/ui/step-dots';
-import { Motion, Radius, Space, Type, useAccent, useShadow, useTheme } from '@/constants/theme';
+import {
+  AccentContext,
+  Motion,
+  RESHAPE,
+  Radius,
+  Space,
+  Type,
+  useAccent,
+  useTheme,
+  type AccentName,
+} from '@/constants/theme';
 import { ApiError, type ProfileInput, type User } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import {
-  ACCENT_COLOR,
   PEAK_ENERGY,
   REMINDER_HOUR,
   REMINDER_STYLE,
   WORKSPACE_TAGS,
 } from '@/features/auth/options';
 import { askForNotifications } from '@/features/notifications/local';
+import { AvatarPicker } from '@/features/profile/avatar-picker';
+import { useAvatars } from '@/features/profile/use-avatars';
+import { useLocalToday } from '@/features/tasks/day';
 import { focusForTag, iconForTag } from '@/features/tasks/focus-accent';
 import { workspacesApi } from '@/features/workspaces/api';
+import { useScreenPadding } from '@/hooks/use-screen-padding';
 
 /**
- * Onboarding como conversacion: la app pregunta en burbujas, tu respuesta se queda en el hilo,
- * y al final el hilo entero ES tu perfil. Una sola decision a la vista a la vez, que es lo que
- * pide una app hecha para no distraerse.
+ * El alta, en ocho pasos.
  *
- * Nada es saltable, porque todos estos datos se usan: los focos ordenan el dia, la intensidad
- * y la hora agendan el recordatorio, y el color pinta la app. Lo unico opcional es el permiso
- * de avisos del sistema, que ademas no se puede forzar.
+ * **Era un hilo de chat y ya no lo es.** La app preguntaba en burbujas y las respuestas se
+ * acumulaban debajo, como una conversación. Se leía bonito la primera vez y mal a partir de la
+ * segunda: el hilo crecía hacia abajo, cada respuesta empujaba la siguiente pregunta fuera de la
+ * pantalla, y sobre todo **no se podía volver atrás** — una respuesta escrita en el hilo era una
+ * respuesta cerrada. Para un alta que pide ocho cosas eso es una trampa.
+ *
+ * Ahora usa el chasis de `new-workspace`: cabecera con flecha y carril de puntos, un bloque por paso
+ * que entra y sale, y la zona de acción FIJA abajo. Se retrocede, se ve cuánto falta, y el botón
+ * está siempre en el mismo sitio.
+ *
+ * **El orden pone la identidad primero.** Antes empezaba pidiendo crear un espacio de trabajo, que es
+ * la pregunta más pesada de las ocho y la primera que alguien ve de la app. Ahora arranca por la cara
+ * y el color: dos toques, respuesta inmediata en pantalla, y de paso el resto del alta ya se pinta
+ * con el color elegido. El espacio pasa al final y **se puede omitir** — es lo único de aquí que se
+ * crea igual de bien desde dentro de la app.
  */
+
+/** Lo que un paso necesita saber de sí mismo. `key` solo existe para volver al que falló. */
 type Step = {
-  /**
-   * El campo del perfil que responde, o `workspace` para el primer paso — que no guarda un campo del
-   * perfil sino que CREA un espacio. Es el unico con esa llave y por eso no colisiona con `e.fields`.
-   */
-  key: keyof ProfileInput | 'workspace';
+  key: keyof ProfileInput | 'avatar' | 'workspace' | 'alerts';
   ask: string;
   hint?: string;
-  /** `workspace` y `date` piden confirmar con el boton; el resto avanza al tocar. */
-  kind: 'workspace' | 'single' | 'hour' | 'date';
-  options?: readonly Option[];
+  /** Se puede seguir sin contestar. Solo el espacio: los demás datos los usa la app. */
+  skippable?: boolean;
 };
 
 const STEPS: readonly Step[] = [
-  /**
-   * La primera pregunta ERA "¿en qué te quieres enfocar?", hasta tres de siete focos. Ahora es tu
-   * primer espacio de trabajo, y el cambio no es de forma sino de fondo: los focos eran una etiqueta
-   * suelta que solo pintaba iconos, y un espacio es donde de verdad vive el trabajo — se comparte, se
-   * mide, y la app entera se puede acotar a el.
-   *
-   * El foco no se pierde: sale de la clasificacion que elijas (ver `focusForTag`), asi que el dia
-   * sigue teniendo con que ordenarse sin una pregunta mas.
-   */
+  { key: 'avatar', ask: '¿Cuál es tu cara?', hint: 'La vas a ver en tu perfil y en la barra.' },
+  { key: 'accentColor', ask: 'Elige tu color', hint: 'Pinta la app entera, y también tu inicial.' },
+  { key: 'peakEnergy', ask: '¿Cuándo rindes mejor?', hint: 'Con eso ordeno tu día.' },
+  { key: 'reminderStyle', ask: '¿Cómo te recuerdo las cosas?' },
+  { key: 'reminderHour', ask: '¿A qué hora te escribo?' },
+  { key: 'birthDate', ask: '¿Cuándo naciste?' },
   {
     key: 'workspace',
     ask: '¿En qué vas a trabajar?',
-    hint: 'Tu primer espacio: la tesis, la mudanza, el trabajo.',
-    kind: 'workspace',
+    hint: 'Tu primer espacio: la tesis, la mudanza, el trabajo. Puedes dejarlo para después.',
+    skippable: true,
   },
-  { key: 'peakEnergy', ask: '¿Cuándo rindes mejor?', kind: 'single', options: PEAK_ENERGY },
-  { key: 'reminderStyle', ask: '¿Cómo te recuerdo las cosas?', kind: 'single', options: REMINDER_STYLE },
-  { key: 'reminderHour', ask: '¿A qué hora te escribo?', kind: 'hour', options: REMINDER_HOUR },
-  { key: 'birthDate', ask: '¿Cuándo naciste?', kind: 'date' },
-  { key: 'accentColor', ask: 'Y por último: elige tu color.', kind: 'single', options: ACCENT_COLOR },
-];
+  { key: 'alerts', ask: '¿Te aviso?', hint: 'Un empujón a la hora que elegiste. Nada más.' },
+] as const;
 
-/** Un paso mas que las preguntas: pedir el permiso no guarda un dato, asi que va aparte. */
-const TOTAL = STEPS.length + 1;
-
-const labelOf = (options: readonly Option[] | undefined, value: string) =>
-  options?.find((o) => o.value === value)?.label ?? value;
+/**
+ * El bloque del paso entra y sale; el chasis se queda. Es la misma pareja que `new-workspace`.
+ *
+ * Aquí SÍ hay `exiting`, al contrario que los paneles del perfil: esto no vive dentro de una `Card`
+ * que encoja, así que nada queda dibujado fuera de su caja.
+ */
+const STEP_IN = FadeInDown.duration(Motion.enter);
+const STEP_OUT = FadeOutDown.duration(Motion.exit);
 
 /** El borrador del primer espacio. Vive fuera de `form` porque no es un campo del perfil. */
 type Draft = { name: string; tag: string };
-
-/** Lo que queda escrito en el hilo como tu respuesta. */
-const answerOf = (step: Step, form: ProfileInput, draft: Draft) => {
-  if (step.kind === 'workspace') {
-    return draft.tag ? `${draft.name} · ${labelOf(WORKSPACE_TAGS, draft.tag)}` : draft.name;
-  }
-  if (step.kind === 'date') {
-    return form.birthDate
-      ? new Date(`${form.birthDate}T00:00:00`).toLocaleDateString('es-MX', {
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric',
-        })
-      : '';
-  }
-  return labelOf(step.options, String(form[step.key as keyof ProfileInput]));
-};
 
 /** El registro ya devolvio el perfil con los defaults del backend: ese es el estado inicial. */
 const profileOf = (user: User): ProfileInput => ({
@@ -106,298 +109,377 @@ const profileOf = (user: User): ProfileInput => ({
 });
 
 export default function OnboardingScreen() {
-  const { user, token, finishOnboarding } = useAuth();
+  const { user, token, finishOnboarding, signOut } = useAuth();
+  const t = useTheme();
+  const pad = useScreenPadding(0);
+  const insets = useSafeAreaInsets();
+  const today = useLocalToday();
+  const avatars = useAvatars(today);
+
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<ProfileInput>(() => profileOf(user!));
   const [draft, setDraft] = useState<Draft>({ name: '', tag: '' });
+  /** Se omitió el espacio. Distinto de "no lo ha contestado todavía". */
+  const [skipped, setSkipped] = useState(false);
   const [error, setError] = useState('');
   const [fields, setFields] = useState<Record<string, string>>({});
   /** Lo que falta para poder avanzar. Es del paso actual, no del guardado. */
   const [nudge, setNudge] = useState('');
-  const [loading, setLoading] = useState(false);
-  const thread = useRef<ScrollView>(null);
+  const [saving, setSaving] = useState(false);
 
-  const t = useTheme();
-  // El color elegido se aplica en vivo: en el ultimo paso el hilo entero se repinta.
-  const accent = useAccent(form.accentColor);
-  const accentName = form.accentColor;
+  /**
+   * El tinte del color elegido, pedido ARRIBA con el resto de hooks.
+   *
+   * `useAccent` es un hook: dentro de un paso condicional sería una llamada que aparece y desaparece
+   * según el paso, que es exactamente lo que rompe el orden de los hooks. Mismo argumento que en
+   * `new-workspace`.
+   */
+  const picked = useAccent(form.accentColor);
 
-  // Cada burbuja nueva empuja el hilo; sin esto la pregunta actual nace fuera de pantalla.
-  useEffect(() => {
-    const id = setTimeout(() => thread.current?.scrollToEnd({ animated: true }), 60);
-    return () => clearTimeout(id);
-  }, [step]);
+  const current = STEPS[step];
+  const last = step === STEPS.length - 1;
 
-  const current: Step | undefined = STEPS[step];
-  const asking = current !== undefined;
-
-  const answer = (key: keyof ProfileInput, value: ProfileInput[keyof ProfileInput]) =>
+  const answer = (key: keyof ProfileInput, value: ProfileInput[keyof ProfileInput]) => {
+    setNudge('');
     setForm((f) => ({ ...f, [key]: value }));
-
-  /** Elegir ya es responder: avanza solo, con una pausa para que se vea la animacion del chip. */
-  const answerAndAdvance = (key: keyof ProfileInput, value: ProfileInput[keyof ProfileInput]) => {
-    answer(key, value);
-    setTimeout(() => setStep((s) => s + 1), 320);
   };
 
-  const ready = !current
-    ? true
-    : current.kind === 'workspace'
-      ? draft.name.trim().length > 0 && draft.tag !== ''
-      : current.kind === 'date'
-        ? form.birthDate !== null
+  /**
+   * Elegir ya es responder: avanza solo, con una pausa para que se vea el rebote del chip.
+   *
+   * No aplica a los pasos que necesitan confirmar (la cara, el color, la fecha y el espacio): ahí la
+   * elección se puede corregir varias veces antes de estar bien, y avanzar al primer toque
+   * convertiría un tanteo en un salto.
+   */
+  const answerAndAdvance = (key: keyof ProfileInput, value: ProfileInput[keyof ProfileInput]) => {
+    answer(key, value);
+    setTimeout(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 320);
+  };
+
+  /** Si el paso actual da para seguir. La cara y el color siempre tienen valor, así que siempre. */
+  const ready =
+    current.key === 'workspace'
+      ? skipped || (draft.name.trim().length > 0 && draft.tag !== '')
+      : current.key === 'birthDate'
+        // `!!` y no `!== null`: el perfil puede llegar del API SIN el campo, y `undefined !== null`
+        // es cierto — el guard dejaba pasar el paso con la fecha vacia y se guardaba sin ella.
+        ? !!form.birthDate
         : true;
 
   /**
-   * El boton NO se apaga: un primario en disabled deja su etiqueta en un contraste malisimo
-   * y se lee como app roto. Si falta la respuesta, el toque dice que falta.
-   */
-  const advance = () => {
-    if (ready) {
-      setNudge('');
-      return setStep((s) => s + 1);
-    }
-    if (current?.kind !== 'workspace') return setNudge('Revisa la fecha para seguir.');
-    setNudge(draft.name.trim() ? 'Elige de qué va para seguir.' : 'Ponle un nombre para seguir.');
-  };
-
-  /**
-   * Guardar es DOS escrituras y su orden importa: primero el espacio, despues el perfil.
+   * Guardar es DOS escrituras y su orden importa: primero el espacio, después el perfil.
    *
-   * `finishOnboarding` es lo que voltea el guard y desmonta esta pantalla, asi que tiene que ir al
-   * final — al reves, un fallo al crear el espacio dejaria a la persona ya dentro de la app con el
-   * error pintado sobre una pantalla que ya no existe. Y el perfil se guarda con el espacio nuevo YA
-   * activo: se entra a la app dentro de lo que acabas de crear, que es de lo que iba la pregunta.
+   * `finishOnboarding` es lo que voltea el guard y desmonta esta pantalla, así que tiene que ir al
+   * final — al revés, un fallo al crear el espacio dejaría a la persona ya dentro de la app con el
+   * error pintado sobre una pantalla que ya no existe.
+   *
+   * Con el espacio omitido no se crea nada y el perfil se guarda sin `activeWorkspaceId`: se entra a
+   * la app en modo general, que es un estado que la app ya sabe pintar.
    */
   const save = async (withAlerts: boolean) => {
     if (!token) return;
     setError('');
     setFields({});
-    setLoading(true);
+    setSaving(true);
     try {
-      // Se llamaba `withPush` y era mentira: no hay push, y lo que se pide aqui es el permiso del
-      // sistema, que es lo que necesitan los avisos locales.
       if (withAlerts) await askForNotifications();
 
-      const { workspace } = await workspacesApi.create(token, {
-        name: draft.name.trim(),
-        tag: draft.tag,
-        icon: iconForTag(draft.tag),
-        accent: form.accentColor,
-      });
+      const space =
+        skipped || !draft.tag
+          ? null
+          : (
+              await workspacesApi.create(token, {
+                name: draft.name.trim(),
+                tag: draft.tag,
+                icon: iconForTag(draft.tag),
+                accent: form.accentColor,
+              })
+            ).workspace;
 
       await finishOnboarding({
         ...form,
-        // El foco sale de la clasificacion en vez de una pregunta propia: ver el comentario de STEPS.
-        focusAreas: focusForTag(draft.tag),
-        activeWorkspaceId: workspace.id,
+        // El foco sale de la clasificacion en vez de una pregunta propia. Sin espacio no hay foco
+        // que derivar, y la app ordena el dia igual: es lo que ya hace en modo general.
+        focusAreas: space ? focusForTag(draft.tag) : [],
+        ...(space ? { activeWorkspaceId: space.id } : {}),
       });
     } catch (e) {
       if (e instanceof ApiError) {
         setFields(e.fields);
         /**
-         * A que pregunta volver. El alta del espacio rechaza por `name`, `tag`, `icon` o `accent`, y
-         * ninguna de esas es una llave de `Step` — `name` ademas es del espacio, no de la persona. Por
-         * eso las cuatro se resuelven a mano contra el paso 0 antes de buscar en `STEPS`.
+         * A qué pregunta volver. El alta del espacio rechaza por `name`, `tag`, `icon` o `accent`, y
+         * las tres primeras son del ESPACIO y no de la persona, así que se resuelven a mano contra su
+         * paso antes de buscar en `STEPS`.
          */
         const ofSpace = ['name', 'tag', 'icon'].some((k) => e.fields[k]);
-        const failed = ofSpace ? 0 : STEPS.findIndex((s) => e.fields[s.key]);
+        const failed = ofSpace
+          ? STEPS.findIndex((s) => s.key === 'workspace')
+          : STEPS.findIndex((s) => e.fields[s.key]);
         if (failed >= 0) setStep(failed);
-        // Y ahi el mensaje general se calla: el del campo ya dice lo mismo, mas concreto.
         setError(failed >= 0 ? '' : e.message);
       } else {
         setError('Algo salió mal');
       }
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
+  /**
+   * El botón NO se apaga: un primario en disabled deja su etiqueta en un contraste malísimo y se lee
+   * como app rota. Si falta la respuesta, el toque dice qué falta.
+   */
+  const advance = () => {
+    if (last) return void save(true);
+    if (ready) {
+      setNudge('');
+      return setStep(step + 1);
+    }
+    if (current.key === 'birthDate') return setNudge('Revisa la fecha para seguir.');
+    setNudge(draft.name.trim() ? 'Elige de qué va para seguir.' : 'Ponle un nombre para seguir.');
+  };
+
+  // Despues de todos los hooks: al cerrar sesion el user se vuelve null.
   if (!user) return null;
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: t.canvas }]}>
-      <View style={styles.header}>
-        <StepDots total={TOTAL} current={step} accent={accentName} />
-      </View>
+    /**
+     * El color se prueba EN VIVO, antes de guardarse: la sesión todavía no lo tiene, porque
+     * `finishOnboarding` corre al final. Adelantando el borrador local, elegirlo repinta la pantalla
+     * entera — el carril de puntos, el botón, los chips — que es la única confirmación que ese paso
+     * puede dar.
+     */
+    <AccentContext value={form.accentColor}>
+      <View style={[styles.screen, { backgroundColor: t.canvas }]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.screen}>
+          <View style={[styles.header, { paddingTop: pad.top }]}>
+            {/*
+              Retroceder, que es lo que el hilo de chat no dejaba hacer.
+              En el paso 0 no hay a dónde volver DENTRO del alta, así que la salida es cambiar de
+              correo: `signOut` devuelve al login, y el API deja reclamar un correo sin verificar
+              registrándose otra vez.
+            */}
+            <BackButton onPress={() => (step === 0 ? void signOut() : setStep(step - 1))} />
+            <View style={styles.dots}>
+              <StepDots total={STEPS.length} current={step} />
+            </View>
+          </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-        <ScrollView
-          ref={thread}
-          contentContainerStyle={styles.thread}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
-          <Bubble text={`Hola, ${user.name.trim().split(' ')[0]}.`} />
-          <Bubble text="Seis respuestas y la app queda a tu medida." />
-
-          {STEPS.map((s, i) =>
-            i > step ? null : (
-              <View key={s.key} style={styles.pair}>
-                <Bubble text={s.ask} hint={i === step ? s.hint : undefined} />
-                {i < step && <Said text={answerOf(s, form, draft)} tint={accent.soft} color={t.text} />}
+          <ScrollView
+            contentContainerStyle={[styles.content, { paddingBottom: Space.lg }]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
+            <Animated.View layout={RESHAPE} style={styles.block}>
+              <View style={styles.ask}>
+                <Micro>{last ? 'Ya casi' : `Paso ${step + 1} de ${STEPS.length}`}</Micro>
+                <Text style={[Type.title, { color: t.text }]}>{current.ask}</Text>
+                {!!current.hint && (
+                  <Text style={[Type.body, { color: t.textMuted }]}>{current.hint}</Text>
+                )}
               </View>
-            )
-          )}
 
-          {!asking && <Bubble text="Listo. ¿Te dejo avisarte a esa hora? Un toque y ya, sin regaños." />}
-        </ScrollView>
+              {current.key === 'avatar' && (
+                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+                  {/*
+                    El vestidor entero, el mismo de "Cómo te ves". Guarda al toque con
+                    `updateProfile`, así que la cara ya está puesta antes de terminar el alta — y por
+                    eso este paso no necesita nada que confirmar.
+                  */}
+                  <AvatarPicker user={user} avatars={avatars} />
+                </Animated.View>
+              )}
 
-        <View style={[styles.answerZone, { backgroundColor: t.canvas, borderTopColor: t.line }]}>
-          <FormError message={error || nudge} />
+              {current.key === 'accentColor' && (
+                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+                  <AccentPicker
+                    value={form.accentColor}
+                    onChange={(value: AccentName) => answer('accentColor', value)}
+                  />
+                </Animated.View>
+              )}
 
-          {/*
-            El unico paso con dos controles, y por eso el unico que pide confirmar: el nombre se
-            teclea y la clasificacion se toca, asi que avanzar al elegir se llevaria por delante un
-            nombre a medio escribir.
-          */}
-          {current?.kind === 'workspace' && (
-            <>
-              <BigField
-                label="Cómo se llama"
-                value={draft.name}
-                onChangeText={(v) => {
-                  setNudge('');
-                  setDraft((d) => ({ ...d, name: v }));
-                }}
-                error={fields.name}
-                accent={accentName}
-                placeholder="La tesis, la mudanza…"
-                maxLength={40}
-                submitBehavior="blurAndSubmit"
-              />
-              <Choice
-                label="De qué va"
-                options={WORKSPACE_TAGS}
-                value={draft.tag}
-                onChange={(v: string) => {
-                  setNudge('');
-                  setDraft((d) => ({ ...d, tag: v }));
-                }}
-                accent={accentName}
-              />
-              <BigButton label="Seguir" onPress={advance} />
-            </>
-          )}
+              {current.key === 'peakEnergy' && (
+                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+                  <Choice
+                    options={PEAK_ENERGY}
+                    value={form.peakEnergy}
+                    onChange={(v) => answerAndAdvance('peakEnergy', v)}
+                  />
+                </Animated.View>
+              )}
 
-          {/* El color tiene su propio selector: once muestras y "Otro" no caben en una lista con
-              etiqueta. Los demas pasos de una sola respuesta siguen con `Choice`. */}
-          {current?.kind === 'single' && current.key === 'accentColor' && (
-            <AccentPicker
-              value={accentName}
-              onChange={(v) => answerAndAdvance('accentColor', v)}
+              {current.key === 'reminderStyle' && (
+                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+                  <Choice
+                    options={REMINDER_STYLE}
+                    value={form.reminderStyle}
+                    onChange={(v) => answerAndAdvance('reminderStyle', v)}
+                  />
+                </Animated.View>
+              )}
+
+              {current.key === 'reminderHour' && (
+                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+                  <Choice
+                    options={REMINDER_HOUR}
+                    value={String(form.reminderHour)}
+                    onChange={(v) => answerAndAdvance('reminderHour', Number(v))}
+                  />
+                </Animated.View>
+              )}
+
+              {current.key === 'birthDate' && (
+                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+                  <DateField
+                    label="Tu fecha"
+                    value={form.birthDate}
+                    onChange={(value) => answer('birthDate', value)}
+                    error={fields.birthDate}
+                  />
+                </Animated.View>
+              )}
+
+              {current.key === 'workspace' && (
+                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+                  {/*
+                    La vista previa es la CARD de verdad, igual que en `new-workspace`: enseña lo que
+                    vas a obtener y se repinta al elegir. Omitido, se apaga en vez de desaparecer —
+                    que el hueco siga ahí es lo que dice que se puede volver.
+                  */}
+                  <View
+                    style={[
+                      styles.card,
+                      { backgroundColor: t.surface, borderColor: t.line },
+                      skipped && styles.faded,
+                    ]}>
+                    <View style={styles.cardHead}>
+                      <ProgressRing done={0} total={0} accent={form.accentColor} />
+                      <Icon3D
+                        name={(draft.tag ? iconForTag(draft.tag) : 'work') as Icon3DName}
+                        size={Icon3DSize.md}
+                      />
+                    </View>
+                    <Text style={[Type.section, { color: t.text }]} numberOfLines={1}>
+                      {draft.name.trim() || 'Sin nombre'}
+                    </Text>
+                    <View style={[styles.chip, { backgroundColor: picked.soft }]}>
+                      <Text style={[Type.micro, styles.chipLabel, { color: t.text }]}>
+                        Sin tareas todavía
+                      </Text>
+                    </View>
+                  </View>
+
+                  <BigField
+                    label="Cómo se llama"
+                    value={draft.name}
+                    onChangeText={(name) => {
+                      setSkipped(false);
+                      setNudge('');
+                      setDraft((d) => ({ ...d, name }));
+                    }}
+                    placeholder="La tesis, la mudanza…"
+                    error={fields.name}
+                  />
+                  <Choice
+                    options={WORKSPACE_TAGS}
+                    value={draft.tag}
+                    onChange={(tag) => {
+                      setSkipped(false);
+                      setNudge('');
+                      setDraft((d) => ({ ...d, tag }));
+                    }}
+                  />
+                </Animated.View>
+              )}
+
+              {current.key === 'alerts' && (
+                <Animated.View entering={STEP_IN} exiting={STEP_OUT} style={styles.step}>
+                  <Text style={[Type.body, { color: t.textMuted }]}>
+                    Los avisos son de este teléfono y no salen de aquí. Si dices que no, la app
+                    funciona igual — solo dejo de escribirte.
+                  </Text>
+                </Animated.View>
+              )}
+
+              <FormError message={error} />
+              <FormError message={nudge} />
+            </Animated.View>
+          </ScrollView>
+
+          {/* La zona de acción es FIJA abajo: el botón no se va con el scroll. */}
+          <View
+            style={[
+              styles.actions,
+              {
+                paddingBottom: insets.bottom + Space.md,
+                backgroundColor: t.canvas,
+                borderTopColor: t.line,
+              },
+            ]}>
+            <BigButton
+              label={last ? 'Sí, avísame' : 'Seguir'}
+              loading={saving}
+              onPress={advance}
             />
-          )}
 
-          {current?.kind === 'single' && current.key !== 'accentColor' && (
-            <Choice
-              options={current.options!}
-              value={String(form[current.key as keyof ProfileInput])}
-              onChange={(v) => answerAndAdvance(current.key as keyof ProfileInput, v)}
-              accent={accentName}
-            />
-          )}
-
-          {current?.kind === 'hour' && (
-            <Choice
-              options={current.options!}
-              value={String(form.reminderHour)}
-              // El API valida entero 0..23 y Choice trabaja con texto: aqui se convierte.
-              onChange={(v) => answerAndAdvance('reminderHour', Number(v))}
-              accent={accentName}
-            />
-          )}
-
-          {current?.kind === 'date' && (
-            <>
-              <DateField
-                label="Día, mes y año"
-                value={form.birthDate}
-                onChange={(v) => {
-                  setNudge('');
-                  answer('birthDate', v);
-                }}
-                accent={accentName}
-                error={fields.birthDate}
-              />
-              <BigButton label="Seguir" onPress={advance} />
-            </>
-          )}
-
-          {!asking && (
-            <>
-              <BigButton label="Sí, avísame" loading={loading} onPress={() => save(true)} />
+            {/*
+              Las dos salidas suaves, cada una en su paso. Van en `ghost` y debajo del primario: son
+              alternativas, no la acción — y con el mismo peso se leerían como dos caminos iguales.
+            */}
+            {current.skippable && !skipped && (
               <BigButton
                 label="Ahora no"
                 variant="ghost"
-                accent={accentName}
-                onPress={() => save(false)}
+                onPress={() => {
+                  setSkipped(true);
+                  setDraft({ name: '', tag: '' });
+                  setNudge('');
+                  setStep(step + 1);
+                }}
               />
-            </>
-          )}
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-}
-
-/** Lo que dice la app: papel, a la izquierda, con la esquina de abajo recortada. */
-function Bubble({ text, hint }: { text: string; hint?: string }) {
-  const t = useTheme();
-  const shadow = useShadow();
-
-  return (
-    <Animated.View
-      entering={FadeInDown.duration(Motion.enter)}
-      style={[styles.bubble, { backgroundColor: t.surface }, shadow]}>
-      <Text style={[Type.body, { color: t.text }]}>{text}</Text>
-      {!!hint && <Text style={[Type.hint, { color: t.textMuted }]}>{hint}</Text>}
-    </Animated.View>
-  );
-}
-
-/** Lo que respondiste: tinte del acento, a la derecha. */
-function Said({ text, tint, color }: { text: string; tint: string; color: string }) {
-  return (
-    <Animated.View entering={FadeInDown.duration(Motion.enter)} style={[styles.said, { backgroundColor: tint }]}>
-      <Text style={[Type.label, { color }]}>{text}</Text>
-    </Animated.View>
+            )}
+            {last && <BigButton label="Ahora no" variant="ghost" onPress={() => void save(false)} />}
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </AccentContext>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  flex: { flex: 1 },
-  header: { paddingHorizontal: Space.xl, paddingVertical: Space.md },
-  thread: {
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingHorizontal: Space.xl,
+    paddingBottom: Space.md,
+  },
+  /** `StepDots` reparte con `space-between`, así que necesita un ancho o se encoge y el carril muere. */
+  dots: { flex: 1 },
+  content: { paddingHorizontal: Space.xl, paddingTop: Space.md },
+  block: { gap: Space.xl },
+  ask: { gap: Space.xs },
+  step: { gap: Space.lg },
+
+  card: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.lg,
+    gap: Space.sm,
+  },
+  /** Omitido: sigue ahí, apagado. Desaparecer diría que ya no se puede volver. */
+  faded: { opacity: 0.4 },
+  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  chip: { alignSelf: 'flex-start', borderRadius: Radius.pill, paddingHorizontal: Space.md, paddingVertical: 6 },
+  chipLabel: { letterSpacing: 0.4 },
+
+  actions: {
     paddingHorizontal: Space.xl,
     paddingTop: Space.md,
-    paddingBottom: Space.xl,
-    gap: Space.md,
-  },
-  // Pregunta y respuesta van mas juntas entre si que con el resto del hilo.
-  pair: { gap: Space.sm },
-  bubble: {
-    alignSelf: 'flex-start',
-    maxWidth: '86%',
-    gap: Space.xs,
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.md,
-    borderRadius: Radius.lg,
-    borderBottomLeftRadius: Radius.sm,
-  },
-  said: {
-    alignSelf: 'flex-end',
-    maxWidth: '86%',
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.md,
-    borderRadius: Radius.lg,
-    borderBottomRightRadius: Radius.sm,
-  },
-  answerZone: {
-    gap: Space.md,
-    paddingHorizontal: Space.xl,
-    paddingTop: Space.lg,
-    paddingBottom: Space.md,
-    borderTopWidth: 1,
+    gap: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

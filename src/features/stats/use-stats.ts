@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 
 import { ApiError, api, type Stats } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
+import { useRevalidate } from '@/features/cache/use-revalidate';
 
 /** `for` es la ventana a la que pertenece lo guardado. Arranca en null por lo mismo que en `use-streak`. */
 type State = { for: string | null; stats: Stats | null; error: string };
@@ -76,6 +77,13 @@ export function useStats(date: string, opts: { days?: number; workspaceId?: numb
   );
 
   const fresh = state.for === key;
+
+  /**
+   * Y sin salir de la pantalla: una mutacion caduca el dominio y esto vuelve a pedir en el sitio.
+   * Es lo que hace que el mapa de calor y los puntos de la tira se mueva al cerrar una tarea en el inicio, donde no hay cambio de foco
+   * que dispare el efecto de arriba.
+   */
+  useRevalidate('stats', reload);
 
   return {
     stats: fresh ? state.stats : null,

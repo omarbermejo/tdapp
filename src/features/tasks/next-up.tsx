@@ -34,7 +34,7 @@ export function NextUp({ day }: { day: ReturnType<typeof useTasks> }) {
 
   const pending = day.tasks?.filter((task) => task.status === 'pending') ?? [];
   const next = pickNext(pending);
-  const tint = useAccent(accentForFocus(next ? focusOf(next) : null, user?.accentColor ?? 'olive'));
+  const tint = useAccent(accentForFocus(next ? focusOf(next) : null, user?.accentColor));
 
   // Sin nada pendiente no hay "lo siguiente". El dia cerrado lo celebra la card de arriba; dos
   // mensajes de felicitacion apilados se leen como una plantilla, no como la app hablandote.

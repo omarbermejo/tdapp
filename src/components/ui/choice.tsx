@@ -60,7 +60,7 @@ type Props = {
  * intencion. La seleccionada se tine con el acento suave y su borde en ink: el tinte solo no
  * se distingue del papel.
  */
-export function Choice({ label, options, value, onChange, accent = 'olive', max, hint }: Props) {
+export function Choice({ label, options, value, onChange, accent, max, hint }: Props) {
   const theme = useTheme();
   const tint = useAccent(accent);
   const multi = Array.isArray(value);

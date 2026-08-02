@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { LinearTransition } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
 import { BigButton } from '@/components/ui/big-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatusVeil, useScrollVeil } from '@/components/ui/status-veil';
-import { Motion, Space, Type, useTheme } from '@/constants/theme';
+import { JoinRequests } from '@/features/workspaces/join-requests';
+import { RESHAPE, Space, Type, useTheme } from '@/constants/theme';
 import { useActivity } from '@/features/activity/activity-context';
 import { EmptyActivity, EventRow } from '@/features/activity/event-row';
 import { useAuth } from '@/features/auth/auth-context';
@@ -80,7 +81,14 @@ export default function NotificationsScreen() {
           `layout` para que una novedad que llega en vivo empuje a las de abajo en vez de aparecer de
           golpe. Lineal y no muelle: un rebote aqui sacude la lista entera.
         */}
-        <Animated.View layout={LinearTransition.duration(Motion.enter)} style={styles.list}>
+        {/*
+          Quien pide entrar va ARRIBA del feed y en su propia tarjeta: no es una novedad que leer,
+          es algo que espera una respuesta tuya. Mezclarla con "cerraste tres cosas" la enterraria.
+          Se pinta sola o no se pinta.
+        */}
+        <JoinRequests />
+
+        <Animated.View layout={RESHAPE} style={styles.list}>
           {events.map((event) => (
             <EventRow key={event.id} event={event} accent={user.accentColor} />
           ))}

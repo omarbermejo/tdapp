@@ -1,16 +1,14 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import Animated, { FadeInDown, FadeOutDown, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 
 import { BackButton } from '@/components/ui/back-button';
 import { BigButton } from '@/components/ui/big-button';
@@ -21,43 +19,28 @@ import { FormError } from '@/components/ui/form-error';
 import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { StepDots } from '@/components/ui/step-dots';
-import { Motion, Radius, Space, Touch, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
+import { IconChoice } from '@/features/workspaces/icon-choice';
+import {
+  Motion,
+  RESHAPE,
+  Radius,
+  Space,
+  Touch,
+  Type,
+  useAccent,
+  useTheme,
+  type AccentName,
+} from '@/constants/theme';
 import { ApiError, type Workspace } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/auth-context';
 import { WORKSPACE_TAGS } from '@/features/auth/options';
 import { workspacesApi } from '@/features/workspaces/api';
 import { InviteStep } from '@/features/workspaces/invite-step';
-import { usePressScale } from '@/hooks/use-press-scale';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useScreenPadding } from '@/hooks/use-screen-padding';
+import { goBackOrHome } from '@/features/nav/go-back';
 
-/**
- * Los iconos que se ofrecen, en el orden en que alguien busca un proyecto.
- *
- * Un subconjunto de los 18 horneados y no todos: `check` y `clock` son objetos de la app (una tarea
- * hecha, un temporizador), no cosas de las que alguien tenga un proyecto. Doce caben en DOS filas de
- * seis sin scroll, que es lo que hace que elegir sea un vistazo y no una lista. Las seis columnas no
- * se declaran: cada hueco mide `Touch.chip` y el `flexWrap` reparte lo que quepa, asi que en un
- * telefono estrecho pasan a tres filas de cinco solas.
- *
- * El catalogo REAL vive en el API (`GET /workspaces/catalogs`) y valida los 18; esto es la seleccion
- * que se pinta. Si algun dia hace falta ofrecerlos todos, se pide ahi y se pinta sin desplegar la app.
- */
-const ICONS: readonly Icon3DName[] = [
-  'work',
-  'academic',
-  'home',
-  'health',
-  'money',
-  'relationships',
-  'creativity',
-  'leaf',
-  'light',
-  'lightning',
-  'trophy',
-  'moon',
-];
 
 /** Los cuatro pasos. El titulo es la pregunta, como en el onboarding. */
 const STEPS = [
@@ -77,7 +60,6 @@ const STEPS = [
  */
 const STEP_IN = FadeInDown.duration(Motion.enter);
 const STEP_OUT = FadeOutDown.duration(Motion.exit);
-const RESIZE = LinearTransition.duration(Motion.enter);
 
 /**
  * Crear un espacio de trabajo, en cuatro pasos.
@@ -198,7 +180,7 @@ export default function NewWorkspaceScreen() {
         <View style={[styles.header, { paddingTop: pad.top }]}>
           {/* Flecha y no cruz: esto es un push. En el ultimo paso desaparece — el espacio YA existe y
               retroceder a elegir color prometeria deshacerlo; ahi la salida es el boton de "Listo". */}
-          {step < 3 && <BackButton onPress={() => (step === 0 ? router.back() : setStep(step - 1))} />}
+          {step < 3 && <BackButton onPress={() => (step === 0 ? goBackOrHome() : setStep(step - 1))} />}
           {/* `StepDots` reparte sus brotes con `space-between`, asi que necesita un ancho: sin el
               `flex: 1` de este envoltorio se encoge a la suma de los cuatro y el carril desaparece. */}
           <View style={styles.dots}>
@@ -216,7 +198,7 @@ export default function NewWorkspaceScreen() {
           contentContainerStyle={[styles.content, { paddingBottom: Space.lg }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <Animated.View layout={RESIZE} style={styles.block}>
+          <Animated.View layout={RESHAPE} style={styles.block}>
             <View style={styles.ask}>
               <Micro>Nuevo espacio</Micro>
               <Text style={[Type.title, { color: t.text }]}>{current.ask}</Text>
@@ -333,7 +315,7 @@ export default function NewWorkspaceScreen() {
               accent={color}
             />
           ) : (
-            <BigButton label="Listo" onPress={() => router.back()} accent={color} />
+            <BigButton label="Listo" onPress={goBackOrHome} accent={color} />
           )}
         </View>
       </KeyboardAvoidingView>
@@ -341,67 +323,6 @@ export default function NewWorkspaceScreen() {
   );
 }
 
-/**
- * La rejilla de iconos 3D.
- *
- * No usa `Choice` aunque se le parezca: `Choice` pinta un icono de LINEA de Lucide junto a una
- * etiqueta de texto, y aqui el icono ES la opcion — un render 3D de 32pt con la palabra "Trabajo" al
- * lado seria decir lo mismo dos veces, y con doce opciones eso son doce filas en vez de cuatro.
- */
-function IconChoice({
-  value,
-  onChange,
-  accent,
-}: {
-  value: Icon3DName;
-  onChange: (icon: Icon3DName) => void;
-  accent: AccentName;
-}) {
-  const t = useTheme();
-  const tint = useAccent(accent);
-
-  return (
-    <View style={styles.icons}>
-      <Micro>Icono</Micro>
-      <View style={styles.iconGrid}>
-        {ICONS.map((name) => {
-          const on = name === value;
-          return (
-            <View
-              key={name}
-              // El borde vive siempre y solo cambia de color: animar el grosor movia el icono un
-              // pixel en cada toque. Es la misma regla que `choice.tsx`.
-              style={[
-                styles.iconSlot,
-                { backgroundColor: on ? tint.soft : t.surface, borderColor: on ? tint.ink : t.line },
-              ]}>
-              <IconOption name={name} on={on} onPress={() => onChange(name)} />
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-/** Aparte para que cada opcion tenga sus propios shared values, como el `Card` de `choice.tsx`. */
-function IconOption({ name, on, onPress }: { name: Icon3DName; on: boolean; onPress: () => void }) {
-  const press = usePressScale({ to: 0.9 });
-  return (
-    <Animated.View style={press.style}>
-      <Pressable
-        accessibilityRole="radio"
-        accessibilityState={{ checked: on }}
-        accessibilityLabel={name}
-        onPress={onPress}
-        onPressIn={press.onPressIn}
-        onPressOut={press.onPressOut}
-        style={styles.iconTouch}>
-        <Icon3D name={name} size={Icon3DSize.md} />
-      </Pressable>
-    </Animated.View>
-  );
-}
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
@@ -448,14 +369,5 @@ const styles = StyleSheet.create({
   chip: { alignSelf: 'flex-start', borderRadius: Radius.pill, paddingHorizontal: Space.sm, paddingVertical: 2 },
   chipLabel: { letterSpacing: 0 },
   name: { minHeight: Touch.button, paddingTop: Space.sm },
-  icons: { gap: Space.sm },
-  iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  iconSlot: { borderRadius: Radius.md, borderWidth: 2 },
-  iconTouch: {
-    width: Touch.chip,
-    height: Touch.chip,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   actions: { paddingHorizontal: Space.xl, paddingTop: Space.md, borderTopWidth: 1 },
 });

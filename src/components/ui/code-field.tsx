@@ -43,7 +43,7 @@ export function CodeField({
   onType,
   error,
   disabled,
-  accent = 'olive',
+  accent,
   length = DIGITS,
   type = 'numeric',
 }: Props) {
