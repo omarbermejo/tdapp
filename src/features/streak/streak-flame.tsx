@@ -1,8 +1,8 @@
-import * as Haptics from 'expo-haptics';
-import { SymbolView } from 'expo-symbols';
-import Flame from 'lucide-react-native/icons/flame';
-import { useEffect, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import * as Haptics from "expo-haptics";
+import { SymbolView } from "expo-symbols";
+import Flame from "lucide-react-native/icons/flame";
+import { useEffect, useRef } from "react";
+import { StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -11,12 +11,19 @@ import Animated, {
   withSequence,
   withSpring,
   withTiming,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
 
-import { Motion, Space, Type, useAccent, useTheme, type AccentName } from '@/constants/theme';
-import type { Streak } from '@/features/auth/api';
+import {
+  Motion,
+  Space,
+  Type,
+  useAccent,
+  useTheme,
+  type AccentName,
+} from "@/constants/theme";
+import type { Streak } from "@/features/auth/api";
 
-import { levelsOf, todayIndexOf } from './streak';
+import { levelsOf, todayIndexOf } from "./streak";
 
 /**
  * Una vuelta entera necesita mas que `Motion.enter` (220) para leerse como GIRO: a 220ms el ojo ve un
@@ -43,7 +50,13 @@ const GLYPH = 22;
  * El fallback es el `Flame` de Lucide, importado por su subpath — nunca del barril, que mete 1756
  * modulos.
  */
-export function StreakFlame({ streak, accent }: { streak: Streak | null; accent?: AccentName }) {
+export function StreakFlame({
+  streak,
+  accent,
+}: {
+  streak: Streak | null;
+  accent?: AccentName;
+}) {
   const t = useTheme();
   const tint = useAccent(accent);
   const reduced = useReducedMotion();
@@ -56,7 +69,7 @@ export function StreakFlame({ streak, accent }: { streak: Streak | null; accent?
    * tampoco la rompe— y duplicarla haria que el mismo martes se viera distinto en la insignia y en la
    * tarjeta del perfil.
    */
-  const lit = !!streak && levelsOf(streak)[todayIndexOf(streak)] === 'closed';
+  const lit = !!streak && levelsOf(streak)[todayIndexOf(streak)] === "closed";
   const days = streak?.days ?? 0;
 
   const spin = useSharedValue(0);
@@ -94,10 +107,15 @@ export function StreakFlame({ streak, accent }: { streak: Streak | null; accent?
       El giro es celebracion y se va con "reducir movimiento"; el color se queda, porque el color es
       informacion (la racha esta activa) y eso tiene que verse igual con el ajuste encendido.
     */
-    if (!reduced) spin.set(withTiming(spin.get() + 1, LIGHT));
+    if (!reduced) {
+      spin.set(0); // Reinicia para que la animación de escala funcione siempre.
+      spin.set(withTiming(1, LIGHT));
+    }
 
     // El mismo golpe que confirma un `BigButton` con exito. Solo al encenderse, nunca al montar.
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+      () => {},
+    );
   }, [streak, lit, reduced, spin]);
 
   /** El golpecito del numero al subir la racha. Se reusa el de la tarjeta del dia. */
@@ -105,9 +123,12 @@ export function StreakFlame({ streak, accent }: { streak: Streak | null; accent?
     if (reduced || !days) return;
     pop.set(
       withSequence(
-        withTiming(1.12, { duration: Motion.pop, easing: Easing.out(Easing.quad) }),
-        withSpring(1, SETTLE)
-      )
+        withTiming(1.12, {
+          duration: Motion.pop,
+          easing: Easing.out(Easing.quad),
+        }),
+        withSpring(1, SETTLE),
+      ),
     );
   }, [days, reduced, pop]);
 
@@ -123,7 +144,9 @@ export function StreakFlame({ streak, accent }: { streak: Streak | null; accent?
     ],
   }));
 
-  const number = useAnimatedStyle(() => ({ transform: [{ scale: pop.get() }] }));
+  const number = useAnimatedStyle(() => ({
+    transform: [{ scale: pop.get() }],
+  }));
 
   /*
     `ink` y no `solid`: un glifo de 22pt esta mas cerca de texto que de relleno —hay que LEERLO— e `ink`
@@ -135,13 +158,14 @@ export function StreakFlame({ streak, accent }: { streak: Streak | null; accent?
   // Sin racha no se pinta un cero: `headlineOf(0)` tampoco lo hace, y un 0 en la esquina de la
   // pantalla de inicio se lee como un reproche diario. Se queda el fuego apagado, que es la verdad.
   return (
-    <View
-      accessible
-      accessibilityLabel={label(days, lit)}
-      style={styles.badge}>
+    <View accessible accessibilityLabel={label(days, lit)} style={styles.badge}>
       <Animated.View style={flame}>
         <SymbolView
-          name={{ ios: 'flame.fill', android: 'local_fire_department', web: 'whatshot' }}
+          name={{
+            ios: "flame.fill",
+            android: "local_fire_department",
+            web: "whatshot",
+          }}
           size={GLYPH}
           tintColor={color}
           // Lucide en Android y web. `color` es prop y no estilo, asi que recibe el mismo paso final:
@@ -151,7 +175,9 @@ export function StreakFlame({ streak, accent }: { streak: Streak | null; accent?
       </Animated.View>
 
       {days > 0 && (
-        <Animated.Text style={[Type.label, styles.days, number, { color }]}>{days}</Animated.Text>
+        <Animated.Text style={[Type.label, styles.days, number, { color }]}>
+          {days}
+        </Animated.Text>
       )}
     </View>
   );
@@ -159,13 +185,15 @@ export function StreakFlame({ streak, accent }: { streak: Streak | null; accent?
 
 /** Lo que lee un lector de pantalla. El fuego solo no diria nada. */
 const label = (days: number, lit: boolean) => {
-  if (days === 0) return 'Sin racha todavía';
-  const run = days === 1 ? '1 día de racha' : `${days} días de racha`;
-  return lit ? `${run}. Hoy ya cerraste algo.` : `${run}. Hoy todavía está abierto.`;
+  if (days === 0) return "Sin racha todavía";
+  const run = days === 1 ? "1 día de racha" : `${days} días de racha`;
+  return lit
+    ? `${run}. Hoy ya cerraste algo.`
+    : `${run}. Hoy todavía está abierto.`;
 };
 
 const styles = StyleSheet.create({
-  badge: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  badge: { flexDirection: "row", alignItems: "center", gap: Space.xs },
   // tabular-nums para que el 9 -> 10 no mueva el fuego de sitio.
-  days: { fontVariant: ['tabular-nums'] },
+  days: { fontVariant: ["tabular-nums"] },
 });

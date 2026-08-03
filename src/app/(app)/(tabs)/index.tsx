@@ -1,9 +1,11 @@
 import { router } from "expo-router";
+import Settings from "lucide-react-native/icons/settings";
 import { useMemo, useState } from "react";
 import { RefreshControl, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 
 import { ScreenGuard } from "@/components/ui/screen-guard";
+import { HeaderAction } from "@/components/ui/screen-header";
 import { GreetingSwitch } from "@/components/ui/space-pill";
 import { StatusVeil, useScrollVeil } from "@/components/ui/status-veil";
 import { Space, Type, useTheme } from "@/constants/theme";
@@ -22,6 +24,7 @@ import { useBacklog, useTasks } from "@/features/tasks/use-tasks";
 import { WeekStrip } from "@/features/tasks/week-strip";
 import { useActiveSpace } from "@/features/workspaces/active-space";
 import { SpaceMembers } from "@/features/workspaces/space-members";
+import { useWorkspace } from "@/features/workspaces/use-workspace";
 import { useWorkspaces } from "@/features/workspaces/use-workspaces";
 import { PlusButton, Workspaces } from "@/features/workspaces/workspaces";
 import { useScreenPadding } from "@/hooks/use-screen-padding";
@@ -100,6 +103,7 @@ export default function HomeScreen() {
   const today = useLocalToday();
   /** El espacio activo acota `useTasks` y `useBacklog` por dentro; aqui ademas acota el mapa. */
   const space = useActiveSpace();
+  const { workspace } = useWorkspace(space?.id ?? null);
 
   /**
    * Que mapa se pinta. Misma geometria —17 semanas, dia de la semana por fila— y distinto TOPE.
@@ -243,6 +247,16 @@ export default function HomeScreen() {
             <View style={styles.status}>
               <StreakFlame streak={streak.streak} accent={user.accentColor} />
               <NotificationBell accent={space?.accent ?? user.accentColor} />
+              {workspace?.isOwner && (
+                <HeaderAction
+                  label="Configurar el espacio"
+                  icon={Settings}
+                  onPress={() =>
+                    router.push(`/workspace/${workspace.id}/settings`)
+                  }
+                  accent={space?.accent}
+                />
+              )}
             </View>
             <PlusButton
               accent={space?.accent ?? user.accentColor}

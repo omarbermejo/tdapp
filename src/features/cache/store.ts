@@ -1,7 +1,7 @@
-import { File, Paths } from 'expo-file-system';
-import { AppState, Platform } from 'react-native';
+import { File, Paths } from "expo-file-system";
+import { AppState, Platform } from "react-native";
 
-import { track } from './meter';
+import { track } from "./meter";
 
 /**
  * El cache de respuestas de la app: una copia en memoria, respaldada en disco.
@@ -45,7 +45,7 @@ export const WARM: Policy = { ttl: 5 * 60_000, persist: true };
 /** Lo que casi nunca cambia: miembros de un espacio, colaboradores. */
 export const COLD: Policy = { ttl: 24 * 60 * 60_000, persist: true };
 
-const FILE = 'tdapp-cache.json';
+const FILE = "tdapp-cache.json";
 /** Presupuesto total en disco. Con lo medido sobra: stats de 119 dias son 5 KB. */
 const BUDGET = 256 * 1024;
 /**
@@ -95,7 +95,7 @@ const emit = (key: string) => listeners.get(key)?.forEach((fn) => fn());
  */
 const disk = {
   read(): string | null {
-    if (Platform.OS === 'web') return localStorage.getItem(FILE);
+    if (Platform.OS === "web") return localStorage.getItem(FILE);
     const file = new File(Paths.cache, FILE);
     if (!file.exists) return null;
     // Si esta desbocado es corrupcion o fuga: se tira y se arranca limpio en vez de intentar parsearlo.
@@ -106,13 +106,13 @@ const disk = {
     return file.textSync();
   },
   write(text: string) {
-    if (Platform.OS === 'web') return localStorage.setItem(FILE, text);
+    if (Platform.OS === "web") return localStorage.setItem(FILE, text);
     const file = new File(Paths.cache, FILE);
     if (!file.exists) file.create({ intermediates: true });
     file.write(text);
   },
   clear() {
-    if (Platform.OS === 'web') return localStorage.removeItem(FILE);
+    if (Platform.OS === "web") return localStorage.removeItem(FILE);
     const file = new File(Paths.cache, FILE);
     if (file.exists) file.delete();
   },
@@ -128,12 +128,14 @@ const disk = {
  * Todo dentro de un try: un archivo corrupto arranca la app vacia, nunca la tumba.
  */
 function hydrate() {
-  if (hydrated) return;
+  if (hydrated || !owner) return;
   hydrated = true;
   try {
     const text = disk.read();
     if (!text) return;
-    for (const [key, entry] of Object.entries(JSON.parse(text) as Record<string, Entry>)) {
+    for (const [key, entry] of Object.entries(
+      JSON.parse(text) as Record<string, Entry>,
+    )) {
       // Solo lo de esta cuenta. Cinturon ademas del tirante: aunque `reset()` fallara al cerrar
       // sesion, una cuenta no puede leer las llaves de otra.
       if (key.startsWith(`${owner}|`)) entries.set(key, entry);
@@ -157,7 +159,9 @@ export function flush() {
     let size = 0;
 
     // De la mas leida recientemente a la mas vieja: si hay que tirar algo, que sea lo que nadie mira.
-    for (const [key, entry] of [...entries].sort((a, b) => b[1].readAt - a[1].readAt)) {
+    for (const [key, entry] of [...entries].sort(
+      (a, b) => b[1].readAt - a[1].readAt,
+    )) {
       const text = JSON.stringify(entry);
       if (text.length > MAX_ENTRY) continue;
       if (size + text.length > BUDGET) break;
@@ -203,13 +207,15 @@ export function reset() {
  * `invalidate('strek')` no fallaria nunca — no encontraria entradas, no despertaria a nadie, y el
  * bug seria una pantalla que no se actualiza, que es justo el que estamos arreglando.
  */
-export type Domain = 'tasks' | 'workspaces' | 'streak' | 'stats';
+export type Domain = "tasks" | "workspaces" | "streak" | "stats";
 
 /** El dominio de una llave. `2|workspaces` → 'workspaces'. Ver `keyOf`. */
-export const domainOf = (key: string) => key.split('|')[1] as Domain;
+export const domainOf = (key: string) => key.split("|")[1] as Domain;
 
-export const keyOf = (domain: Domain, ...parts: (string | number | null | undefined)[]) =>
-  `${owner}|${[domain, ...parts].map((p) => p ?? '').join('|')}`;
+export const keyOf = (
+  domain: Domain,
+  ...parts: (string | number | null | undefined)[]
+) => `${owner}|${[domain, ...parts].map((p) => p ?? "").join("|")}`;
 
 /**
  * Cuantas veces se ha invalidado cada dominio. Monotono y para siempre.
@@ -225,9 +231,13 @@ export const keyOf = (domain: Domain, ...parts: (string | number | null | undefi
 const revisions = new Map<Domain, number>();
 const revisionListeners = new Map<Domain, Set<() => void>>();
 
-export const revisionOf = (domain: Domain): number => revisions.get(domain) ?? 0;
+export const revisionOf = (domain: Domain): number =>
+  revisions.get(domain) ?? 0;
 
-export function subscribeRevision(domain: Domain, listener: () => void): () => void {
+export function subscribeRevision(
+  domain: Domain,
+  listener: () => void,
+): () => void {
   const set = revisionListeners.get(domain) ?? new Set();
   set.add(listener);
   revisionListeners.set(domain, set);
@@ -318,10 +328,14 @@ export function invalidate(...domains: Domain[]) {
  * La deduplicacion es lo que arregla que `useWorkspaces` montado en cuatro sitios dispare cuatro
  * peticiones identicas a la vez.
  */
-export function revalidate<T>(key: string, fetcher: () => Promise<T>, policy: Policy): Promise<T> {
+export function revalidate<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  policy: Policy,
+): Promise<T> {
   const running = inFlight.get(key);
   if (running) {
-    track(key, 'dedup');
+    track(key, "dedup");
     return running as Promise<T>;
   }
 
@@ -351,10 +365,10 @@ export function revalidate<T>(key: string, fetcher: () => Promise<T>, policy: Po
 const errors = new Map<string, string>();
 const errorListeners = new Map<string, Set<() => void>>();
 
-export const readError = (key: string): string => errors.get(key) ?? '';
+export const readError = (key: string): string => errors.get(key) ?? "";
 
 export function setError(key: string, message: string) {
-  if ((errors.get(key) ?? '') === message) return;
+  if ((errors.get(key) ?? "") === message) return;
   if (message) errors.set(key, message);
   else errors.delete(key);
   errorListeners.get(key)?.forEach((fn) => fn());
@@ -377,6 +391,6 @@ export function subscribeError(key: string, listener: () => void): () => void {
  * puede matarla sin avisar. Se registra al importar el modulo y no en un efecto: no pertenece a
  * ninguna pantalla.
  */
-AppState.addEventListener('change', (state) => {
-  if (state === 'background') flush();
+AppState.addEventListener("change", (state) => {
+  if (state === "background") flush();
 });
