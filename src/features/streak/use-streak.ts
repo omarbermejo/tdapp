@@ -1,9 +1,9 @@
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 
-import { ApiError, api, type Streak } from '@/features/auth/api';
-import { useAuth } from '@/features/auth/auth-context';
-import { useRevalidate } from '@/features/cache/use-revalidate';
+import { ApiError, api, type Streak } from "@/features/auth/api";
+import { useAuth } from "@/features/auth/auth-context";
+import { useRevalidate } from "../cache/use-revalidate";
 
 /**
  * `for` es el dia al que pertenece lo guardado, y por eso vive DENTRO del estado. Arranca en null y
@@ -21,17 +21,24 @@ type State = { for: string | null; streak: Streak | null; error: string };
  */
 export function useStreak(date: string) {
   const { token } = useAuth();
-  const [state, setState] = useState<State>({ for: null, streak: null, error: '' });
+  const [state, setState] = useState<State>({
+    for: null,
+    streak: null,
+    error: "",
+  });
 
   const reload = useCallback(async () => {
     if (!token || !date) return;
     try {
       const streak = await api.streak(token, date);
-      setState({ for: date, streak, error: '' });
+      setState({ for: date, streak, error: "" });
     } catch (e) {
-      const error = e instanceof ApiError ? e.message : 'No pudimos traer tu racha';
+      const error =
+        e instanceof ApiError ? e.message : "No pudimos traer tu racha";
       // Si ya habia racha de ESTE dia se queda: un fallo no borra lo que se esta viendo.
-      setState((s) => (s.for === date ? { ...s, error } : { for: date, streak: null, error }));
+      setState((s) =>
+        s.for === date ? { ...s, error } : { for: date, streak: null, error },
+      );
     }
   }, [token, date]);
 
@@ -48,7 +55,7 @@ export function useStreak(date: string) {
       return () => {
         cancelled = true;
       };
-    }, [reload])
+    }, [reload]),
   );
 
   const fresh = state.for === date;
@@ -58,11 +65,11 @@ export function useStreak(date: string) {
    * Es lo que hace que la llama se mueva al cerrar una tarea en el inicio, donde no hay cambio de foco
    * que dispare el efecto de arriba.
    */
-  useRevalidate('streak', reload);
+  useRevalidate("streak", reload);
 
   return {
     streak: fresh ? state.streak : null,
-    error: fresh ? state.error : '',
+    error: fresh ? state.error : "",
     loading: !fresh,
     reload,
   };
