@@ -62,9 +62,7 @@ export function JoinRequests() {
       );
       await reload();
       // Si se aprobó, también invalida el cache de workspaces para que se refresque la lista
-      if (approve) {
-        invalidate("workspaces");
-      }
+      if (approve) invalidate("workspaces", "stats");
     } catch (e) {
       setProblem(e instanceof ApiError ? e.message : "No se pudo responder");
     } finally {

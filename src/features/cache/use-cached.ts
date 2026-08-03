@@ -1,9 +1,9 @@
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useSyncExternalStore } from 'react';
+import { useFocusEffect } from "expo-router";
+import { useCallback, useSyncExternalStore } from "react";
 
-import { ApiError } from '@/features/auth/api';
+import { ApiError } from "@/features/auth/api";
 
-import { track } from './meter';
+import { track } from "./meter";
 import {
   domainOf,
   isStale,
@@ -14,8 +14,8 @@ import {
   subscribe,
   subscribeError,
   type Policy,
-} from './store';
-import { useRevalidate } from './use-revalidate';
+} from "./store";
+import { useRevalidate } from "./use-revalidate";
 
 /**
  * Leer algo del servidor, con lo guardado por delante.
@@ -35,43 +35,54 @@ import { useRevalidate } from './use-revalidate';
 export function useCached<T>(
   key: string | null,
   fetcher: () => Promise<T>,
-  policy: Policy
-): { data: T | undefined; error: string; loading: boolean; reload: () => Promise<void> } {
+  policy: Policy,
+): {
+  data: T | undefined;
+  error: string;
+  loading: boolean;
+  reload: () => Promise<void>;
+} {
   /*
     `key` puede ser null y eso NO es un caso raro: `useLocalToday()` devuelve '' hasta que ancla el
     reloj en un efecto, y varios hooks dependen de esa fecha. Con la llave en null no se lee, no se
     suscribe y no se pide — igual que hacen hoy los guards `if (!date) return`.
   */
   const data = useSyncExternalStore(
-    useCallback((listener) => (key ? subscribe(key, listener) : () => {}), [key]),
-    useCallback(() => (key ? read<T>(key) : undefined), [key])
+    useCallback(
+      (listener) => (key ? subscribe(key, listener) : () => {}),
+      [key],
+    ),
+    useCallback(() => (key ? read<T>(key) : undefined), [key]),
   );
 
   // El error vive en el store pero APARTE de las entradas y sin persistirse: ver su docblock alli.
   const error = useSyncExternalStore(
-    useCallback((listener) => (key ? subscribeError(key, listener) : () => {}), [key]),
-    useCallback(() => (key ? readError(key) : ''), [key])
+    useCallback(
+      (listener) => (key ? subscribeError(key, listener) : () => {}),
+      [key],
+    ),
+    useCallback(() => (key ? readError(key) : ""), [key]),
   );
 
   const run = useCallback(async () => {
     if (!key) return;
     try {
       await revalidate(key, fetcher, policy);
-      setError(key, '');
+      setError(key, "");
     } catch (e) {
-      setError(key, e instanceof ApiError ? e.message : 'No pudimos traerlo');
+      setError(key, e instanceof ApiError ? e.message : "No pudimos traerlo");
     }
     // `fetcher` cambia en cada render (es una arrow) y meterlo en las deps haria que el efecto de
     // foco se re-armara sin parar. La llave ya identifica lo que se pide.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, policy]);
+  }, [key, fetcher, policy]);
 
   useFocusEffect(
     useCallback(() => {
       if (!key) return;
       if (!isStale(key, policy)) {
         // Se apunta como acierto para que el medidor pueda decir cuantas peticiones se evitaron.
-        track(key, 'hit');
+        track(key, "hit");
         return;
       }
       let cancelled = false;
@@ -82,7 +93,7 @@ export function useCached<T>(
       return () => {
         cancelled = true;
       };
-    }, [key, policy, run])
+    }, [key, policy, run]),
   );
 
   /**

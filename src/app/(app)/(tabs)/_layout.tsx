@@ -1,36 +1,48 @@
-import { GlassContainer, GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
-import * as Haptics from 'expo-haptics';
-import { Tabs, type BottomTabBarProps } from 'expo-router/js-tabs';
-import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  GlassContainer,
+  GlassView,
+  isLiquidGlassAvailable,
+} from "expo-glass-effect";
+import * as Haptics from "expo-haptics";
+import { Tabs, type BottomTabBarProps } from "expo-router/js-tabs";
+import { useEffect } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withSpring,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
 
-import { Icon3D, Icon3DSize, type Icon3DName } from '@/components/ui/icon3d';
-import { Radius, Space, Type, useAccent, useScheme, useShadow, useTheme } from '@/constants/theme';
-import type { User } from '@/features/auth/api';
-import { useAuth } from '@/features/auth/auth-context';
-import { ProfileAvatar } from '@/features/profile/avatar';
-import { DockProvider, useDock } from '@/features/nav/dock';
-import { FocusModeProvider, useFocusMode } from '@/features/timer/focus-mode';
-import { usePressScale } from '@/hooks/use-press-scale';
+import { Icon3D, Icon3DSize, type Icon3DName } from "@/components/ui/icon3d";
+import {
+  Radius,
+  Space,
+  Type,
+  useAccent,
+  useScheme,
+  useShadow,
+  useTheme,
+} from "@/constants/theme";
+import type { User } from "@/features/auth/api";
+import { useAuth } from "@/features/auth/auth-context";
+import { DockProvider, useDock } from "@/features/nav/dock";
+import { ProfileAvatar } from "@/features/profile/avatar";
+import { FocusModeProvider, useFocusMode } from "@/features/timer/focus-mode";
+import { usePressScale } from "@/hooks/use-press-scale";
 
 /**
- * `isLiquidGlassAvailable()` hace `requireNativeModule('ExpoGlassEffect')`, que LANZA si el
- * binario instalado no trae el modulo. Como esto corre al importar, sin el try/catch un dev
- * build viejo no llega ni al primer render. Ya nos paso con ExpoPushTokenManager.
+ * `isLiquidGlassAvailable()` hace `requireNativeModule('ExpoGlassEffect')`, que LANZA si el binario
+ * instalado no trae el modulo. Como esto corre al importar, sin el try/catch un dev build viejo no
+ * llega ni al primer render. Ya nos paso con ExpoPushTokenManager.
  */
-function detectGlass(): boolean {
+const GLASS = (() => {
   try {
     return isLiquidGlassAvailable();
   } catch {
     return false;
   }
-}
+})();
 
 /**
  * Constante del build, no del render: el vidrio liquido depende de la version de iOS con la que
@@ -40,7 +52,6 @@ function detectGlass(): boolean {
  * iOS 26 (y en Android y web) no pintan desenfoque ni relleno. Asi que la capsula se rellena con
  * `t.surface` + sombra cuando esto es false.
  */
-const GLASS = detectGlass();
 
 /**
  * Geometria de la capsula. Vive aqui y no en `Touch` porque es de ESTE control: `Touch.icon` son
@@ -128,7 +139,8 @@ const BAR_H = SLOT_H + GAP * 2;
  * SE, 375) deja 327 entre los margenes del dock, asi que sobran 7.5pt de aire a cada lado y la
  * capsula sigue sin tocar los cantos. En un 16 Pro Max sobran 40 por lado.
  */
-const barWidth = (slots: number) => (slots - 1) * SLOT_OFF + SLOT_ON + (slots + 1) * GAP;
+const barWidth = (slots: number) =>
+  (slots - 1) * SLOT_OFF + SLOT_ON + (slots + 1) * GAP;
 
 /**
  * La salida y la entrada de la capsula en modo enfoque. Sin rebote: la barra se aparta, no se
@@ -171,14 +183,14 @@ type Tab = {
  */
 const TABS: Tab[] = [
   // 'home-chrome' y no 'home': la casa del AREA es calida y aqui tiene que ser cromo. Ver icon3d.
-  { name: 'index', label: 'Hoy', icon: 'home-chrome' },
+  { name: "index", label: "Hoy", icon: "home-chrome" },
   // Segunda y no ultima: el cronometro es lo que se hace CON el dia, asi que va pegado al dia.
-  { name: 'timer', label: 'Enfoque', icon: 'clock' },
+  { name: "timer", label: "Enfoque", icon: "clock" },
   // 'Agenda' y no 'Calendario': una etiqueta de pestaña es un NOMBRE, no una descripcion, y
   // 'Calendario' (~74pt) no cabe en los 64 del hueco activo. Ademas describe mejor lo que esa
   // pantalla es: un planificador de dia y semana, no un mes con cuadritos. La ruta no cambia.
-  { name: 'calendar', label: 'Agenda', icon: 'calendar' },
-  { name: 'profile', label: 'Perfil', icon: 'user', avatar: true },
+  { name: "calendar", label: "Agenda", icon: "calendar" },
+  { name: "profile", label: "Perfil", icon: "user", avatar: true },
 ];
 
 /**
@@ -210,7 +222,10 @@ function TabSlot({
   const t = useTheme();
   // 0.9 y no 0.86: es el mismo hundido que la celda de dia de la tira de semana, el otro objetivo
   // pequeño y redondo de la app. A 0.86 el glifo brincaba mas que cualquier otra cosa que se toca.
-  const press = usePressScale({ to: 0.9, haptic: Haptics.ImpactFeedbackStyle.Light });
+  const press = usePressScale({
+    to: 0.9,
+    haptic: Haptics.ImpactFeedbackStyle.Light,
+  });
   const glyph = focused ? GLYPH : GLYPH * GLYPH_OFF;
 
   return (
@@ -221,7 +236,8 @@ function TabSlot({
       onPress={onPress}
       onPressIn={press.onPressIn}
       onPressOut={press.onPressOut}
-      style={[styles.slot, focused ? styles.slotOn : styles.slotOff]}>
+      style={[styles.slot, focused ? styles.slotOn : styles.slotOff]}
+    >
       {/* El escalado va en el glifo y no en el Pressable: el area tactil se queda entera. */}
       <Animated.View style={press.style}>
         {/*
@@ -232,7 +248,11 @@ function TabSlot({
           que el resaltado, asi que activo desapareceria. Por eso ahi se le pasa `t.sunken`.
         */}
         {tab.avatar && user ? (
-          <ProfileAvatar user={user} size={glyph} bg={focused ? t.sunken : undefined} />
+          <ProfileAvatar
+            user={user}
+            size={glyph}
+            bg={focused ? t.sunken : undefined}
+          />
         ) : (
           /* Un asset del bundle, no un simbolo del sistema: no hace falta `fallback`, asi que
              tampoco hay una etiqueta de texto con su propia tipografia colandose en la barra. */
@@ -252,7 +272,8 @@ function TabSlot({
         <Text
           style={[Type.label, styles.tag, { color: t.text }]}
           numberOfLines={1}
-          maxFontSizeMultiplier={1.2}>
+          maxFontSizeMultiplier={1.2}
+        >
           {tab.label}
         </Text>
       )}
@@ -301,7 +322,9 @@ function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
   const current = state.routes[state.index]?.name;
   // Una pestaña sin archivo todavia simplemente no aparece. Filtrar ANTES de pintar mantiene
   // el resaltado cuadrado con los huecos: con un `return null` dentro del map se desalinearia.
-  const visible = TABS.filter((tab) => state.routes.some((route) => route.name === tab.name));
+  const visible = TABS.filter((tab) =>
+    state.routes.some((route) => route.name === tab.name),
+  );
   const index = visible.findIndex((tab) => tab.name === current);
 
   const size = { width: barWidth(visible.length), height: BAR_H };
@@ -317,7 +340,7 @@ function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
    * alterna vive en el cronometro.
    */
   const away = useSharedValue(0);
-  const gone = hidden && current === 'timer';
+  const gone = hidden && current === "timer";
   /**
    * Dos razones distintas para apartarse, y ganan por separado.
    *
@@ -360,7 +383,8 @@ function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
       style={[styles.dock, dock, { paddingBottom: insets.bottom + Space.md }]}
       // Apartada no captura nada: sin esto, la capsula invisible seguiria comiendose los toques de
       // la franja de abajo de la pantalla.
-      pointerEvents={gone ? 'none' : 'box-none'}>
+      pointerEvents={gone ? "none" : "box-none"}
+    >
       {/*
         Tres capas, y el orden importa: capsula (vidrio), resaltado (vidrio) y glifos (planos).
         Las dos piezas de vidrio son HERMANAS dentro del contenedor — es lo que las funde. Meter
@@ -425,7 +449,7 @@ function FloatingTabs({ state, navigation, insets }: BottomTabBarProps) {
                 user={user}
                 onPress={() => {
                   const event = navigation.emit({
-                    type: 'tabPress',
+                    type: "tabPress",
                     target: route.key,
                     canPreventDefault: true,
                   });
@@ -449,42 +473,22 @@ export default function AppLayout() {
   return (
     <FocusModeProvider>
       <DockProvider>
-      <Tabs
-        tabBar={(props) => <FloatingTabs {...props} />}
-        screenOptions={{
-          headerShown: false,
-          sceneStyle: { backgroundColor: t.canvas },
-          /**
-           * Cambiar de pestaña deja de ser un CORTE, y deja de entrar en blanco.
-           *
-           * Eran dos problemas y tienen una sola respuesta conjunta:
-           *
-           * 1. El default de este navegador es `animation: 'none'`. Era la unica transicion que le
-           *    faltaba a la app — la pila ya empuja y las hojas ya suben.
-           * 2. Y es perezoso: la primera vez que tocas una pestaña, su pantalla se monta EN ESE
-           *    momento, asi que lo que entra es el canvas vacio. Con el corte no se notaba; con una
-           *    transicion se ve entrar la nada.
-           *
-           * **`lazy: false` se probo y se retiro.** Montar las cuatro al arrancar mataba el blanco de
-           * la primera visita, pero trajo uno peor: con `'shift'` dejaba las escenas FUERA DE SITIO
-           * —la agenda en blanco permanente con la barra encima— y con `'fade'` seguia apareciendo
-           * en blanco al volver al grupo con `replace`. Dos fallos distintos con la misma causa: en
-           * esta version del navegador, precargar las escenas y animarlas no se llevan bien.
-           *
-           * Asi que se queda perezoso. El coste es el que ya habia: la PRIMERA vez que tocas una
-           * pestaña se ve un instante de canvas mientras se monta. Es una vez por arranque y por
-           * pestaña, contra una pantalla que se queda vacia y no vuelve. No es un empate.
-           *
-           * `'fade'` y no `'shift'` por lo mismo: aunque ya no hay precarga, el fundido es el que se
-           * verifico estable en el simulador. El orden de las pestañas lo cuenta el resaltado.
-           */
-          animation: 'fade',
-          transitionSpec: {
-            animation: 'spring',
-            config: { damping: 26, stiffness: 220, mass: 0.9 },
-          },
-        }}
-      />
+        <Tabs
+          tabBar={(props) => <FloatingTabs {...props} />}
+          screenOptions={{
+            headerShown: false,
+            sceneStyle: { backgroundColor: t.canvas },
+            // `lazy: false` monta todas las pantallas del grupo al inicio. Arregla el parpadeo en
+            // blanco al visitar una pestaña por primera vez, que es el comportamiento por defecto
+            // de este navegador. El coste es un arranque algo más lento, pero la experiencia de
+            // navegación es más fluida.
+            lazy: true,
+            // El `shift` es la animación de cambio de pestaña. Es más suave que el corte por defecto
+            // y, a diferencia de `fade`, no entra en conflicto con la carga de las escenas, lo que
+            // evita el parpadeo en blanco.
+            animation: "shift",
+          }}
+        />
       </DockProvider>
     </FocusModeProvider>
   );
@@ -494,22 +498,22 @@ const styles = StyleSheet.create({
   // Absoluta: no le quita alto a la pantalla, flota encima. Centrada y no estirada: con tres
   // huecos una capsula compacta se lee como objeto, y una barra de borde a borde como cromo.
   dock: {
-    position: 'absolute',
+    position: "absolute",
     left: Space.xl,
     right: Space.xl,
     bottom: 0,
-    alignItems: 'center',
+    alignItems: "center",
   },
   // El padding y el gap son los que colocan los huecos, asi que TIENEN que coincidir con
   // `barWidth` y con el `left`/`top` del resaltado: de ahi sale la aritmetica del muelle.
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: GAP,
     padding: GAP,
   },
   track: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     borderRadius: Radius.pill,
@@ -519,9 +523,9 @@ const styles = StyleSheet.create({
     height: SLOT_H,
     // En fila para que el glifo y la etiqueta compartan linea. Con la pestaña apagada solo hay
     // glifo, asi que `center` lo deja centrado igual que antes.
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: Space.sm,
     borderRadius: Radius.pill,
   },
@@ -532,7 +536,7 @@ const styles = StyleSheet.create({
   // Absoluto sobre el primer hueco; de ahi lo corre `translateX`. Mide como el hueco ENCENDIDO,
   // que es el unico sobre el que se pinta, y su ancho nunca cambia.
   highlight: {
-    position: 'absolute',
+    position: "absolute",
     top: GAP,
     left: GAP,
     width: SLOT_ON,

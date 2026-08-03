@@ -1,28 +1,46 @@
-import * as SecureStore from 'expo-secure-store';
-import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Platform } from 'react-native';
+import * as SecureStore from "expo-secure-store";
+import {
+    createContext,
+    use,
+    useCallback,
+    useEffect,
+    useMemo,
+    useState,
+    type ReactNode,
+} from "react";
+import { Platform } from "react-native";
 
-import { reset as resetCache, setOwner } from '@/features/cache/store';
-import { clearReminders } from '@/features/notifications/reminders';
-import { syncTodayWidget } from '@/features/widgets/sync-today';
+import { reset as resetCache, setOwner } from "@/features/cache/store";
+import { clearReminders } from "@/features/notifications/reminders";
+import { syncTodayWidget } from "@/features/widgets/sync-today";
 
-import { ApiError, api, type ProfileInput, type RegisterInput, type User } from './api';
+import {
+    ApiError,
+    api,
+    type ProfileInput,
+    type RegisterInput,
+    type User,
+} from "./api";
 
 // ponytail: clave nueva (antes solo el token). Las sesiones de dev se caen una vez y ya.
-const KEY = 'tdapp.session';
+const KEY = "tdapp.session";
 
 type Session = { token: string; user: User };
 
 // ponytail: SecureStore no existe en web, localStorage cubre el caso de dev.
 const raw = {
   get: (): Promise<string | null> =>
-    Platform.OS === 'web' ? Promise.resolve(localStorage.getItem(KEY)) : SecureStore.getItemAsync(KEY),
+    Platform.OS === "web"
+      ? Promise.resolve(localStorage.getItem(KEY))
+      : SecureStore.getItemAsync(KEY),
   set: (value: string) =>
-    Platform.OS === 'web'
+    Platform.OS === "web"
       ? Promise.resolve(localStorage.setItem(KEY, value))
       : SecureStore.setItemAsync(KEY, value),
   clear: () =>
-    Platform.OS === 'web' ? Promise.resolve(localStorage.removeItem(KEY)) : SecureStore.deleteItemAsync(KEY),
+    Platform.OS === "web"
+      ? Promise.resolve(localStorage.removeItem(KEY))
+      : SecureStore.deleteItemAsync(KEY),
 };
 
 const storage = {
@@ -50,19 +68,14 @@ const storage = {
 let queue: Promise<unknown> = Promise.resolve();
 
 /** En que punto del alta esta el usuario. Se deriva del user, nunca se guarda aparte. */
-export type Stage = 'guest' | 'verify' | 'onboarding' | 'ready';
-
+export type Stage = "guest" | "verify" | "onboarding" | "ready";
 /**
  * El paso lo decide el API (`user.stage`); aqui solo se traduce "sin sesion" a 'guest'.
- * El fallback deriva de las marcas de tiempo por si contesta un API viejo sin el campo,
- * y compara contra false/null explicitos para que un user sin esos campos sea 'ready'
- * en vez de quedar atrapado en una pantalla sin endpoint detras.
+ *
+ * Ya no hay fallback: el API siempre manda `stage`, y confiar en el es lo que arregla que el
+ * onboarding se saltara. La logica duplicada de aqui se desincronizaba con la del servidor.
  */
-export const stageOf = (user: User | null): Stage =>
-  !user
-    ? 'guest'
-    : (user.stage ??
-      (user.emailVerified === false ? 'verify' : user.onboardedAt === null ? 'onboarding' : 'ready'));
+export const stageOf = (user: User | null): Stage => user?.stage ?? "guest";
 
 type AuthValue = {
   user: User | null;
@@ -90,12 +103,16 @@ type AuthValue = {
    * Aparte de `updateProfile` aunque escriba el mismo endpoint: la firma pide un espacio y no un
    * parche de perfil, y quien la llama esta cambiando el CONTEXTO de la app, no editando sus ajustes.
    */
-  setActiveSpace: (space: User['activeWorkspace']) => Promise<void>;
+  setActiveSpace: (space: User["activeWorkspace"]) => Promise<void>;
   /**
    * Cambia la contraseña con el codigo del correo. Vive aqui y no en la pantalla —al contrario que
    * `api.forgot`— porque devuelve sesion: es un `start`, como `signUp` y `verify`.
    */
-  resetPassword: (email: string, code: string, password: string) => Promise<void>;
+  resetPassword: (
+    email: string,
+    code: string,
+    password: string,
+  ) => Promise<void>;
   /**
    * Borra la cuenta y cierra la sesion. `password` va sin valor en cuentas de Google o Apple: no
    * tienen ninguna, y el API decide por `authProvider` a quien se la pide.
@@ -177,9 +194,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token,
       stage: stageOf(session?.user ?? null),
       loading,
-      signIn: async (email, password) => start(await api.login(email, password)),
+      signIn: async (email, password) =>
+        start(await api.login(email, password)),
       signInWithGoogle: async (idToken) => start(await api.google(idToken)),
-      signInWithApple: async (idToken, name) => start(await api.apple(idToken, name)),
+      signInWithApple: async (idToken, name) =>
+        start(await api.apple(idToken, name)),
       signUp: async (input) => start(await api.register(input)),
       verify: async (code) => start(await api.verify(token!, code)),
       resend: () => api.resend(token!),
@@ -239,7 +258,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         queue = queue.then(async () => {
           try {
-            const { user } = await api.onboard(token, { activeWorkspaceId: space?.id ?? null });
+            const { user } = await api.onboard(token, {
+              activeWorkspaceId: space?.id ?? null,
+            });
             await start({ token, user });
           } catch (error) {
             setSession({ token, user: previous });
@@ -249,7 +270,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return queue as Promise<void>;
       },
-      resetPassword: async (email, code, password) => start(await api.reset(email, code, password)),
+      resetPassword: async (email, code, password) =>
+        start(await api.reset(email, code, password)),
       deleteAccount: async (password) => {
         await api.deleteAccount(token!, password);
         // No hay nada mas que limpiar: al quedarse sin sesion el guard desmonta `(app)`, y ese
@@ -267,6 +289,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const value = use(AuthContext);
-  if (!value) throw new Error('useAuth necesita estar dentro de <AuthProvider>');
+  if (!value)
+    throw new Error("useAuth necesita estar dentro de <AuthProvider>");
   return value;
 }
