@@ -1,24 +1,25 @@
+import { ScreenGuard } from "@/components/ui/screen-guard";
 import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, {
-    FadeIn,
-    FadeInDown,
-    FadeOut,
-    FadeOutDown,
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  FadeOutDown,
 } from "react-native-reanimated";
 
 import { Icon3D, Icon3DSize, type Icon3DName } from "@/components/ui/icon3d";
 import { ProgressRing } from "@/components/ui/progress-ring";
 import {
-    Motion,
-    Radius,
-    Space,
-    Touch,
-    Type,
-    useAccent,
-    useShadow,
-    useTheme,
-    type AccentName,
+  Motion,
+  Radius,
+  Space,
+  Touch,
+  Type,
+  useAccent,
+  useShadow,
+  useTheme,
+  type AccentName,
 } from "@/constants/theme";
 import type { Workspace } from "@/features/auth/api";
 import { useAuth } from "@/features/auth/auth-context";

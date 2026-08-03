@@ -17,7 +17,8 @@ export function useGoogleSignIn() {
   const handled = useRef<string>(undefined);
 
   const [request, response, promptAsync] = Google.useAuthRequest({
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    iosClientId:
+      "1063576011719-ed8chqlramd40oqebrkobk6vi3pgjm1e.apps.googleusercontent.com",
     androidClientId:
       "1063576011719-98a6i6dh0sgse9m6fu2bh3pc3lqm0o4j.apps.googleusercontent.com",
   });
